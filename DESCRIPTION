@@ -1,0 +1,26 @@
+Package: stan4bart
+Version: 0.0-1
+Date: 2020-04-01
+Title: I Stan for BART
+Authors@R: c(
+  person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
+  person("Ben", "Goodrich", role = "aut"))
+Depends:
+  R (>= 3.6-0),
+  methods,
+  dbarts (>= 0.9-18)
+Imports:
+  stats,
+  Matrix
+LinkingTo:
+  StanHeaders (>= 2.19.1), rstan (>= 2.19.1), BH (>= 1.66.0), Rcpp (>=
+    0.12.0), RcppEigen (>= 0.3.3.3.0), RcppParallel, dbarts (>= 0.9-18)
+Suggests:
+  testthat (>= 2.0-0),
+  lme4
+Description: Does things.
+License: GPL (>= 2)
+NeedsCompilation: yes
+SystemRequirements: GNU make
+URL: https://github.com/vdorie/mbartstan
+BugReports: https://github.com/vdorie/mbartstan/issues

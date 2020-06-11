@@ -1,0 +1,20 @@
+STANHEADERS_SRC = $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "message()" -e "cat(system.file('include', 'src', package = 'StanHeaders', mustWork = TRUE))" -e "message()" | grep "StanHeaders")
+TBB = $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "message()" -e "cat(system.file('lib', package = 'RcppParallel', mustWork = TRUE))" -e "message()" | grep "RcppParallel")
+PKG_CPPFLAGS = -I"include" -I"../inst/include" -I"$(STANHEADERS_SRC)" -DBOOST_DISABLE_ASSERTS -DEIGEN_NO_DEBUG `"${R_HOME}/bin/Rscript" -e "RcppParallel::CxxFlags()"` `"${R_HOME}/bin/Rscript" -e "StanHeaders:::CxxFlags()"`
+PKG_LIBS = -L"$(TBB)$(R_ARCH)" -Wl,-rpath,"$(TBB)$(R_ARCH)" -ltbb -ltbbmalloc
+
+CXX_STD = CXX14
+SOURCES = stan_files/continuous.stan bart_util.cpp init.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c stan_sampler.cpp
+OBJECTS = bart_util.o init.o misc_adaptiveRadixTree.o misc_string.o rc_bounds.o rc_util.o stan_sampler.o
+
+
+all: $(SHLIB)
+#		@if test -e "/usr/bin/install_name_tool" && test -e "$(CLANG_DIR)lib/libc++.1.dylib" && test -e "$(R_HOME)/lib/libc++.1.dylib"; then /usr/bin/install_name_tool -change $(CLANG_DIR)lib/libc++.1.dylib $(R_HOME)/lib/libc++.1.dylib $(SHLIB); fi
+
+clean:
+		rm -rf *.so *.o
+
+#%.cc: %.stan
+#		"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "source(file.path('..', 'tools', 'make_cc.R')); make_cc(commandArgs(TRUE))" $<
+
+.phony: all clean

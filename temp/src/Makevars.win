@@ -1,0 +1,7 @@
+CXX_STD=CXX14
+
+STANHEADERS_SRC=$(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "message()" \
+  -e "cat(system.file('include', 'src', package = 'StanHeaders', mustWork = TRUE))" \
+  -e "message()" | grep "StanHeaders")
+PKG_CPPFLAGS=-I"$(STANHEADERS_SRC)"
+
