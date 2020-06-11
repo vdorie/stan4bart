@@ -2,7 +2,7 @@ This mess is an initial stab at a C++ version of sampler that uses BART for non-
 
 To install:
   1. Install all prerequisites (see DESCRIPTION file)
-  2. Install development version of [dbarts](/vdorie/dbarts)
+  2. Install development version of [dbarts](https://github.com/vdorie/dbarts)
   3. Try install from this root
 
 Windows makefile not yet updated - should be essentially a copy of the \*nix one.
