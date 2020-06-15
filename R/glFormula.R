@@ -1,10 +1,17 @@
 glFormula <- function (formula, data = NULL, subset, weights, 
-    na.action, offset, contrasts = NULL, start, mustart, etastart, 
+    na.action, offset, contrasts = NULL, treatment = NULL, start, mustart, etastart, 
     control = glmerControl(), ...) 
 {
     control <- control$checkControl
     mf <- mc <- match.call()
    
+    if (!is.null(mc$treatment)) {
+        if (is.symbol(mc$treatment)) treatment <- as.character(mc$treatment)
+      mf$treatment <- NULL
+      if (!is.character(treatment))
+        stop("treament must be a character or symbol")
+    }
+    
     ignoreArgs <- c("start", "verbose", "devFunOnly", "optimizer", 
         "control", "nAGQ")
     l... <- list(...)
@@ -35,7 +42,21 @@ glFormula <- function (formula, data = NULL, subset, weights,
         attr(fr, "start") <- start$fixef
     }
     n <- nrow(fr)
+    
     reTrms <- mkReTrms(findbars(RHSForm(formula)), fr)
+    
+    if (!is.null(treatment)) {
+      if (!(treatment %in% colnames(fr)))
+        stop("treament must be the name of a column in data")
+      uq <- sort(unique(fr[[treatment]]))
+      if (length(uq) != 2L || !all(uq == c(0, 1)))
+        stop("treatment must in { 0, 1 }")
+      fr.cf <- fr
+      fr.cf[[treatment]] <- 1 - fr.cf[[treatment]]
+      reTrms.cf <- mkReTrms(findbars(RHSForm(formula)), fr.cf)
+      if (!all(sapply(seq_along(reTrms$cnms), function(i) all(reTrms$cnms[[i]] == reTrms.cf$cnms[[i]]))))
+        stop("counterfactual random effect design matrix does not match observed: contact package author")
+    }
     wmsgNlev <- checkNlevels(reTrms$flist, n = n, control, allow.n = TRUE)
     wmsgZdims <- checkZdims(reTrms$Ztlist, n = n, control, allow.n = TRUE)
     wmsgZrank <- checkZrank(reTrms$Zt, n = n, control, nonSmall = 1e+06, 
@@ -46,33 +67,40 @@ glFormula <- function (formula, data = NULL, subset, weights,
     fixedfr <- eval(mf, parent.frame())
     attr(attr(fr, "terms"), "predvars.fixed") <- attr(attr(fixedfr, 
         "terms"), "predvars")
-    ranform <- formula
-    RHSForm(ranform) <- subbars(RHSForm(reOnly(formula)))
-    mf$formula <- ranform
-    ranfr <- eval(mf, parent.frame())
-    attr(attr(fr, "terms"), "predvars.random") <- attr(terms(ranfr), 
-        "predvars")
+    #ranform <- formula
+    #RHSForm(ranform) <- subbars(RHSForm(reOnly(formula)))
+    #mf$formula <- ranform
+    #ranfr <- eval(mf, parent.frame())
+    #attr(attr(fr, "terms"), "predvars.random") <- attr(terms(ranfr), 
+    #    "predvars")
     fr.bart <- fixedfr
     if ("(offset)" %in% colnames(fr.bart)) {
       keepcols <- colnames(fr.bart) != "(offset)"
-      fr.bart <- fr.bart[,keepcols]
+      fr.bart <- fr.bart[,keepcols,drop = FALSE]
       attr(attr(fr.bart, "terms"), "dataClasses") <- attr(attr(fr.bart, "terms"), "dataClasses")[keepcols]
     }
     bartData <- dbarts::dbartsData(fixedform, fr.bart)
-    if (FALSE) {
-      X <- model.matrix(fixedform, fr, contrasts)
-      if (is.null(rankX.chk <- control[["check.rankX"]])) 
-          rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
-      X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
-      if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
-          scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
-      X <- checkScaleX(X, kind = scaleX.chk)
+    if (!is.null(treatment)) {
+      bartData@x.test <- bartData@x
+      bartData@x.test[, treatment] <- 1 - bartData@x.test[, treatment, drop = FALSE]
+      bartData@testUsesRegularOffset <- FALSE
     }
+    #X <- model.matrix(fixedform, fr, contrasts)
+    #if (is.null(rankX.chk <- control[["check.rankX"]])) 
+    #   rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
+    #X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
+    #if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
+    #    scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
+    #X <- checkScaleX(X, kind = scaleX.chk)
+    
     y <- model.response(fr)
     u.y <- unique(y)
     family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
-    list(fr = fr, bartData = bartData, reTrms = reTrms, family = family, formula = formula, 
-        wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
+    result <- list(fr = fr, bartData = bartData, reTrms = reTrms, family = family, formula = formula, 
+                   wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
+    if (!is.null(treatment))
+      result$reTrms.cf <- reTrms.cf
+    result
 }
 
 tryResult <- tryCatch(lme4ns <- asNamespace("lme4"), error = function(e) e)

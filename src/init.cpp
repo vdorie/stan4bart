@@ -206,7 +206,7 @@ extern "C" {
     // allocate storage for results
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART)
       bartSamples = new stan4bart::IterableBartResults(
-        sampler.bartData.numObservations, sampler.bartData.numPredictors, 0, numIter, 1 /* num chains */, false /* TODO: binary */);
+        sampler.bartData.numObservations, sampler.bartData.numPredictors, sampler.bartData.numTestObservations, numIter, 1 /* num chains */, false /* TODO: binary */);
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
       sampler.stanSampler->sample_writer.resize(sampler.stanSampler->num_pars, numIter);
     
@@ -874,6 +874,7 @@ static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_run", run, 4),
   DEF_FUNC("stan4bart_printInitialSummary", printInitialSummary, 1),
   DEF_FUNC("stan4bart_disengageAdaptation", disengageAdaptation, 1),
+  DEF_FUNC("stan4bart_finalize", finalize, 0),
   {NULL, NULL, 0}
 };
 

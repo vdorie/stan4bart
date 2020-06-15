@@ -1,3 +1,22 @@
+ # results are:
+  # named list of length = num chains
+  #   warmup - has same elements as sample
+  #   sample
+  #     stan
+  #       raw   - matrix of num pars x num samples
+  #       Sigma - list of length num grouping factors
+  #         g.XX - array of cov rows x cov cols x num samples
+  #       ranef - list of length num groupin factors
+  #         g.XX - array of num ranef @ factor x num groups x num samples
+  #     bart
+  #       sigma - length of num samples (use aux in stan$raw instead)
+  #       train - num obs x num samples
+  #       test  - num obs x num samples, contains counterfactuals
+  #       varcount - num predictors x num samples
+  # also present are two attributes:
+  #   Zt.obs - random effects design matrix for observed
+  #   Zt.cf  - random effects design matrix for counterfactuals
+
 mstan4bart <- 
   function(formula,
            data = NULL,
@@ -6,6 +25,7 @@ mstan4bart <-
            na.action = getOption("na.action", "na.omit"),
            offset,
            contrasts = NULL,
+           treatment = NULL,
            ...,
            prior_aux = exponential(),
            prior_covariance = decov(),
@@ -23,6 +43,7 @@ mstan4bart <-
   mc$data <- data
   mc$prior_covariance <- mc$prior_aux <-
     mc$adapt_delta <- mc$... <- NULL
+  
   glmod <- eval(mc, parent.frame())
   family <- glmod$family
   
@@ -49,16 +70,16 @@ mstan4bart <-
     stop("'prior_covariance' can't be NULL.", call. = FALSE)
   group <- glmod$reTrms
   group$decov <- prior_covariance
-  
+    
   mc <- match.call(expand.dots = FALSE)
   mc[[1L]] <- quote(lme4::lmer)
   mc$control <- lme4::lmerControl()
   mc$data <- data
   mc$verbose <- FALSE
   mc$prior_covariance <- mc$prior_aux <-
-    mc$adapt_delta <- mc$... <- NULL
-  lmerFit <- eval(mc, parent.frame())
-  fit <- mstan4bart.fit(bartData = bartData, y = y, weights = weights,
+    mc$adapt_delta <- mc$treatment <- mc$... <- NULL
+  lmerFit <- suppressWarnings(eval(mc, parent.frame()))
+  fit <- mstan4bart_fit(bartData = bartData, y = y, weights = weights,
                         offset = offset, family = family,
                         prior_aux = prior_aux, 
                         adapt_delta = adapt_delta,
@@ -66,7 +87,9 @@ mstan4bart <-
                         ranef_init = fitted(lmerFit, ranef.only = TRUE),
                         sigma_init = sigma(lmerFit),
                         ...)
-  
+  attr(fit, "Zt.obs") <- glmod$reTrms$Zt
+  if (!is.null(glmod$reTrms.cf))
+    attr(fit, "Zt.cf") <- glmod$reTrms.cf$Zt
   return(fit)
   
   sel <- apply(X, 2L, function(x) !all(x == 1) && length(unique(x)) < 2)

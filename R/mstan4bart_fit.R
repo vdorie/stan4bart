@@ -25,7 +25,36 @@ getRanef <- function(group, samples) {
   res
 }
 
-mstan4bart.fit <- 
+# putting this out here so we can export it when parallelizing
+mstan4bart_fitforreal <- function(chain.num, bartControl, bartData, bartModel, standata, stan_args, commonControl, group)
+{
+  chain.num <- "ignored"
+  # TODO: figure out why the C refs aren't reachable when dispatched to cluster
+  ns <- asNamespace("stan4bart")
+  sampler <- .Call(ns$C_stan4bart_create, bartControl, bartData, bartModel, standata, stan_args, commonControl)
+  if (commonControl$verbose > 0L)
+    .Call(ns$C_stan4bart_printInitialSummary, sampler)
+  results <- list()
+  if (commonControl$warmup > 0L)
+    results$warmup  <- .Call(ns$C_stan4bart_run, sampler, commonControl$warmup, TRUE, "both")
+  .Call(ns$C_stan4bart_disengageAdaptation, sampler)
+  results$sample <- .Call(ns$C_stan4bart_run, sampler, commonControl$iter, FALSE, "both")
+  
+  if (commonControl$warmup > 0L) {
+    stan_warmup <- list(raw = results$warmup$stan)
+    stan_warmup$Sigma <- ns$getSigma(group$cnms, stan_warmup$raw)
+    stan_warmup$ranef <- ns$getRanef(group, stan_warmup$raw)
+    results$warmup$stan <- stan_warmup
+  }
+  stan_sample <- list(raw = results$sample$stan)
+  stan_sample$Sigma <- ns$getSigma(group$cnms, stan_sample$raw)
+  stan_sample$ranef <- ns$getRanef(group, stan_sample$raw)
+  results$sample$stan <- stan_sample
+  
+  results
+}
+
+mstan4bart_fit <- 
   function(bartData, y,
            ranef_init, sigma_init,
            weights = rep(1, NROW(y)), 
@@ -205,13 +234,7 @@ mstan4bart.fit <-
     adjusted_prior_aux_scale = prior_scale_for_aux,
     family = family
   )
-  
-  pars <- c("b",
-            "aux",
-            "theta_L")
  
-  # doing this manually b/c turning off check_data later screws up
-  # still check_data at least once to match dimensions
   for (varName in names(standata))
     if (is.logical(standata[[varName]])) standata[[varName]] <- as.integer(standata[[varName]])
   for (varName in c("len_theta_L"))
@@ -259,10 +282,6 @@ mstan4bart.fit <-
     stop("'cores' must be a positive integer")
   cores <- as.integer(cores)
   
-  save_warmup <- if (!is.null(dotsList[["save_warmup"]])) dotsList[["save_warmup"]] else FALSE
-  if (!is.logical(save_warmup) || length(save_warmup) != 1L || is.na(save_warmup))
-    stop("'save_warmup' must be TRUE or FALSE")
-  
   verbose <- if (!is.null(dotsList[["verbose"]])) dotsList[["verbose"]] else 1L
   if (is.logical(verbose)) verbose <- as.integer(verbose)
   if (!is.numeric(verbose) || length(verbose) != 1L || is.na(verbose))
@@ -278,10 +297,7 @@ mstan4bart.fit <-
   offset_type <- match.arg(offset_type, c("default", "fixef", "ranef"))
   offset_type <- which(offset_type == c("default", "fixef", "ranef")) - 1L
   
-  ranef_true <- if (!is.null(dotsList[["ranef_true"]])) dotsList[["ranef_true"]] else NULL
-  fixef_true <- if (!is.null(dotsList[["fixef_true"]])) dotsList[["fixef_true"]] else NULL
-  
-  bartData@sigma <- 1
+  bartData@sigma <- sigma_init
   bartControl <- dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
                                        n.thin = thin.bart, n.threads = 1L,
                                        updateState = FALSE)
@@ -293,60 +309,40 @@ mstan4bart.fit <-
   bartModel <- new("dbartsModel", bartPriors$tree.prior, bartPriors$node.prior, bartPriors$resid.prior,
                     node.scale = if (!is_continuous) 3.0 else 0.5)
   
-  # TODO: make these user setable
+  # TODO: make more stan args user setable
   stan_args <- list(
     seed = sample.int(.Machine$integer.max, 1L),
     init_r = 2.0,
     thin = thin.stan,
     adapt_delta = adapt_delta)
   
-  commonControl <- nlist(iter, warmup, verbose, save_warmup, refresh,
-                        offset = offset, offset_type = offset_type,
-                        ranef_init = ranef_init, sigma_init = sigma_init,
-                        ranef_true, fixef_true)
-  
-  sampler <- .Call(C_stan4bart_create, bartControl, bartData, bartModel, standata, stan_args, commonControl)
-  if (commonControl$verbose > 0L)
-    .Call(C_stan4bart_printInitialSummary, sampler)
-  results <- list()
-  if (warmup > 0L)
-    results$warmup  <- .Call(C_stan4bart_run, sampler, warmup, TRUE, "both")
-  .Call(C_stan4bart_disengageAdaptation, sampler)
-  results$sample <- .Call(C_stan4bart_run, sampler, iter, FALSE, "both")
+  commonControl <- nlist(iter, warmup, verbose, refresh,
+                         offset = offset, offset_type = offset_type,
+                         ranef_init = ranef_init, sigma_init = sigma_init)
   
   
-  if (warmup > 0L) {
-    stan_warmup <- list(raw = results$warmup$stan)
-    stan_warmup$Sigma <- getSigma(group$cnms, stan_warmup$raw)
-    stan_warmup$ranef <- getRanef(group, stan_warmup$raw)
-    results$warmup$stan <- stan_warmup
-  }
-  stan_sample <- list(raw = results$sample$stan)
-  stan_sample$Sigma <- getSigma(group$cnms, stan_sample$raw)
-  stan_sample$ranef <- getRanef(group, stan_sample$raw)
-  results$sample$stan <- stan_sample
-  
-  return(results)
-    
-  # below here is mostly garbage
   chainResults <- vector("list", chains)
   if (cores <= 1L || chains <= 1L) {
     for (chainNum in seq_len(chains))
-      chainResults[[chainNum]] <- rstanbartarmglmerglmer_fit(X, Z, iter, warmup, sampling_args, bartControl)
+      chainResults[[chainNum]] <- mstan4bart_fitforreal(1L, bartControl, bartData, bartModel, standata, stan_args, commonControl, group)
   } else {
-    cluster <- parallel::makeCluster(chains)
+    if (commonControl$verbose > 0L)
+      cat("starting multithreaded fit, futher output silenced\n")
+    commonControl$verbose <- 0L
+    cluster <- makeCluster(min(cores, chains))
     
-    parallel::clusterExport(cluster, "rstanbartarmglmerglmer_fit", asNamespace("rstanbartarmglmerglmer"))
-    parallel::clusterEvalQ(cluster, require(rstanbartarmglmerglmer))
+    clusterExport(cluster, "mstan4bart_fitforreal", asNamespace("stan4bart"))
+    clusterEvalQ(cluster, require(stan4bart))
     
     tryResult <- tryCatch(
-      chainResults <- parallel::clusterCall(cluster, "rstanbartarmglmerglmer_fit", X, Z, iter, warmup, sampling_args, bartControl))
+      chainResults <- clusterMap(cluster, "mstan4bart_fitforreal", seq_len(chains), MoreArgs = nlist(bartControl, bartData, bartModel, standata, stan_args, commonControl, group)))
     
-    parallel::stopCluster(cluster)
+    stopCluster(cluster)
   }
         
   return(chainResults)
 
+  # below here is garbage
   check <- try(check_stanfit(stanfit))
   if (!isTRUE(check)) return(standata)
   
