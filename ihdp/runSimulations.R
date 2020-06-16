@@ -10,10 +10,66 @@ source("sim.R")
 
 ihdp <- loadIHDPData()
 
+# methods <- c("lm", "lmer", "bart", "bart_vi", "stan4bart")
+method.files <- list.files("methods")
+n.methods <- length(method.files)
+methods <- gsub("\\.R$", "", method.files)
+
+# load methods
+fit.functions <- vector("list", length(n.methods))
+fit.caches    <- vector("list", length(n.methods))
+for (i in seq_along(method.files)) {
+  source.env <- new.env()
+  source(file.path("methods", method.files[[i]]), source.env)
+  source.env$init()
+  fit.functions[[i]] <- source.env$getFit
+  fit.caches[[i]]    <- source.env$getCache(ihdp)
+}
+names(fit.functions) <- names(fit.caches) <- methods
+
 n.iters <- 1000L
+n.groups  <- nlevels(ihdp$g1)
+p.groups  <- unname(table(ihdp$g1[ihdp$z == 1])) / sum(ihdp$z == 1)
+
+# vector of treated indices corresponding to each group
+g.sel <- lapply(seq_len(n.groups), function(j) which(ihdp$g1 == levels(ihdp$g1)[j] & ihdp$z == 1))
+
+results <- array(NA_real_,
+                 c(n.iters, n.methods, 4L),
+                  dimnames = list(NULL, methods, c("bias", "cover", "pehe", "pegste")))
+
+truthIsFour <- TRUE
+
+set.seed(1)
+# sample a covariance matrix for random effects by first picking
+# a high correlation
+# then a ratio of variances, while fixing the det of Sigma.b to 1
+rho <- rbeta(1, 16, 4)
+r.var <- rf(1, 5, 7)
+# r.var = sigma1.sq / sigma2.sq
+#  | Sigma.b | = sigma1.sq * sigma2.sq - sigma1.sq * sigma2.sq * rho^2
+#              = sigma1.sq * sigma2.sq * (1 - rho^2)
+# 1 / (1 - rho) = sigma1.sq^2 / r.var
+sigma1.sq <- sqrt(r.var / (1 - rho^2))
+sigma2.sq <- sigma1.sq / r.var
+Sigma.b <- matrix(c(sigma1.sq, rho * sqrt(sigma1.sq) * sqrt(sigma2.sq), rho * sqrt(sigma1.sq) * sqrt(sigma2.sq), sigma2.sq),
+                  2, 2)
+rm(rho, r.var, sigma1.sq, sigma2.sq)
+
+
+startTime <- proc.time()
 
 for (iter in seq_len(n.iters)) {
-  resp <- generateResponseForIter(ihdp, iter, momage.is.group = TRUE)
+  if (iter %% 10L == 0L) {
+    timeDiff <- proc.time() - startTime
+    
+    cat("fitting iter: ", iter,
+        ", elapsed time: ", format.time(timeDiff[["elapsed"]]), 
+        ", time/iter: ", format.time(timeDiff[["elapsed"]] / iter),
+        "\n", sep = "")
+  }
+  resp <- generateResponseForIter(ihdp, iter, grouping.var = "momage", Sigma.b = Sigma.b)
+  
   # use response surface C, noted below by suffixes
   # mu.xx are the mean structure for trt/control
   # b.xx are the varying intercepts and slopes for each observation
@@ -26,39 +82,24 @@ for (iter in seq_len(n.iters)) {
   df$z  <- ihdp$z
   df$y  <- y
   
-  # see R/mstan4bart.R for a description of what this function returns
-  fit.s4b <- mstan4bart(y ~ . - g1 - (1 + z | g1), df, treatment = z, verbose = 0, chains = 10)
-  rows.b <- grepl("^b\\.", rownames(fit.s4b[[1L]]$sample$stan$raw))
-  n.obs <- nrow(df)
-  n.samp <- ncol(fit.s4b[[1L]]$sample$bart$test)
-  Zt.cf <- attr(fit.s4b, "Zt.cf")
- 
+  icate.truth <- with(resp, (mu.1.c + b.1 - mu.0.c - b.0))
+  gcatt.truth <- sapply(g.sel, function(sel) mean(icate.truth[sel]))
+  icatt.truth <- icate.truth[df$z == 1]
+  truth <- if (truthIsFour) 4 else mean(icatt.truth)
   
-  # by way of example, this computes the individual treatment effect estimates,
-  #   (y(obs) - y(cf)) * sign flip for controls
-  # can be modified to compute sub-group estimates or confidence intervals
-  ite <- apply(sapply(fit.s4b, function(fit.chain) {
-    sample.sigma <- fit.chain$sample$stan$raw["aux",]
-    y.hat.cf <- fit.chain$sample$bart$test + Matrix::crossprod(Zt.cf, fit.chain$sample$stan$raw[rows.b,,drop = FALSE]) +
-      rnorm(n.obs * n.samp, 0, rep(sample.sigma, rep(n.obs, n.samp)))
+  sd.y <- sd(y)
+  
+  for (method in methods) {
+    fit <- fit.functions[[method]](df, fit.caches[[method]])
     
-    sample.ite <- (y - y.hat.cf) * (2 * ihdp$z - 1) # num obs x num samples
-    ite <- apply(sample.ite, 1, mean)
-  }), 1L, mean)
-  # mean(ite) is the sate
+    results[iter,method,"bias"]  <- (fit$catt - truth) / sd.y
+    results[iter,method,"cover"] <- as.double(fit$catt.lower <= truth && truth <= fit$catt.upper)
+    results[iter,method,"pehe"]  <- sqrt(mean((fit$icatt - icatt.truth)^2)) / sd.y
+    results[iter,method,"pegste"] <- sqrt(mean((fit$gcatt - gcatt.truth)^2)) / sd.y
+  }
   
-  
-  # bart with fixed effects
-  confounders <- paste0(colnames(ihdp$x.z), collapse = " + ")
-  fit.bart.fixef <- bartc(y, z, confounders, df, estimand = "ate", group.by = g1, use.ranef = FALSE, n.samples = 2000, n.burn = 1000, verbose = FALSE)
-  sum.bart.fixef <- summary(fit.bart.fixef, target = "sate")
-  # sum.bart.fixef$estimates$estimate
-  
-  # bart with varying intercepts
-  fit.bart.varint <- bartc(y, z, confounders, df, estimand = "ate", group.by = g1, use.ranef = TRUE, n.samples = 2000, n.burn = 1000, verbose = FALSE)
-  sum.bart.varint <- summary(fit.bart.varint, target = "sate")
-  # sum.bart.varint$estimates$estimate
-  
-  
-  break
+  if (iter == 5L) { timeDiff <- proc.time() - startTime; break }
 }
+
+# rmse for a method is sqrt(mean((results[iter,method,"bias"]^2)))
+

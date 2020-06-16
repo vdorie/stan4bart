@@ -19,3 +19,12 @@ nlist <- function (...)  {
 
 "%not_in%" <- function(x, table) match(x, table, nomatch = 0L) <= 0L
 
+format.time <- function(secs) {
+  hours <- floor(secs / 3600)
+  secs <- secs - hours * 3600
+  mins  <- floor(secs / 60)
+  secs <- round(secs - mins * 60)
+  
+  if (hours > 0) paste0(hours, ":", mins, ":", secs) else paste0(mins, ":", secs)
+}
+
