@@ -64,7 +64,7 @@ getMSE <- function(x) {
 }
 
 df$user_offset <- NULL
-fit <- mstan4bart(y ~ . - g.1 - g.2 + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2)
+fit <- mstan4bart(y ~ . - g.1 - g.2 + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2, chains = 1)[[1L]]
 #                  ranef_true = ranef_true, fixef_true = fixef_true)
 
 
@@ -72,13 +72,13 @@ fit <- mstan4bart(y ~ . - g.1 - g.2 + (1 + X4 | g.1) + (1 | g.2), df, verbose = 
 
 # test that it can fit the mean model well with a user-supplied set of random effects
 df$user_offset <- ranef_true
-fit.ranef <- mstan4bart(y ~ . - g.1 - g.2 - user_offset + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2,
-                         offset = user_offset, offset_type = "ranef")
+fit.ranef <- mstan4bart(y ~ . - g.1 - g.2 - user_offset + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2, chains = 1,
+                         offset = user_offset, offset_type = "ranef")[[1L]]
 
 # test that it can fit the hierarchical model well with a user-supplied set of fixed effects
 df$user_offset <- fixef_true
-fit.fixef <- mstan4bart(y ~ . - g.1 - g.2 - user_offset + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2,
-                         offset = user_offset, offset_type = "fixef")
+fit.fixef <- mstan4bart(y ~ . - g.1 - g.2 - user_offset + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2, chains = 1,
+                         offset = user_offset, offset_type = "fixef")[[1L]]
 
 # test against default methods without ranef or non-parametric part
 df.temp <- df

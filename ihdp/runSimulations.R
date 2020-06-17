@@ -57,15 +57,18 @@ Sigma.b <- matrix(c(sigma1.sq, rho * sqrt(sigma1.sq) * sqrt(sigma2.sq), rho * sq
 rm(rho, r.var, sigma1.sq, sigma2.sq)
 
 
+startIter <- which.max(apply(results[,,"bias"], 1L, anyNA))
 startTime <- proc.time()
 
-for (iter in seq_len(n.iters)) {
+for (iter in seq.int(startIter, n.iters)) {
+  if (!anyNA(results[iter,,"bias"])) next
+  
   if (iter %% 10L == 0L) {
     timeDiff <- proc.time() - startTime
     
     cat("fitting iter: ", iter,
         ", elapsed time: ", format.time(timeDiff[["elapsed"]]), 
-        ", time/iter: ", format.time(timeDiff[["elapsed"]] / iter),
+        ", time/iter: ", format.time(timeDiff[["elapsed"]] / (iter - startIter + 1L)),
         "\n", sep = "")
   }
   resp <- generateResponseForIter(ihdp, iter, grouping.var = "momage", Sigma.b = Sigma.b)
@@ -97,9 +100,18 @@ for (iter in seq_len(n.iters)) {
     results[iter,method,"pehe"]  <- sqrt(mean((fit$icatt - icatt.truth)^2)) / sd.y
     results[iter,method,"pegste"] <- sqrt(mean((fit$gcatt - gcatt.truth)^2)) / sd.y
   }
-  
-  if (iter == 5L) { timeDiff <- proc.time() - startTime; break }
 }
 
-# rmse for a method is sqrt(mean((results[iter,method,"bias"]^2)))
+pdf("results.pdf", 6, 6)
+par(mfrow = c(2, 2))
+boxplot(results[seq_len(iter - 1L),,"bias"], main = "bias")
+boxplot(results[seq_len(iter - 1L),,"pehe"], main = "pehe")
+boxplot(results[seq_len(iter - 1L),,"pegste"], main = "pegste")
+coverage <- apply(results[seq_len(iter - 1L),,"cover"], 2L, mean)
+rmse     <- apply(results[seq_len(iter - 1L),,"bias"], 2L, function(x) sqrt(mean(x^2)))
+
+plot(NULL, type = "n", xlim = range(coverage, na.rm = TRUE), ylim = range(rmse),
+     xlab = "coverage", ylab = "rmse")
+text(coverage, rmse, methods)
+dev.off()
 
