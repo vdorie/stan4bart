@@ -262,36 +262,36 @@ void initializeStanArgsFromExpression(StanArgs& args, SEXP argsExpr)
   args.init_radius = rc_getDoubleAt(argsExpr, matchPos[1], "init_r",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 2.0, RC_END);
-  args.thin = rc_getIntAt(argsExpr, matchPos[3], "thin",
+  args.thin = rc_getIntAt(argsExpr, matchPos[2], "thin",
     RC_VALUE | RC_GT, 0,
     RC_NA | RC_YES, RC_END);
-  args.adapt_gamma = rc_getDoubleAt(argsExpr, matchPos[4], "adapt_gamma",
+  args.adapt_gamma = rc_getDoubleAt(argsExpr, matchPos[3], "adapt_gamma",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 0.05, RC_END);
-  args.adapt_delta = rc_getDoubleAt(argsExpr, matchPos[5], "adapt_delta",
+  args.adapt_delta = rc_getDoubleAt(argsExpr, matchPos[4], "adapt_delta",
     RC_VALUE | RC_GT, 0.0,
     RC_VALUE | RC_LT, 1.0,
     RC_VALUE | RC_DEFAULT, 0.8, RC_END);
-  args.adapt_kappa = rc_getDoubleAt(argsExpr, matchPos[6], "adapt_kappa",
+  args.adapt_kappa = rc_getDoubleAt(argsExpr, matchPos[5], "adapt_kappa",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 0.75, RC_END);
-  args.adapt_init_buffer = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[7], "adapt_init_buffer",
+  args.adapt_init_buffer = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[6], "adapt_init_buffer",
     RC_VALUE | RC_DEFAULT, 75u, RC_END));
-  args.adapt_term_buffer = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[8], "adapt_term_buffer",
+  args.adapt_term_buffer = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[7], "adapt_term_buffer",
     RC_VALUE | RC_DEFAULT, 50u, RC_END));
-  args.adapt_window = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[9], "adapt_window",
+  args.adapt_window = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[8], "adapt_window",
     RC_VALUE | RC_DEFAULT, 25u, RC_END));
-  args.adapt_t0 = rc_getDoubleAt(argsExpr, matchPos[10], "adapt_t0",
+  args.adapt_t0 = rc_getDoubleAt(argsExpr, matchPos[9], "adapt_t0",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 10.0, RC_END);
-  args.stepsize = rc_getDoubleAt(argsExpr, matchPos[11], "stepsize",
+  args.stepsize = rc_getDoubleAt(argsExpr, matchPos[10], "stepsize",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 1.0, RC_END);
-  args.stepsize_jitter = rc_getDoubleAt(argsExpr, matchPos[12], "stepsize_jitter",
+  args.stepsize_jitter = rc_getDoubleAt(argsExpr, matchPos[11], "stepsize_jitter",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_LEQ, 1.0,
     RC_VALUE | RC_DEFAULT, 0.0, RC_END);
-  args.max_treedepth = rc_getIntAt(argsExpr, matchPos[13], "max_treedepth",
+  args.max_treedepth = rc_getIntAt(argsExpr, matchPos[12], "max_treedepth",
     RC_VALUE | RC_GEQ, 0,
     RC_VALUE | RC_DEFAULT, 10, RC_END);
   
