@@ -11,7 +11,10 @@ getFit <- function(df, cache) {
   
   icatt <- fitted(fit)[df$z == 1] - predict(fit, within(df, z <- 1 - z)[df$z == 1,])
   
-  # not being clever about this
+  # not being clever about this, just taking the first observation in each group
+  # since their x * beta under z == 1 is the same as x * beta under z == 0, it
+  # shouldn't matter who in the group we use to evaluate when obtaining the
+  # group predicted expected difference
   new.data <- df[sapply(seq_len(n.groups), function(j) which.max(df$g1 == levels(df$g1)[j])),]
   new.data$z <- 1
   mu.1 <- predict(fit, new.data)
@@ -19,7 +22,6 @@ getFit <- function(df, cache) {
   mu.0  <- predict(fit, new.data)
   
   gcatt <- mu.1 - mu.0
-  catt <- sum(gcatt * p.groups)
   
   se.lmer <- NA_real_
   
