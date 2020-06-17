@@ -39,20 +39,14 @@ struct double_writer : public stan::callbacks::writer {
     delete [] x_base;
   }
   
-  // copies in current sample, if applicable
   void resize(size_t num_pars, size_t num_samples) {
-    const double* x_curr_old = x_curr;
-    const double* x_base_old = x_base;
+    if (x_base != NULL)
+      delete [] x_base;
     
     this->num_pars = num_pars;
     this->num_samples = num_samples;
     x_base = new double[num_pars * num_samples];
     x_curr = x_base;
-    
-    if (x_base_old != NULL) {
-      std::memcpy(x_curr, x_curr_old, num_pars * sizeof(double));
-      delete [] x_base_old;
-    }
   }
    
   void operator()(const std::vector<std::string>& names) {
