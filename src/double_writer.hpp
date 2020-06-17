@@ -11,14 +11,13 @@
 // TODO: remove context and names
 namespace stan4bart {
 
-class double_writer : public stan::callbacks::writer {
-  public:
-    size_t num_pars;
-    size_t num_samples;
-    const char* context;
-    double* x_base;
-    double* x_curr;
-    std::vector<std::string> names;
+struct double_writer : public stan::callbacks::writer {
+  size_t num_pars;
+  size_t num_samples;
+  const char* context;
+  double* x_base;
+  double* x_curr;
+  std::vector<std::string> names;
   
   double_writer(const char* context) :
     num_pars(0), num_samples(0),

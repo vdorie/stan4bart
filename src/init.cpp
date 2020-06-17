@@ -48,16 +48,6 @@ namespace {
   };
   BARTFunctionTable bartFunctions;
   
-  double getRange(const double* x, size_t len) {
-    double min, max;
-    min = max = x[0];
-    for (size_t i = 1; i < len; ++i) {
-      if (x[i] < min) min = x[i];
-      else if (x[i] > max) max = x[i];
-    }
-    return max - min;
-  }
-  
   enum UserOffsetType {
     OFFSET_DEFAULT = 0,
     OFFSET_FIXEF,
@@ -218,7 +208,7 @@ extern "C" {
               resultsType == RESULTS_BOTH ? "both BART and Stan" : (resultsType == RESULTS_BART ? "BART only" : "Stan only"));
     
     // TODO: add in capacity for fitting against true ranef and true fixef
-    for (size_t iter = 0; iter < numIter; ++iter) {
+    for (int iter = 0; iter < numIter; ++iter) {
       if (sampler.refresh > 0 && sampler.verbose > 1 && (iter + 1) % sampler.refresh == 0)
           Rprintf("  iter %.3d / %.3d\n", iter + 1, numIter);
       
@@ -838,7 +828,7 @@ static void samplerFinalizer(SEXP samplerExpr)
   R_ClearExternalPtr(samplerExpr);
 }
 
-static SEXP isValidPointer(SEXP samplerExpr)
+/* static SEXP isValidPointer(SEXP samplerExpr)
 {
   Sampler* sampler = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
   if (sampler == NULL) return Rf_ScalarLogical(FALSE);
@@ -847,7 +837,7 @@ static SEXP isValidPointer(SEXP samplerExpr)
     return Rf_ScalarLogical(TRUE);
   
   return Rf_ScalarLogical(FALSE);
-}
+} */
 
 static SEXP finalize(void)
 {

@@ -9,6 +9,26 @@
 #include <sstream> // stringstream
 #include <vector>
 
+#if defined(__GNUC__) && (\
+  (!defined(__clang__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || \
+  ( defined(__clang__) && (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 7))))
+#  define SUPPRESS_DIAGNOSTIC 1
+#endif
+
+#define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS 1
+#ifdef SUPPRESS_DIAGNOSTIC
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wunknown-pragmas"
+#  pragma GCC diagnostic ignored "-Wunused-variable"
+#  pragma GCC diagnostic ignored "-Wunused-parameter"
+#  pragma GCC diagnostic ignored "-Wunused-local-typedef"
+#  pragma GCC diagnostic ignored "-Wunneeded-internal-declaration"
+#  pragma GCC diagnostic ignored "-Wunused-function"
+#  pragma GCC diagnostic ignored "-Wsign-compare"
+#  pragma GCC diagnostic ignored "-Wlanguage-extension-token"
+#  pragma GCC diagnostic ignored "-Winfinite-recursion"
+#  pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#endif
 #include <stan/callbacks/interrupt.hpp>
 #include <stan/callbacks/stream_logger.hpp>
 #include <stan/callbacks/stream_writer.hpp>
@@ -16,6 +36,9 @@
 #include <stan/io/dump.hpp>
 #include <stan/io/empty_var_context.hpp>
 #include <stan/io/var_context.hpp>
+#ifdef SUPPRESS_DIAGNOSTIC
+#  pragma GCC diagnostic pop
+#endif
 
 #include "double_writer.hpp"
 #include "interruptable_sampler.hpp"
@@ -23,7 +46,7 @@
 // #include "stan_files/continuous.hpp"
 
 namespace model_continuous_namespace {
-  struct model_continuous;
+  class model_continuous;
 }
 
 namespace stan4bart {

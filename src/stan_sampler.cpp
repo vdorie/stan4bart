@@ -11,7 +11,21 @@
 
 #include <stan/services/util/create_unit_e_diag_inv_metric.hpp>
 
+#if defined(__GNUC__) && (\
+  (!defined(__clang__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || \
+  ( defined(__clang__) && (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 7))))
+#  define SUPPRESS_DIAGNOSTIC 1
+#endif
+
+#ifdef SUPPRESS_DIAGNOSTIC
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wunused-parameter"
+#  pragma GCC diagnostic ignored "-Wunused-local-typedef"
+#endif
 #include "stan_files/continuous.hpp" // should include Eigen
+#ifdef SUPPRESS_DIAGNOSTIC
+#  pragma GCC diagnostic pop
+#endif
 
 #include "double_writer.hpp"
 
@@ -96,8 +110,6 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
     }
   }
   
-  typedef Eigen::Matrix<double, Eigen::Dynamic, 1> vector_d;
-  
   // transformed data
   int t = rc_getIntAt(dataExpr, matchPos[12], "t", RC_VALUE | RC_GEQ, 0, RC_END);
   
@@ -131,10 +143,10 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   }
   
   const int* l = INTEGER(VECTOR_ELT(dataExpr, matchPos[14]));
-  for (size_t i = 0; i < t; ++i) {
+  for (int i = 0; i < t; ++i) {
     if (l[i] < 1) {
       misc_stackFree(matchPos);
-      Rf_error("l[%lu] less than 1", i + 1);
+      Rf_error("l[%d] less than 1", i + 1);
     }
   }
   
@@ -207,10 +219,10 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
     delete result;
     Rf_error("u[%lu] out of [0, %d] range", n + 1, maxU);
   }
-  for (size_t i = 0; i < numNonZero; ++i) {
+  for (int i = 0; i < numNonZero; ++i) {
     if (v[i] < 0 || v[i] > q - 1) {
       delete result;
-      Rf_error("v[%lu] out of [0, %d] range", i + 1, q - 1);
+      Rf_error("v[%d] out of [0, %d] range", i + 1, q - 1);
     }
   }
   
