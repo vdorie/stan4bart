@@ -10,6 +10,10 @@
 #
 # if we do care, then have to generate all three mean-response surfaces
 #   sequentially after setting the seed
+
+
+# NOTE: !!if group.var is not momage, references to g1 will need to be
+# changed to g2 elsewhere!!
 generateResponseForIter <- function(ihdp, iter,
                                     grouping.var = c("momage", "site.num"),
                                     Sigma.b = diag(c(1, 0.5)))
