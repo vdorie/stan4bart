@@ -131,7 +131,8 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   int len_concentration = rc_getIntAt(dataExpr, matchPos[19], "len_concentration", RC_VALUE | RC_GEQ, 0, RC_END);
   std::vector<double> delta_v(len_concentration);
   SEXP concentrationExpr = VECTOR_ELT(dataExpr, matchPos[20]);
-  rc_assertDoubleConstraints(concentrationExpr, "concentration", RC_VALUE | RC_GEQ, 0.0, RC_END);
+  if (len_concentration > 0)
+    rc_assertDoubleConstraints(concentrationExpr, "concentration", RC_VALUE | RC_GEQ, 0.0, RC_END);
   double* concentration = REAL(concentrationExpr);
   for (int i = 0; i < t; ++i) {
     if (p_int[i] > 1) {
