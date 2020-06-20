@@ -9,7 +9,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
         if (is.symbol(mc$treatment)) treatment <- as.character(mc$treatment)
       mf$treatment <- NULL
       if (!is.character(treatment))
-        stop("treament must be a character or symbol")
+        stop("'treament' argument must be a character or symbol")
     }
     
     ignoreArgs <- c("start", "verbose", "devFunOnly", "optimizer", 
@@ -46,11 +46,11 @@ glFormula <- function (formula, data = NULL, subset, weights,
     reTrms <- mkReTrms(findbars(RHSForm(formula)), fr)
     
     if (!is.null(treatment)) {
-      if (!(treatment %in% colnames(fr)))
+      if (treatment %not_in% colnames(fr))
         stop("treament must be the name of a column in data")
       uq <- sort(unique(fr[[treatment]]))
       if (length(uq) != 2L || !all(uq == c(0, 1)))
-        stop("treatment must in { 0, 1 }")
+        stop("treatment must in { 0, 1 }^n")
       fr.cf <- fr
       fr.cf[[treatment]] <- 1 - fr.cf[[treatment]]
       reTrms.cf <- mkReTrms(findbars(RHSForm(formula)), fr.cf)
@@ -82,7 +82,8 @@ glFormula <- function (formula, data = NULL, subset, weights,
     bartData <- dbarts::dbartsData(fixedform, fr.bart)
     if (!is.null(treatment)) {
       bartData@x.test <- bartData@x
-      bartData@x.test[, treatment] <- 1 - bartData@x.test[, treatment, drop = FALSE]
+      if (treatment %in% colnames(bartData@x.test))
+        bartData@x.test[, treatment] <- 1 - bartData@x.test[, treatment, drop = FALSE]
       bartData@testUsesRegularOffset <- FALSE
     }
     #X <- model.matrix(fixedform, fr, contrasts)

@@ -1,5 +1,5 @@
 getSigma <- function(cnms, samples) {
-  thetas <- samples[grep("^theta_L", rownames(samples)),]
+  thetas <- samples[grep("^theta_L", rownames(samples)),,drop = FALSE]
   nc <- sapply(cnms, FUN = length)
   nms <- names(cnms)
   Sigma <- apply(thetas, 2L, function(theta) mkVarCorr(sc = 1, cnms, nc, theta, nms))
@@ -12,7 +12,7 @@ getSigma <- function(cnms, samples) {
   Sigmas
 }
 getRanef <- function(group, samples) {
-  ranef <- samples[grep("^b\\.", rownames(samples)),]
+  ranef <- samples[grep("^b\\.", rownames(samples)),,drop = FALSE]
   numGroupingFactors <- length(group$cnms)
   numRanefPerGroupingFactor <- unname(sapply(group$cnms, length))
   
