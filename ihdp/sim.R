@@ -16,7 +16,8 @@
 # changed to g2 elsewhere!!
 generateResponseForIter <- function(ihdp, iter,
                                     grouping.var = c("momage", "site.num"),
-                                    Sigma.b = diag(c(1, 0.5)))
+                                    Sigma.b = diag(c(1, 0.5)),
+                                    ranef.dist = function(n) rnorm(n, 0, 1))
 {
   # only warning is that the sample.kind is old, which is intended to
   # match the original dgp
@@ -66,7 +67,7 @@ generateResponseForIter <- function(ihdp, iter,
     g <- if (grouping.var == "momage") g1 else g2
     
     n.g <- length(unique(g))
-    b <- matrix(rnorm(n.g * 2, 0, 1), n.g) %*% chol(Sigma.b)
+    b <- matrix(ranef.dist(n.g * 2), n.g) %*% chol(Sigma.b)
     
     b.0 <- b[as.integer(g1),1L]
     b.1 <- b.0 + b[as.integer(g2),2L]
