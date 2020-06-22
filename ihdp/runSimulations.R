@@ -118,11 +118,31 @@ for (iter in seq.int(startIter, n.iters)) {
 
 maxIter <- if (!anyNA(results[,,"bias"])) n.iters else which.max(apply(results[,,"bias"], 1L, anyNA)) - 1L
 
-source("plotDualAxis.R")
+#source("plotDualAxis.R")
 
 pdf(paste0("results_sim_", sim.setting, ".pdf"), 6, 6)
 par(mfrow = c(2, 2))
-plotBiasRMSE(results[seq_len(maxIter),,"bias"], methods, main = "Bias/RMSE")
+#plotBiasRMSE(results[seq_len(maxIter),,"bias"], methods, main = "Bias/RMSE")
+par(mar = c(1.5, 2.5, 1.5, 2.5),
+      mgp = c(1, 0.2, 0.0),
+      tcl = -0.3,
+      cex.main = 1.2, cex.axis = 0.7)
+y.range <- range(results[seq_len(maxIter),,"bias"])
+y.range <- c(-1, 1) * 0.5 * 1.05 * diff(y.range) + mean(y.range)
+boxplot(results[seq_len(maxIter),,"bias"], main = "Bias/RMSE", ylab = "bias",
+        ylim = y.range, staplewex = 0)
+plotRegion <- par("usr")
+rmse <- apply(results[seq_len(maxIter),,"bias"], 2L, function(x) sqrt(mean(x^2)))
+cex.text <- 0.7
+lineHeight <- diff(grconvertY(0:1, "inches", "user")) * par("cin")[2L] * par("lheight") * par("cex") * cex.text
+text(1, plotRegion[4] - 1.5 * lineHeight, labels = "rmse", adj = c(0.5, 0.5), cex = cex.text)
+x.vals <- seq_len(length(methods))
+y.vals <- plotRegion[4] - 0.5 * lineHeight
+y.vals <- rep_len(y.vals, length(methods))
+text(x.vals, y.vals, labels = round(rmse, 3),
+     cex = cex.text,
+     adj = c(0.5, 0.5))
+
 #plotCovLenDualAxis(results[seq_len(maxIter),,"cover"],
                    #results[seq_len(maxIter),,"ci_len"],
                    #methods, main = "Coverage/Interval Length")
@@ -140,8 +160,12 @@ par(mar = c(1.5, 2.5, 1.5, 2.5),
       mgp = c(1, 0.2, 0.0),
       tcl = -0.3,
       cex.main = 1.2, cex.axis = 0.7)
-boxplot(results[seq_len(maxIter),,"pehe"], main = "PEHE", ylab = "pehe")
-boxplot(results[seq_len(maxIter),,"pegste"], main = "PEGSTE", ylab = "pegste")
+boxplot(results[seq_len(maxIter),,"pehe"],
+        main = "PEHE", ylab = "pehe",
+        staplewex = 0)
+boxplot(results[seq_len(maxIter),,"pegste"],
+        main = "PEGSTE", ylab = "pegste",
+        staplewex = 0)
 dev.off()
 
 # old plots
