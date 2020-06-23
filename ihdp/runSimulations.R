@@ -128,9 +128,14 @@ par(mar = c(1.5, 2.5, 1.5, 2.5),
       tcl = -0.3,
       cex.main = 1.2, cex.axis = 0.7)
 y.range <- range(results[seq_len(maxIter),,"bias"])
-y.range <- c(-1, 1) * 0.5 * 1.05 * diff(y.range) + mean(y.range)
-boxplot(results[seq_len(maxIter),,"bias"], main = "Bias/RMSE", ylab = "bias",
-        ylim = y.range, staplewex = 0)
+y.range <- c(-1, 1) * 0.5 * 1.1 * diff(y.range) + mean(y.range)
+x.range <- c(1, length(methods))
+x.range <- c(-1, 1) * 0.5 * 1.2 * diff(x.range) + mean(x.range)
+plot(NULL, type = "n", xlim = x.range, ylim = y.range,
+     main = "Bias/RMSE", ylab = "bias", xlab = "", xaxt = "n")
+abline(h = 0, col = "gray")
+boxplot(results[seq_len(maxIter),,"bias"],
+        ylim = y.range, staplewex = 0, add = TRUE)
 plotRegion <- par("usr")
 rmse <- apply(results[seq_len(maxIter),,"bias"], 2L, function(x) sqrt(mean(x^2)))
 cex.text <- 0.7
