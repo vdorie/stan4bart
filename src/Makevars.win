@@ -11,8 +11,5 @@ all: $(SHLIB)
 clean:
 		RM -rf *.so *.o
 
-%.cc: %.stan
-				"$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "source(file.path('..', 'tools', 'make_cc.R')); make_cc(commandArgs(TRUE))" $<
-
-				
 .phony: all clean
+

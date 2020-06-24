@@ -4,7 +4,7 @@ To install:
   1. Install all prerequisites (see DESCRIPTION file)
   2. Try install from this root directory
 
-Windows makefile not yet updated - should be essentially a copy of the \*nix one.
+Windows not tested yet.
 
 Here's some test code to get started with the package. It accepts an lme4 syntax and should be pretty flexible in that regard, but the results are not well packaged at present. You will have to manually dig into the samples, but they should at least have a familar structure.
 

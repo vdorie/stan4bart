@@ -1,5 +1,8 @@
-#!/bin/sh -e
+#!/bin/sh
 
-# Note to Windows users: This is not actually platform specific.
-# "${R_HOME}/bin/R" --vanilla --slave -e 'roxygen2::roxygenize(clean = FALSE)'
-exit $?
+if [ -f src/Makevars ]; then
+  (cd src; make -f Makevars clean)
+else
+  (cd src; make -f Makevars.in clean)
+fi
+
