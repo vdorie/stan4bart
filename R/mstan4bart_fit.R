@@ -322,24 +322,35 @@ mstan4bart_fit <-
   
   
   chainResults <- vector("list", chains)
-  if (cores <= 1L || chains <= 1L) {
+  runSingleThreaded <- cores <= 1L || chains <= 1L
+  if (!runSingleThreaded) {
+    tryResult <- tryCatch(cluster <- makeCluster(min(cores, chains), "PSOCK"), error = function(e) e)
+    if (is(tryResult, "error"))
+      tryResult <- tryCatch(cluster <- makeCluster(min(cores, chains), "FORK"), error = function(e) e)
+    
+    if (is(tryResult, "error")) {
+      warning("unable to multithread, defaulting to single: ", tryResult$message)
+      runSingleThreaded <- TRUE
+    } else {
+      if (commonControl$verbose > 0L)
+        cat("starting multithreaded fit, futher output silenced\n")
+      commonControl$verbose <- 0L
+      
+      clusterExport(cluster, "mstan4bart_fitforreal", asNamespace("stan4bart"))
+      clusterEvalQ(cluster, require(stan4bart))
+      
+      tryResult <- tryCatch(
+        chainResults <- clusterMap(cluster, "mstan4bart_fitforreal", seq_len(chains), MoreArgs = nlist(bartControl, bartData, bartModel, standata, stan_args, commonControl, group)))
+    
+      stopCluster(cluster)
+    }
+  }
+  
+  if (runSingleThreaded) {
     for (chainNum in seq_len(chains))
       chainResults[[chainNum]] <- mstan4bart_fitforreal(1L, bartControl, bartData, bartModel, standata, stan_args, commonControl, group)
-  } else {
-    if (commonControl$verbose > 0L)
-      cat("starting multithreaded fit, futher output silenced\n")
-    commonControl$verbose <- 0L
-    cluster <- makeCluster(min(cores, chains))
-    
-    clusterExport(cluster, "mstan4bart_fitforreal", asNamespace("stan4bart"))
-    clusterEvalQ(cluster, require(stan4bart))
-    
-    tryResult <- tryCatch(
-      chainResults <- clusterMap(cluster, "mstan4bart_fitforreal", seq_len(chains), MoreArgs = nlist(bartControl, bartData, bartModel, standata, stan_args, commonControl, group)))
-    
-    stopCluster(cluster)
   }
-        
+          
   return(chainResults)
 
   # below here is garbage
