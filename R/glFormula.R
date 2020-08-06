@@ -27,7 +27,9 @@ glFormula <- function (formula, data = NULL, subset, weights,
     mf <- mf[c(1L, m)]
     mf$drop.unused.levels <- TRUE
     mf[[1L]] <- quote(stats::model.frame)
-    fr.form <- subbars(formula)
+    # fr and fr.form contains everything, build specialized
+    # frames below
+    fr.form <- subbart(subbars(formula))
     environment(fr.form) <- environment(formula)
     for (i in c("weights", "offset")) {
         if (!eval(bquote(missing(x = .(i))))) 
@@ -61,46 +63,72 @@ glFormula <- function (formula, data = NULL, subset, weights,
     wmsgZdims <- checkZdims(reTrms$Ztlist, n = n, control, allow.n = TRUE)
     wmsgZrank <- checkZrank(reTrms$Zt, n = n, control, nonSmall = 1e+06, 
         allow.n = TRUE)
+    
     fixedform <- formula
-    RHSForm(fixedform) <- nobars(RHSForm(fixedform))
-    mf$formula <- fixedform
+    RHSForm(fixedform) <- nobart(nobars(RHSForm(fixedform)))
+    RHSForm(mf$formula) <- RHSForm(fixedform)
     fixedfr <- eval(mf, parent.frame())
-    attr(attr(fr, "terms"), "predvars.fixed") <- attr(attr(fixedfr, 
-        "terms"), "predvars")
-    #ranform <- formula
-    #RHSForm(ranform) <- subbars(RHSForm(reOnly(formula)))
-    #mf$formula <- ranform
-    #ranfr <- eval(mf, parent.frame())
-    #attr(attr(fr, "terms"), "predvars.random") <- attr(terms(ranfr), 
-    #    "predvars")
-    fr.bart <- fixedfr
-    if ("(offset)" %in% colnames(fr.bart)) {
-      keepcols <- colnames(fr.bart) != "(offset)"
-      fr.bart <- fr.bart[,keepcols,drop = FALSE]
-      attr(attr(fr.bart, "terms"), "dataClasses") <- attr(attr(fr.bart, "terms"), "dataClasses")[keepcols]
+    fixedterms <- attr(fixedfr, "terms")
+    attr(attr(fr, "terms"), "predvars.fixed") <-
+      attr(fixedterms, "variables")[c(1L, 1L + attr(fixedterms, "response"), which(as.character(attr(fixedterms, "variables")) %in% attr(fixedterms, "term.labels")))]
+    
+    bartform <- formula
+    RHSForm(bartform) <- allbart(nobars(RHSForm(bartform)))
+    RHSForm(mf$formula) <- RHSForm(bartform)
+    bartfr <- eval(mf, parent.frame())
+    bartterms <- attr(bartfr, "terms")
+    attr(attr(fr, "terms"), "predvars.bart") <-
+      attr(bartterms, "variables")[c(1L, 1L + attr(bartterms, "response"), which(as.character(attr(bartterms, "variables")) %in% attr(bartterms, "term.labels")))]
+    
+    ranform <- formula
+    RHSForm(ranform) <- subbars(RHSForm(reOnly(formula)))
+    mf$formula <- ranform
+    ranfr <- eval(mf, parent.frame())
+    ranterms <- attr(ranfr, "terms")
+    attr(attr(fr, "terms"), "predvars.random") <-
+      attr(ranterms, "variables")[c(1L, 1L + attr(ranterms, "response"), which(as.character(attr(ranterms, "variables")) %in% attr(ranterms, "term.labels")))]
+    
+    
+    # dbartsData can't handle columns in the model frame not in the formula terms, so we
+    # pull out  "(offset)" if it exists
+    bartprednames <- as.character(attr(bartterms, "predvars"))[-1]
+    if (any(!(colnames(bartfr) %in% bartprednames))) {
+      keepcols <- colnames(bartfr) %in% bartprednames
+      bartfr <- bartfr[,keepcols, drop = FALSE]
+      attr(bartfr, "terms") <- bartterms
+      attr(attr(bartfr, "terms"), "dataClasses") <- attr(bartterms, "dataClasses")[keepcols]
+      bartterms <- attr(bartfr, "terms")
     }
-    bartData <- dbarts::dbartsData(fixedform, fr.bart)
+    bartData <- dbarts::dbartsData(bartform, bartfr)
     if (!is.null(treatment)) {
       bartData@x.test <- bartData@x
       if (treatment %in% colnames(bartData@x.test))
-        bartData@x.test[, treatment] <- 1 - bartData@x.test[, treatment, drop = FALSE]
+        bartData@x.test[,treatment] <- 1 - bartData@x.test[,treatment, drop = FALSE]
       bartData@testUsesRegularOffset <- FALSE
     }
-    #X <- model.matrix(fixedform, fr, contrasts)
-    #if (is.null(rankX.chk <- control[["check.rankX"]])) 
-    #   rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
-    #X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
-    #if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
-    #    scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
-    #X <- checkScaleX(X, kind = scaleX.chk)
+    X <- model.matrix(fixedform, fr, contrasts)
+    if (is.null(rankX.chk <- control[["check.rankX"]])) 
+       rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
+    X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
+    if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
+        scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
+    X <- checkScaleX(X, kind = scaleX.chk)
+    
+    if (!is.null(treatment)) {
+      X.test <- X
+      if (treatment %in% colnames(X.test))
+        X.test[,treatment] <- 1 - X.test[,treatment, drop = FALSE]
+    }
     
     y <- model.response(fr)
     u.y <- unique(y)
     family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
-    result <- list(fr = fr, bartData = bartData, reTrms = reTrms, family = family, formula = formula, 
+    result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, family = family, formula = formula, 
                    wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
-    if (!is.null(treatment))
+    if (!is.null(treatment)) {
       result$reTrms.cf <- reTrms.cf
+      result$X.test <- X.test
+    }
     result
 }
 
@@ -113,6 +141,120 @@ if (!is(tryResult, "error")) {
   }
 } else {
   `%ORifNotInLme4%` <- function(a, b) b
+}
+
+glmerControl <- glmerControl %ORifNotInLme4% function (optimizer = c("bobyqa", "Nelder_Mead"), restart_edge = FALSE, 
+    boundary.tol = 1e-05, calc.derivs = TRUE, use.last.params = FALSE, 
+    sparseX = FALSE, standardize.X = FALSE, check.nobs.vs.rankZ = "ignore", 
+    check.nobs.vs.nlev = "stop", check.nlev.gtreq.5 = "ignore", 
+    check.nlev.gtr.1 = "stop", check.nobs.vs.nRE = "stop", check.rankX = c("message+drop.cols", 
+        "silent.drop.cols", "warn+drop.cols", "stop.deficient", 
+        "ignore"), check.scaleX = c("warning", "stop", "silent.rescale", 
+        "message+rescale", "warn+rescale", "ignore"), check.formula.LHS = "stop", 
+    check.conv.grad = .makeCC("warning", tol = 0.002, relTol = NULL), 
+    check.conv.singular = .makeCC(action = "message", tol = formals(isSingular)$tol), 
+    check.conv.hess = .makeCC(action = "warning", tol = 1e-06), 
+    optCtrl = list(), mod.type = "glmer", tolPwrss = 1e-07, compDev = TRUE, 
+    nAGQ0initStep = TRUE, check.response.not.const = "stop") 
+{
+    stopifnot(is.list(optCtrl))
+    if (mod.type == "glmer" && length(optimizer) == 1) {
+        optimizer <- replicate(2, optimizer)
+    }
+    c.opts <- paste0(mod.type, "Control")
+    merOpts <- getOption(c.opts)
+    if (!is.null(merOpts)) {
+        nn <- names(merOpts)
+        nn.ok <- .get.checkingOpts(names(merOpts))
+        if (length(nn.ignored <- setdiff(nn, nn.ok)) > 0) {
+            warning("some options in ", shQuote(sprintf("getOption('%s')", 
+                c.opts)), " ignored : ", paste(nn.ignored, collapse = ", "))
+        }
+        for (arg in nn.ok) {
+            if (do.call(missing, list(arg))) 
+                assign(arg, merOpts[[arg]])
+        }
+    }
+    check.rankX <- match.arg(check.rankX)
+    check.scaleX <- match.arg(check.scaleX)
+    me <- sys.function()
+    chk.cconv(check.conv.grad, me)
+    chk.cconv(check.conv.singular, me)
+    chk.cconv(check.conv.hess, me)
+    if (mod.type == "glmer" && use.last.params && calc.derivs) {
+        warning("using ", shQuote("use.last.params"), "=TRUE and ", 
+            shQuote("calc.derivs"), "=TRUE with ", shQuote("glmer"), 
+            " will not give backward-compatible results")
+    }
+    ret <- namedList(optimizer, restart_edge, boundary.tol, calc.derivs, 
+        use.last.params, checkControl = namedList(check.nobs.vs.rankZ, 
+            check.nobs.vs.nlev, check.nlev.gtreq.5, check.nlev.gtr.1, 
+            check.nobs.vs.nRE, check.rankX, check.scaleX, check.formula.LHS), 
+        checkConv = namedList(check.conv.grad, check.conv.singular, 
+            check.conv.hess), optCtrl = optCtrl)
+    if (mod.type == "glmer") {
+        ret <- c(ret, namedList(tolPwrss, compDev, nAGQ0initStep))
+        ret$checkControl <- c(ret$checkControl, namedList(check.response.not.const))
+    }
+    class(ret) <- c(c.opts, "merControl")
+    ret
+}
+
+lmerControl <- lmerControl %ORifNotInLme4% 
+function (optimizer = "nloptwrap", restart_edge = TRUE, boundary.tol = 1e-05, 
+    calc.derivs = TRUE, use.last.params = FALSE, sparseX = FALSE, 
+    standardize.X = FALSE, check.nobs.vs.rankZ = "ignore", check.nobs.vs.nlev = "stop", 
+    check.nlev.gtreq.5 = "ignore", check.nlev.gtr.1 = "stop", 
+    check.nobs.vs.nRE = "stop", check.rankX = c("message+drop.cols", 
+        "silent.drop.cols", "warn+drop.cols", "stop.deficient", 
+        "ignore"), check.scaleX = c("warning", "stop", "silent.rescale", 
+        "message+rescale", "warn+rescale", "ignore"), check.formula.LHS = "stop", 
+    check.conv.grad = .makeCC("warning", tol = 0.002, relTol = NULL), 
+    check.conv.singular = .makeCC(action = "message", tol = formals(isSingular)$tol), 
+    check.conv.hess = .makeCC(action = "warning", tol = 1e-06), 
+    optCtrl = list(), mod.type = "lmer") 
+{
+    stopifnot(is.list(optCtrl))
+    if (mod.type == "glmer" && length(optimizer) == 1) {
+        optimizer <- replicate(2, optimizer)
+    }
+    c.opts <- paste0(mod.type, "Control")
+    merOpts <- getOption(c.opts)
+    if (!is.null(merOpts)) {
+        nn <- names(merOpts)
+        nn.ok <- .get.checkingOpts(names(merOpts))
+        if (length(nn.ignored <- setdiff(nn, nn.ok)) > 0) {
+            warning("some options in ", shQuote(sprintf("getOption('%s')", 
+                c.opts)), " ignored : ", paste(nn.ignored, collapse = ", "))
+        }
+        for (arg in nn.ok) {
+            if (do.call(missing, list(arg))) 
+                assign(arg, merOpts[[arg]])
+        }
+    }
+    check.rankX <- match.arg(check.rankX)
+    check.scaleX <- match.arg(check.scaleX)
+    me <- sys.function()
+    chk.cconv(check.conv.grad, me)
+    chk.cconv(check.conv.singular, me)
+    chk.cconv(check.conv.hess, me)
+    if (mod.type == "glmer" && use.last.params && calc.derivs) {
+        warning("using ", shQuote("use.last.params"), "=TRUE and ", 
+            shQuote("calc.derivs"), "=TRUE with ", shQuote("glmer"), 
+            " will not give backward-compatible results")
+    }
+    ret <- namedList(optimizer, restart_edge, boundary.tol, calc.derivs, 
+        use.last.params, checkControl = namedList(check.nobs.vs.rankZ, 
+            check.nobs.vs.nlev, check.nlev.gtreq.5, check.nlev.gtr.1, 
+            check.nobs.vs.nRE, check.rankX, check.scaleX, check.formula.LHS), 
+        checkConv = namedList(check.conv.grad, check.conv.singular, 
+            check.conv.hess), optCtrl = optCtrl)
+    if (mod.type == "glmer") {
+        ret <- c(ret, namedList(tolPwrss, compDev, nAGQ0initStep))
+        ret$checkControl <- c(ret$checkControl, namedList(check.response.not.const))
+    }
+    class(ret) <- c(c.opts, "merControl")
+    ret
 }
 
 checkArgs <- checkArgs %ORifNotInLme4% function (type, ...) 
@@ -442,6 +584,21 @@ checkZrank <- checkZrank %ORifNotInLme4% function (Zt, n, ctrl, nonSmall = 1e+06
     else character()
 }
 
+subbart <- function(term)
+{
+  if (is.name(term) || !is.language(term)) return(term)
+  
+  if (length(term) == 2) {
+    if (term[[1]] == as.name("bart"))
+      term[[1]] <- as.name("(")
+    term[[2]] <- subbart(term[[2]])
+    return(term)
+  }
+  
+  for (j in 2:length(term)) term[[j]] <- subbart(term[[j]])
+  term
+}
+
 subbars <- subbars %ORifNotInLme4% function (term) 
 {
     if (is.name(term) || !is.language(term)) 
@@ -662,6 +819,83 @@ nobars <- nobars %ORifNotInLme4% function (term)
         else 1
     }
     nb
+}
+
+nobart_ <- function(term) 
+{
+  if (length(term) == 1L)
+    return(if (term == as.name("bart")) NULL else term)
+  
+  if (length(term) == 2L) {
+    if (term[[1]] == as.name("bart")) return(NULL)
+    browser()
+    nb <- nobart_(term[[2]])
+    if (is.null(nb)) return(NULL)
+    term[[2]] <- nb
+    return(term)
+  }
+  
+  nb2 <- nobart_(term[[2]])
+  nb3 <- nobart_(term[[3]])
+  if (is.null(nb2)) return(nb3)
+  if (is.null(nb3)) return(nb2)
+  
+  term[[2]] <- nb2
+  term[[3]] <- nb3
+  term
+}
+
+nobart <- function(term)
+{
+  nb <- nobart_(term)
+  if (is(term, "formula") && length(term) == 3 && is.symbol(nb)) {
+    nb <- reformulate("1", response = deparse(nb))
+  }
+  if (is.null(nb)) {
+    nb <- if (is(term, "formula")) 
+      ~1
+    else 1
+  }
+  nb
+}
+
+allbart_ <- function(term, inbart)
+{
+  if (length(term) == 1L)
+    return(if (term == as.name("bart") || !inbart) NULL else term)
+  
+  if (length(term) == 2L) {
+    if (term[[1]] == as.name("bart")) return(allbart_(term[[2L]], TRUE))
+    browser()
+    ab <- allbart_(term[[2]], inbart)
+    if (is.null(ab)) return(NULL)
+    term[[2L]] <- ab
+    return(term)
+  }
+  
+  # should be a + b, or some other binary operator
+  ab2 <- allbart_(term[[2L]], inbart)
+  ab3 <- allbart_(term[[3L]], inbart)
+  if (is.null(ab2)) return(ab3)
+  if (is.null(ab3)) return(ab2)
+  
+  term[[2L]] <- ab2
+  term[[3L]] <- ab3
+  term
+}
+
+allbart <- function(term)
+{
+  ab <- allbart_(term, FALSE)
+  if (is(term, "formula") && length(term) == 3 && is.symbol(ab)) {
+    ab <- reformulate("1", response = deparse(ab))
+  }
+  if (is.null(ab)) {
+    ab <- if (is(term, "formula")) 
+      ~1
+    else 1
+  }
+  ab
 }
 
 `RHSForm<-` <- `RHSForm<-` %ORifNotInLme4% function (formula, value) 
