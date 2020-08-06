@@ -100,6 +100,9 @@ glFormula <- function (formula, data = NULL, subset, weights,
       bartterms <- attr(bartfr, "terms")
     }
     bartData <- dbarts::dbartsData(bartform, bartfr)
+    if (ncol(bartData@x) == 0L)
+      stop("no bart component detected; consider using rstanarm instead")
+    
     if (!is.null(treatment)) {
       bartData@x.test <- bartData@x
       if (treatment %in% colnames(bartData@x.test))
@@ -119,6 +122,22 @@ glFormula <- function (formula, data = NULL, subset, weights,
       if (treatment %in% colnames(X.test))
         X.test[,treatment] <- 1 - X.test[,treatment, drop = FALSE]
     }
+    
+    terms <- attr(fr, "terms")
+    responsename   <- as.character(attr(terms, "variables"))[1 + attr(terms, "response")]
+    
+    ranprednames   <- as.character(attr(terms, "predvars.random"))[-1]
+    ranprednames   <- ranprednames[ranprednames != responsename]
+    
+    fixedprednames <- as.character(attr(terms, "predvars.fixed"))[-1]
+    fixedprednames <- fixedprednames[fixedprednames != responsename]
+    
+    bartprednames  <- as.character(attr(terms, "predvars.bart"))[-1]
+    bartprednames  <- bartprednames[bartprednames != responsename]
+    
+    mixedvars <- bartprednames %in% ranprednames | bartprednames %in% fixedprednames
+    if (any(mixedvars))
+      warning("variable(s) '", paste0(bartprednames[mixedvars], collapse = "', '"), "' appear in both parametric and nonparametric are not identifiable; model will fit but some results may be uninterpretable")
     
     y <- model.response(fr)
     u.y <- unique(y)
