@@ -55,7 +55,7 @@ ranef_true <- with(testData, b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2])
 fixef_true <- testData$f.x
 
 getMSE <- function(x) {
-  fixef.hat <- apply(x$sample$bart$train, 1L, mean)
+  fixef.hat <- apply(x$sample$bart$train, 1L, mean) + testData$x[,4] %*% x$sample$stan$fixef
   ranef.hat <- lapply(x$sample$stan$ranef, function(ranef.j) apply(ranef.j, c(1, 2), mean))
   ranef.full <- with(testData, ranef.hat$g.1[1,g.1] + x[,4] * ranef.hat$g.1[2,g.1] + ranef.hat$g.2[g.2])
   c(fixef = mean((fixef_true - fixef.hat)^2),
@@ -63,45 +63,8 @@ getMSE <- function(x) {
     obs   = mean((fixef_true + ranef_true - fixef.hat - ranef.full)^2))
 }
 
-df$user_offset <- NULL
-fit <- mstan4bart(y ~ . - g.1 - g.2 + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2, chains = 1)[[1L]]
-#                  ranef_true = ranef_true, fixef_true = fixef_true)
+fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4) + X4 + (1 + X4 | g.1) + (1 | g.2), df,
+                  verbose = 2, chains = 1)[[1L]]
 
-
-
-
-# test that it can fit the mean model well with a user-supplied set of random effects
-df$user_offset <- ranef_true
-fit.ranef <- mstan4bart(y ~ . - g.1 - g.2 - user_offset + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2, chains = 1,
-                         offset = user_offset, offset_type = "ranef")[[1L]]
-
-# test that it can fit the hierarchical model well with a user-supplied set of fixed effects
-df$user_offset <- fixef_true
-fit.fixef <- mstan4bart(y ~ . - g.1 - g.2 - user_offset + (1 + X4 | g.1) + (1 | g.2), df, verbose = 2, chains = 1,
-                         offset = user_offset, offset_type = "fixef")[[1L]]
-
-# test against default methods without ranef or non-parametric part
-df.temp <- df
-df.temp$g.1 <- NULL
-df.temp$g.2 <- NULL
-df.temp$user_offset <- ranef_true
-fit.bart <- bart2(y ~ . - user_offset, df.temp, offset = user_offset, n.samples = 2000, n.burn = 1000, n.chains = 1, verbose = FALSE)
-
-df.temp <- df
-df.temp$user_offset <- fixef_true
-fit.lmer <- lme4::lmer(y ~ 0 + (1 + X4 | g.1) + (1 | g.2), offset = user_offset, data = df.temp)
-
-results <- data.frame(fixef = numeric(4), ranef = numeric(4), full = numeric(4))
-results[1,] <- getMSE(fit)
-results[2,] <- getMSE(fit.ranef)
-results[3,] <- getMSE(fit.fixef)
-results[4,"fixef"] <- mean((fit.bart$yhat.train.mean - ranef_true - testData$f.x)^2)
-
-ranef.hat <- lme4::ranef(fit.lmer)
-results[4,"ranef"] <- (sum((testData$b.1 - ranef.hat$g.1)^2) + sum((testData$b.2 - ranef.hat$g.2)^2)) / (length(testData$b.1) + length(testData$b.2))
-
-results[4,"full"] <- NA_real_
-
-rownames(results) <- c("reg", "ranef", "fixef", "mle")
-print(results)
+getMSE(fit)
 ```

@@ -14,7 +14,7 @@ Imports:
   Matrix,
   parallel
 LinkingTo:
-  StanHeaders (>= 2.21.5), rstan (>= 2.21.2), BH (>= 1.72.0.3), Rcpp (>=
+  StanHeaders (>= 2.21.0-6), rstan (>= 2.21.2), BH (>= 1.72.0.3), Rcpp (>=
     1.0.5), RcppEigen (>= 0.3.3.7.0), RcppParallel, dbarts (>= 0.9-18)
 Suggests:
   testthat (>= 2.0-0),

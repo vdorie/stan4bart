@@ -39,6 +39,7 @@ std::vector<double> getDoubleVector(SEXP x) {
 }
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, 1> vector_d;
+typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> matrix_d;
 
 vector_d getEigenVector(SEXP x) {
   size_t len = rc_getLength(x);
@@ -49,14 +50,32 @@ vector_d getEigenVector(SEXP x) {
   return result;
 }
 
+matrix_d getEigenMatrix(SEXP x) {
+  int* dims = INTEGER(rc_getDims(x));
+  matrix_d result(dims[0], dims[1]);
+  size_t offset = 0;
+  for (int col = 0; col < dims[1]; ++col) {
+    for (int row = 0; row < dims[0]; ++row) {
+      result(row, col) = REAL(x)[offset++];
+    }
+  }
+  
+  return result;
+}
+
 const char* const dataNames[] = {
-  "N", "len_y", "lb_y", "ub_y", "y",
-  "prior_dist_for_aux", "has_weights", "weights",
-  "offset_", "prior_scale_for_aux", "prior_mean_for_aux",
-  "prior_df_for_aux", "t", "p", "l", "q", "len_theta_L",
+  "N", "K", "X", "len_y", "lb_y", "ub_y", "y",
+  "has_intercept",
+  "prior_dist", "prior_dist_for_intercept", "prior_dist_for_aux",
+  "has_weights", "weights", "offset_",
+  "prior_scale", "prior_scale_for_intercept", "prior_scale_for_aux",
+  "prior_mean", "prior_mean_for_intercept", "prior_mean_for_aux",
+  "prior_df", "prior_df_for_intercept", "prior_df_for_aux",
+  "global_prior_df", "global_prior_scale", "slab_df", "slab_scale", "num_normals",
+  "t", "p", "l", "q", "len_theta_L",
   "shape", "scale", "len_concentration", "concentration",
-  "len_regularization", "regularization", "num_non_zero",
-  "w", "v", "u"
+  "len_regularization", "regularization",
+  "num_non_zero", "w", "v", "u"
 };
 
 const char* const argNames[] = {
@@ -111,10 +130,16 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   }
   
   // transformed data
-  int t = rc_getIntAt(dataExpr, matchPos[12], "t", RC_VALUE | RC_GEQ, 0, RC_END);
+  int prior_dist = rc_getIntAt(dataExpr, matchPos[8], "prior_dist", RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 7, RC_END);
+  int hs = 0;
+  if (prior_dist <= 2) hs = 0;
+  else if (prior_dist == 3) hs = 2;
+  else if (prior_dist == 4) hs = 4;
+  
+  int t = rc_getIntAt(dataExpr, matchPos[28], "t", RC_VALUE | RC_GEQ, 0, RC_END);
   
   int len_var_group = 0;
-  SEXP pExpr = VECTOR_ELT(dataExpr, matchPos[13]);
+  SEXP pExpr = VECTOR_ELT(dataExpr, matchPos[29]);
   rc_assertIntConstraints(pExpr, "p", RC_VALUE | RC_GEQ, 1, RC_END);
   const int* p_int = INTEGER(pExpr);
   for (size_t i = 0; i < rc_getLength(pExpr); ++i) {
@@ -128,9 +153,9 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   
   int len_z_T = 0;
   int pos = 0;
-  int len_concentration = rc_getIntAt(dataExpr, matchPos[19], "len_concentration", RC_VALUE | RC_GEQ, 0, RC_END);
+  int len_concentration = rc_getIntAt(dataExpr, matchPos[35], "len_concentration", RC_VALUE | RC_GEQ, 0, RC_END);
   std::vector<double> delta_v(len_concentration);
-  SEXP concentrationExpr = VECTOR_ELT(dataExpr, matchPos[20]);
+  SEXP concentrationExpr = VECTOR_ELT(dataExpr, matchPos[36]);
   if (len_concentration > 0)
     rc_assertDoubleConstraints(concentrationExpr, "concentration", RC_VALUE | RC_GEQ, 0.0, RC_END);
   double* concentration = REAL(concentrationExpr);
@@ -143,7 +168,7 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
       len_z_T += p_int[i] - 1;
   }
   
-  const int* l = INTEGER(VECTOR_ELT(dataExpr, matchPos[14]));
+  const int* l = INTEGER(VECTOR_ELT(dataExpr, matchPos[30]));
   for (int i = 0; i < t; ++i) {
     if (l[i] < 1) {
       misc_stackFree(matchPos);
@@ -158,54 +183,106 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
                                                     REAL(VECTOR_ELT(dataExpr, matchPos[10]))[0] >= -1.0e-16 ? "true" : "false"); */
   model_continuous_namespace::model_continuous* result = new model_continuous_namespace::model_continuous(
     rc_getIntAt(  dataExpr, matchPos[ 0], "N",     RC_VALUE | RC_GEQ, 0, RC_END),
-    rc_getIntAt(  dataExpr, matchPos[ 1], "len_y", RC_VALUE | RC_GEQ, 0, RC_END),
-    rc_getDouble0(VECTOR_ELT(dataExpr, matchPos[ 2]), "lb_y"),
-    rc_getDouble0(VECTOR_ELT(dataExpr, matchPos[ 3]), "ub_y"),
-    getEigenVector( VECTOR_ELT(dataExpr, matchPos[ 4])), // y
-    rc_getIntAt(  dataExpr, matchPos[ 5], "prior_dist_for_aux", RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 3, RC_END),
-    rc_getIntAt(  dataExpr, matchPos[ 6], "has_weights",        RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 1, RC_END),
-    getEigenVector( VECTOR_ELT(dataExpr, matchPos[ 7])), // weights
-    getEigenVector( VECTOR_ELT(dataExpr, matchPos[ 8])), // offset_
-    rc_getDoubleAt(dataExpr, matchPos[ 9], "prior_scale_for_aux", RC_VALUE | RC_GEQ, 0.0, RC_END),
-    rc_getDoubleAt(dataExpr, matchPos[10], "prior_mean_for_aux",  RC_VALUE | RC_GEQ, 0.0, RC_END),
-    rc_getDoubleAt(dataExpr, matchPos[11], "prior_df_for_aux",    RC_VALUE | RC_GEQ, 0.0, RC_END),
-    t,
-    getIntVector(   VECTOR_ELT(dataExpr, matchPos[13])), // p
-    getIntVector(   VECTOR_ELT(dataExpr, matchPos[14])), // l
-    rc_getIntAt(dataExpr, matchPos[15], "q",           RC_VALUE | RC_GEQ, 0, RC_END),
-    rc_getIntAt(dataExpr, matchPos[16], "len_theta_L", RC_VALUE | RC_GEQ, 0, RC_END),
-    getEigenVector( VECTOR_ELT(dataExpr, matchPos[17])), // shape
-    getEigenVector( VECTOR_ELT(dataExpr, matchPos[18])), // scale
-    len_concentration,
-    getDoubleVector(VECTOR_ELT(dataExpr, matchPos[20])), // concentration
-    rc_getIntAt(dataExpr, matchPos[21], "len_regularization", RC_VALUE | RC_GEQ, 0, RC_END),
-    getDoubleVector(VECTOR_ELT(dataExpr, matchPos[22])), // regularization
-    rc_getIntAt(dataExpr, matchPos[23], "num_non_zero", RC_VALUE | RC_GEQ, 0, RC_END),
-    getEigenVector( VECTOR_ELT(dataExpr, matchPos[24])), // w
-    getIntVector(   VECTOR_ELT(dataExpr, matchPos[25])), // v
-    getIntVector(   VECTOR_ELT(dataExpr, matchPos[26])), // u
+    rc_getIntAt(  dataExpr, matchPos[ 1], "K",     RC_VALUE | RC_GEQ, 0, RC_END),
+    getEigenMatrix(VECTOR_ELT(dataExpr, matchPos[ 2])), // X
+    rc_getIntAt(  dataExpr, matchPos[ 3], "len_y", RC_VALUE | RC_GEQ, 0, RC_END),
+    rc_getDouble0(VECTOR_ELT(dataExpr, matchPos[ 4]), "lb_y"),
+    rc_getDouble0(VECTOR_ELT(dataExpr, matchPos[ 5]), "ub_y"),
+    getEigenVector(VECTOR_ELT(dataExpr, matchPos[ 6])), // y
+    rc_getIntAt(  dataExpr, matchPos[ 7], "has_intercept", RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 1, RC_END),
+    prior_dist, // 8
+    rc_getIntAt(  dataExpr, matchPos[ 9], "prior_dist_for_intercept", RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 2, RC_END),
+    rc_getIntAt(  dataExpr, matchPos[10], "prior_dist_for_aux", RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 3, RC_END),
+    rc_getIntAt(  dataExpr, matchPos[11], "has_weights",        RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 1, RC_END),
+    getEigenVector(VECTOR_ELT(dataExpr, matchPos[12])), // weights
+    getEigenVector(VECTOR_ELT(dataExpr, matchPos[13])), // offset_
+    getEigenVector(VECTOR_ELT(dataExpr, matchPos[14])), // prior_scale
+    rc_getDoubleAt(dataExpr, matchPos[15], "prior_scale_for_intercept", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    rc_getDoubleAt(dataExpr, matchPos[16], "prior_scale_for_aux",       RC_VALUE | RC_GEQ, 0.0, RC_END),
+    getEigenVector(VECTOR_ELT(dataExpr, matchPos[17])), // prior_mean
+    rc_getDoubleAt(dataExpr, matchPos[18], "prior_mean_for_intercept", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    rc_getDoubleAt(dataExpr, matchPos[19], "prior_mean_for_aux",  RC_VALUE | RC_GEQ, 0.0, RC_END),
+    getEigenVector(VECTOR_ELT(dataExpr, matchPos[20])), // prior_df
+    rc_getDoubleAt(dataExpr, matchPos[21], "prior_df_for_intercept", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    rc_getDoubleAt(dataExpr, matchPos[22], "prior_df_for_aux", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    
+    rc_getDoubleAt(dataExpr, matchPos[23], "global_prior_df", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    rc_getDoubleAt(dataExpr, matchPos[24], "global_prior_scale", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    rc_getDoubleAt(dataExpr, matchPos[25], "slab_df", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    rc_getDoubleAt(dataExpr, matchPos[26], "slab_scale", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    getIntVector(VECTOR_ELT(dataExpr, matchPos[27])), // num_normals
+    t, // 28
+    getIntVector(   VECTOR_ELT(dataExpr, matchPos[29])), // p
+    getIntVector(   VECTOR_ELT(dataExpr, matchPos[30])), // l
+    rc_getIntAt(dataExpr, matchPos[31], "q",           RC_VALUE | RC_GEQ, 0, RC_END),
+    rc_getIntAt(dataExpr, matchPos[32], "len_theta_L", RC_VALUE | RC_GEQ, 0, RC_END),
+    getEigenVector( VECTOR_ELT(dataExpr, matchPos[33])), // shape
+    getEigenVector( VECTOR_ELT(dataExpr, matchPos[34])), // scale
+    len_concentration, // 35
+    getDoubleVector(VECTOR_ELT(dataExpr, matchPos[36])), // concentration
+    rc_getIntAt(dataExpr, matchPos[37], "len_regularization", RC_VALUE | RC_GEQ, 0, RC_END),
+    getDoubleVector(VECTOR_ELT(dataExpr, matchPos[38])), // regularization
+    rc_getIntAt(dataExpr, matchPos[39], "num_non_zero", RC_VALUE | RC_GEQ, 0, RC_END),
+    getEigenVector( VECTOR_ELT(dataExpr, matchPos[40])), // w
+    getIntVector(   VECTOR_ELT(dataExpr, matchPos[41])), // v
+    getIntVector(   VECTOR_ELT(dataExpr, matchPos[42])), // u
+    1, // link,
+    1, // family
+    1, // is_continuous
     len_z_T,
     len_var_group,
     len_rho,
     pos,
-    delta_v
+    delta_v,
+    hs
   );
   
   // check some extra constraints
   size_t n = static_cast<size_t>(INTEGER(VECTOR_ELT(dataExpr, matchPos[0]))[0]);
-  const double* y = REAL(VECTOR_ELT(dataExpr, matchPos[4]));
-  double lb = REAL(VECTOR_ELT(dataExpr, matchPos[2]))[0];
-  double ub = REAL(VECTOR_ELT(dataExpr, matchPos[3]))[0];
+  size_t k = static_cast<size_t>(INTEGER(VECTOR_ELT(dataExpr, matchPos[1]))[0]);
   
-  int numNonZero = rc_getInt0(VECTOR_ELT(dataExpr, matchPos[23]), "num_non_zero");
-  const int* v = INTEGER(VECTOR_ELT(dataExpr, matchPos[25]));
-  const int* u = INTEGER(VECTOR_ELT(dataExpr, matchPos[26]));
+  const int* x_dims = Rf_isNull(rc_getDims(VECTOR_ELT(dataExpr, matchPos[2]))) ? NULL : INTEGER(rc_getDims(VECTOR_ELT(dataExpr, matchPos[2])));
   
-  int maxU = rc_getLength(VECTOR_ELT(dataExpr, matchPos[24])) + 1;
-  int q = INTEGER(VECTOR_ELT(dataExpr, matchPos[15]))[0];
+  double lb = REAL(VECTOR_ELT(dataExpr, matchPos[4]))[0];
+  double ub = REAL(VECTOR_ELT(dataExpr, matchPos[5]))[0];
+  const double* y = REAL(VECTOR_ELT(dataExpr, matchPos[6]));
+  size_t y_len = rc_getLength(VECTOR_ELT(dataExpr, matchPos[6]));
+  
+  bool has_weights = rc_getIntAt(  dataExpr, matchPos[11], "has_weights",        RC_VALUE | RC_GEQ, 0, RC_VALUE | RC_LEQ, 1, RC_END);
+  size_t weights_len = rc_getLength(VECTOR_ELT(dataExpr, matchPos[12]));
+  
+  size_t offset_len = rc_getLength(VECTOR_ELT(dataExpr, matchPos[13]));
+  
+  SEXP prior_scaleExpr = VECTOR_ELT(dataExpr, matchPos[14]);
+  SEXP prior_meanExpr  = VECTOR_ELT(dataExpr, matchPos[17]);
+  SEXP prior_dfExpr    = VECTOR_ELT(dataExpr, matchPos[20]);
+  
+  SEXP num_normalsExpr = VECTOR_ELT(dataExpr, matchPos[27]);
+
+  
+  int numNonZero = rc_getInt0(VECTOR_ELT(dataExpr, matchPos[39]), "num_non_zero");
+  const int* v = INTEGER(VECTOR_ELT(dataExpr, matchPos[41]));
+  const int* u = INTEGER(VECTOR_ELT(dataExpr, matchPos[42]));
+  
+  int maxU = rc_getLength(VECTOR_ELT(dataExpr, matchPos[40])) + 1;
+  int q = INTEGER(VECTOR_ELT(dataExpr, matchPos[31]))[0];
   
   misc_stackFree(matchPos);
   
+  if (x_dims == NULL) {
+    delete result;
+    Rf_error("x is not a matrix");
+  }
+  if (static_cast<size_t>(x_dims[0]) != n || static_cast<size_t>(x_dims[1]) != k) {
+    delete result;
+    Rf_error("x dim mismatch: got [%d, %d], expected [%lu, %lu]", x_dims[0], x_dims[1], n, k);
+  }
+  
+  if (y_len != n) {
+    delete result;
+    Rf_error("y length mismatch: got %lu, expected %lu", y_len, n);
+  }
+
   for (size_t i = 0; i < n; ++i) {
     if (y[i] < lb || y[i] > ub) {
       delete result;
@@ -216,14 +293,72 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
       Rf_error("u[%lu] out of [0, %d] range", i + 1, maxU);
     }
   }
+  
+  if (has_weights ? (weights_len != n) : (has_weights != 0)) {
+    delete result;
+    Rf_error("weights length mismatch: got %lu, expected %lu", weights_len, has_weights ? n : 0);
+  }
+  
+  if (offset_len != n) {
+    delete result;
+    Rf_error("offset length mismatch: got %lu, expected %lu", offset_len, n);
+  }
+  
+  if (rc_getLength(prior_scaleExpr) != k) {
+    delete result;
+    Rf_error("prior_scale length mismatch: got %lu, expected %lu", rc_getLength(prior_scaleExpr), k);
+  }
+  for (size_t i = 0; i < k; ++i) {
+    if (REAL(prior_scaleExpr)[i] < 0.0) {
+      delete result;
+      Rf_error("prior_scale[%lu] out of [0, Inf) range", i + 1);
+    }
+  }
+  if (rc_getLength(prior_meanExpr) != k) {
+    delete result;
+    Rf_error("prior_mean length mismatch: got %lu, expected %lu", rc_getLength(prior_meanExpr), k);
+  }
+  for (size_t i = 0; i < k; ++i) {
+    if (REAL(prior_meanExpr)[i] < 0.0) {
+      delete result;
+      Rf_error("prior_mean[%lu] out of [0, Inf) range", i + 1);
+    }
+  }
+  if (rc_getLength(prior_dfExpr) != k) {
+    delete result;
+    Rf_error("prior_df length mismatch: got %lu, expected %lu", rc_getLength(prior_dfExpr), k);
+  }
+  for (size_t i = 0; i < k; ++i) {
+    if (REAL(prior_dfExpr)[i] < 0.0) {
+      delete result;
+      Rf_error("prior_df[%lu] out of [0, Inf) range", i + 1);
+    }
+  }
+  
+  if (prior_dist == 7) {
+    if (rc_getLength(num_normalsExpr) != k) {
+      delete result;
+      Rf_error("num_normals length mismatch: got %lu, expected %lu", rc_getLength(num_normalsExpr), k);
+    }
+    for (size_t i = 0; i < k; ++i) {
+      if (INTEGER(num_normalsExpr)[i] < 2) {
+        delete result;
+        Rf_error("num_normals[%lu] out of [2, Inf) range", i);
+      }
+    }
+  } else if (rc_getLength(num_normalsExpr) != 0) {
+    delete result;
+    Rf_error("prior_df length mismatch: got %lu, expected %lu", rc_getLength(num_normalsExpr), 0);
+  }
+  
   if (u[n] < 0 || u[n] > maxU) {
     delete result;
     Rf_error("u[%lu] out of [0, %d] range", n + 1, maxU);
   }
-  for (int i = 0; i < numNonZero; ++i) {
+  for (size_t i = 0; i < static_cast<size_t>(numNonZero); ++i) {
     if (v[i] < 0 || v[i] > q - 1) {
       delete result;
-      Rf_error("v[%d] out of [0, %d] range", i + 1, q - 1);
+      Rf_error("v[%lu] out of [0, %d] range", i + 1, q - 1);
     }
   }
   
@@ -325,6 +460,7 @@ StanSampler::StanSampler(StanModel& stanModel, const StanArgs& stanArgs, int cha
   num_pars = sample_names.size() + sampler_names.size() + constrained_param_names.size();
   // sample_writer.resize(sample_names.size() + sampler_names.size() + constrained_param_names.size(), num_warmup + num_iter);
   
+  try {
   sampler = new stan4bart::interruptable_sampler<StanModel>(
     stanModel,
     *init_context_ptr,
@@ -349,6 +485,10 @@ StanSampler::StanSampler(StanModel& stanModel, const StanArgs& stanArgs, int cha
     init_writer,
     sample_writer,
     diagnostic_writer);
+  } catch (std::bad_alloc e) {
+    Rprintf("bad alloc: %s", e.what());
+    throw e;
+  }
 }
 
 void setStanOffset(StanModel& model, const double* offset)
@@ -356,9 +496,9 @@ void setStanOffset(StanModel& model, const double* offset)
   model.set_offset(offset);
 }
 
-void getZb(const StanSampler& sampler, const StanModel& model, double* Zb)
+void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result)
 {
-  model.get_Zb(sampler.sample_writer.x_curr + sampler.sample_writer_offset, Zb);
+  model.get_parametric_mean(sampler.sample_writer.x_curr + sampler.sample_writer_offset, result);
 }
 
 double getSigma(const StanSampler& sampler, const StanModel& model)

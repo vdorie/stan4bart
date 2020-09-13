@@ -129,12 +129,12 @@ struct interruptable_sampler {
     sampler.get_stepsize_adaptation().set_t0(t0);
 
     sampler.set_window_params(num_warmup * num_thin, init_buffer, term_buffer, window, logger);
-
+   
     sampler.engage_adaptation();
     
     sampler.z().q = cont_params;
     sampler.init_stepsize(logger);
-   
+    
     writer.write_sample_names(s, sampler, model);
     writer.write_diagnostic_names(s, sampler, model);
   }

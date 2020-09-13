@@ -889,14 +889,29 @@ struct CFt_functor__ {
     }
 };
 
-template <typename T2__, typename T5__>
+/* template <typename T2__, typename T5__>
 Eigen::Matrix<typename boost::math::tools::promote_args<T2__, T5__>::type, Eigen::Dynamic, 1>
 csr_matrix_times_vector2(const int& m,
-                             const int& n,
-                             const Eigen::Matrix<T2__, Eigen::Dynamic, 1>& w,
-                             const std::vector<int>& v,
-                             const std::vector<int>& u,
-                             const Eigen::Matrix<T5__, Eigen::Dynamic, 1>& b, std::ostream* pstream__);
+                         const int& n,
+                         const Eigen::Matrix<T2__, Eigen::Dynamic, 1>& w,
+                         const std::vector<int>& v,
+                         const std::vector<int>& u,
+                         const Eigen::Matrix<T5__, Eigen::Dynamic, 1>& b, std::ostream* pstream__); */
+template <typename T2__, typename T5__>
+Eigen::Matrix<typename boost::math::tools::promote_args<typename T2__::Scalar, typename T5__::Scalar>::type, Eigen::Dynamic, 1>
+csr_matrix_times_vector3(const int& m,
+                         const int& n,
+                         const T2__& w,
+                         const std::vector<int>& v,
+                         const std::vector<int>& u,
+                         const T5__& b,
+                         std::ostream* pstream__)
+{
+  Eigen::Map<const Eigen::SparseMatrix<typename T2__::Scalar, Eigen::RowMajor> >
+    sm(m, n, w.size(), &u[0], &v[0], &w[0]);
+  return sm * b;
+}
+
 
 template <typename T0__, typename T1__, typename T2__>
 Eigen::Matrix<typename boost::math::tools::promote_args<T0__, T1__, T2__>::type, Eigen::Dynamic, 1>
@@ -1055,8 +1070,6 @@ public:
       prior_dist_for_intercept(prior_dist_for_intercept),
       prior_dist_for_aux(prior_dist_for_aux),
       has_weights(has_weights),
-      prior_dist_for_aux(prior_dist_for_aux),
-      has_weights(has_weights),
       weights(weights),
       offset_(offset_),
       prior_scale(prior_scale),
@@ -1098,7 +1111,24 @@ public:
       delta(delta),
       hs(hs)
     {
-      num_params_r__ = q + len_z_T + len_rho + len_concentration + t + 1;
+      num_params_r__ = 
+        has_intercept + // gammma
+        (prior_dist == 7 ? sum(num_normals) : K) + // z_beta
+        hs + // global
+        hs * K + // local
+        (hs > 0 ? 1 : 0) + // caux
+        (prior_dist == 5 || prior_dist == 6 ? K : 0) + // mix
+        (prior_dist == 6 ? 1 : 0) + // one_over_lambda
+        q + // z_b
+        len_z_T + // z_T
+        len_rho + // rho
+        len_concentration + // zeta
+        t + // tau
+        1; // + // aux_unscaled; transformed not part of num_params_r
+        // 1 + // aux
+        // K + // beta
+        // q + // b
+        // len_theta_L; // theta_L
     }
     
     model_continuous(stan::io::var_context& context__,
@@ -2382,7 +2412,7 @@ public:
             current_statement_begin__ = 344;
             stan::math::assign(eta, add(eta, multiply(X, beta)));
             current_statement_begin__ = 345;
-            stan::math::assign(eta, add(eta, csr_matrix_times_vector2(N, q, w, v, u, b, pstream__)));
+            stan::math::assign(eta, add(eta, csr_matrix_times_vector3(N, q, w, v, u, b, pstream__)));
             current_statement_begin__ = 347;
             if (as_bool(logical_eq(has_intercept, 1))) {
 
@@ -2573,7 +2603,7 @@ public:
         len_rho + // rho
         len_concentration + // zeta
         t + // tau
-        1 // aux_unscaled
+        1; // aux_unscaled
         // 1 //  aux
         // K // beta
         // q // b
@@ -2617,29 +2647,27 @@ public:
       // extract transformed parameters, could recreate instead
        
       // local_scalar_t__ aux_unscaled = sample[offset];
-      local_scalar_t__ aux_unscaled = sample[offset++];
       
       ++offset; // skip aux
       
-      Eigen::Map<Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> beta(sample + offset, K);
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> beta(sample + offset, K);
       offset += K;
       
-      Eigen::Map<Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> b(sample + offset, q);
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> b(sample + offset, q);
       offset += q;
       
-      Eigen::Map<Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> theta_L(sample + offset, len_theta_L);
       
-      
+      Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> eta(N);
       eta = X * beta;
-      eta += csr_matrix_times_vector2(N, q, w, v, u, b, NULL);
+      eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
       
       if (has_intercept) {
         if ((family == 1 || link == 2) || (family == 4 && link != 5))
-          eta += gamma
+          eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma);
         else if (family == 4 && link == 5)
-          eta += gamma - max(eta);
+          eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma - max(eta));
         else
-          eta += gamma - min(eta);
+          eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma - min(eta));
       }      
       
       std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));

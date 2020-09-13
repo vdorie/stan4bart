@@ -118,6 +118,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     X <- checkScaleX(X, kind = scaleX.chk)
     
     if (!is.null(treatment)) {
+      X <- X[,c(colnames(X)[colnames(X) != "treatment"], treatment)]
       X.test <- X
       if (treatment %in% colnames(X.test))
         X.test[,treatment] <- 1 - X.test[,treatment, drop = FALSE]

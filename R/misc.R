@@ -90,6 +90,16 @@ handle_glm_prior <- function(prior, nvars, default_scale, link,
         prior_autoscale = isTRUE(prior$autoscale))
 }
 
+set_prior_scale <- function(scale, default, link) {
+  stopifnot(is.numeric(default), is.character(link) || is.null(link))
+  if (is.null(scale)) 
+    scale <- default
+  if (isTRUE(link == "probit"))
+    scale <- scale * dnorm(0) / dlogis(0)
+  
+  return(scale)
+}
+
 drop_redundant_dims <- function(data) {
   drop_dim <- sapply(data, function(v) is.matrix(v) && NCOL(v) == 1)
   data[, drop_dim] <- lapply(data[, drop_dim, drop=FALSE], drop)

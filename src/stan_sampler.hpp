@@ -117,7 +117,7 @@ namespace stan4bart {
   interruptable_sampler<StanModel>* createStanSampler();
   
   void setStanOffset(StanModel& model, const double* offset);
-  void getZb(const StanSampler& sampler, const StanModel& model, double* zb);
+  void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result);
   double getSigma(const StanSampler& sampler, const StanModel& model);
   
   SEXP createStanResultsExpr(const double_writer& sample_writer);
