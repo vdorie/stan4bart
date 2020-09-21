@@ -341,7 +341,8 @@ model {
   real dummy;
   
   eta = offset_;
-  eta += X * beta;
+  if (K > 0)
+    eta += X * beta;
   eta += csr_matrix_times_vector2(N, q, w, v, u, b);
   
   if (has_intercept == 1) {

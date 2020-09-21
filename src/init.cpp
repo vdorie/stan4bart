@@ -115,7 +115,6 @@ extern "C" {
     std::unique_ptr<Sampler> samplerPtr(new Sampler);
     Sampler& sampler(*samplerPtr);
     
-    // Rprintf("initializing Sampler from common control\"n");
     initializeSamplerFromExpression(sampler, commonControlExpr);
     
     const double* bart_offset_init = REAL(rc_getListElement(commonControlExpr, "bart_offset_init"));
@@ -123,9 +122,7 @@ extern "C" {
       RC_VALUE | RC_GT, 0.0, RC_VALUE | RC_DEFAULT, 1.0,
       RC_END);
     
-    // Rprintf("creating stan model from stanData\"n");
     sampler.stanModel = stan4bart::createStanModelFromExpression(stanDataExpr);
-    // Rprintf("initializing stan args\n");
     stan4bart::initializeStanArgsFromExpression(sampler.stanArgs, stanArgsExpr);
     if (sampler.stanArgs.thin == R_NaInt) {
       sampler.stanArgs.thin = (2000 - sampler.numWarmup) / 1000;
@@ -133,10 +130,8 @@ extern "C" {
     }
     
     int chain_id = 1;
-    // Rprintf("creating stan sampling from model and args\"n");
     sampler.stanSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanArgs, chain_id, sampler.numWarmup);
     
-    // Rprintf("creating bart stuff\"n");
     bartFunctions.initializeControl(&sampler.bartControl, bartControlExpr);
     bartFunctions.initializeData(&sampler.bartData, bartDataExpr);
     bartFunctions.initializeModel(&sampler.bartModel, bartModelExpr, &sampler.bartControl);
@@ -183,6 +178,23 @@ extern "C" {
     return result;
   }
   
+  static SEXP get_parametric_mean(SEXP samplerExpr)
+  {
+    Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
+    if (samplerPtr == NULL) Rf_error("run called on NULL external pointer");
+    Sampler& sampler(*samplerPtr);
+    
+    sampler.stanSampler->sample_writer.decrement();
+    SEXP result = PROTECT(rc_newReal(sampler.bartData.numObservations));
+    
+    stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, REAL(result));
+    sampler.stanSampler->sample_writer.increment();
+    
+    UNPROTECT(1);
+    
+    return result;
+  }
+  
   static SEXP run(SEXP samplerExpr, SEXP numIterExpr, SEXP isWarmupExpr, SEXP resultsTypeExpr)
   {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
@@ -206,7 +218,6 @@ extern "C" {
     
     size_t n = sampler.bartData.numObservations;
     
-    
     if (sampler.verbose > 0)
       Rprintf("starting %s, %d draws, %s:\n", isWarmup ? "warmup" : "sampling", numIter,
               resultsType == RESULTS_BOTH ? "both BART and Stan" : (resultsType == RESULTS_BART ? "BART only" : "Stan only"));
@@ -222,13 +233,15 @@ extern "C" {
         
         // bart with an offset will produce predictions that have the offset added;
         // in order to just get the tree predictions, subtract out that offset
-        for (size_t j = 0; j < sampler.bartData.numObservations; ++j) bartSamples->trainingSamples[j] -= sampler.bartOffset[j];
+        for (size_t j = 0; j < n; ++j)
+          bartSamples->trainingSamples[j] -= sampler.bartOffset[j];
         
         std::memcpy(sampler.stanOffset, const_cast<const double*>(bartSamples->trainingSamples), n * sizeof(double));
         
         if (sampler.userOffset != NULL) {
           if (sampler.offsetType == OFFSET_DEFAULT)
-            for (size_t j = 0; j < n; ++j) sampler.stanOffset[j] += sampler.userOffset[j];
+            for (size_t j = 0; j < n; ++j)
+              sampler.stanOffset[j] += sampler.userOffset[j];
           else if (sampler.offsetType == OFFSET_FIXEF)
             std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
         }
@@ -236,7 +249,7 @@ extern "C" {
         
         bartSamples->incrementPointers();
       }
-            
+      
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN) {
         sampler.stanSampler->run(isWarmup);
         
@@ -255,7 +268,7 @@ extern "C" {
       }
     }
     if (bartSamples != NULL) bartSamples->resetPointers();
-        
+    
     SEXP resultExpr = PROTECT(rc_newList(resultsType == RESULTS_BOTH ? 2 : 1));
     int pos = 0;
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
@@ -411,6 +424,7 @@ static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_printInitialSummary", printInitialSummary, 1),
   DEF_FUNC("stan4bart_disengageAdaptation", disengageAdaptation, 1),
   DEF_FUNC("stan4bart_finalize", finalize, 0),
+  DEF_FUNC("stan4bart_get_parametric_mean", get_parametric_mean, 1),
   {NULL, NULL, 0}
 };
 

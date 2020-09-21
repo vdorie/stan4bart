@@ -2429,7 +2429,8 @@ public:
             current_statement_begin__ = 343;
             stan::math::assign(eta, offset_);
             current_statement_begin__ = 344;
-            stan::math::assign(eta, add(eta, multiply(X, beta)));
+            if (as_bool(logical_gt(K, 0)))
+              stan::math::assign(eta, add(eta, multiply(X, beta)));
             current_statement_begin__ = 345;
             stan::math::assign(eta, add(eta, csr_matrix_times_vector3(N, q, w, v, u, b, pstream__)));
             current_statement_begin__ = 347;
@@ -2663,7 +2664,7 @@ public:
       if (hs > 0) offset += 2 + K;
       
       /*std::vector<Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > mix;
-      size_t mix_length = (prior_dist == 5 || prior_dist == 6 ? K : 0);
+      size_t mix_length = (prior_dist == 5 || prior_dist == 6 ? 1 : 0);
       mix.reserve(mix_length);
       for (size_t i_mix = 0; i_mix < mix_length; ++i_mix) {
         Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>temp(K);
@@ -2679,23 +2680,20 @@ public:
         one_over_lambda.push_back(sample[offset++]);*/
       if (prior_dist == 6) offset += 1;
        
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > z_b(sample + offset, q);
+      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > z_b(sample + offset, q);
       offset += q;
-      // Rprintf("q: %d, len_z_T: %d, len_rho: %d, len_concentation: %d, t: %d\n", q, len_z_T, len_rho, len_concentration, t);
       
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > z_T(sample + offset, len_z_T);
+      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > z_T(sample + offset, len_z_T);
       offset += len_z_T;
       
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > rho(sample + offset, len_rho);
+      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > rho(sample + offset, len_rho);
       offset += len_rho;
       
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > zeta(sample + offset, len_concentration);
+      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > zeta(sample + offset, len_concentration);
       offset += len_concentration;
       
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > tau(sample + offset, t);
+      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > tau(sample + offset, t);
       offset += t;
-      // Rprintf("gamma: %f, z_beta[0]: %f, z_b[0]: %f, z_b[17]: %f, tau[1] %f\n",
-      //        gamma, z_beta(0), z_b(0), z_b(17), tau(1));
       
       //local_scalar_t__ aux_unscaled = sample[offset++];
       offset += 1;
@@ -2703,11 +2701,12 @@ public:
       /* extract transformed parameters from sample */
       //local_scalar_t__ aux = sample[offset++];
       offset += 1;
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> beta(sample + offset, K);
+      
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > beta(sample + offset, K);
       offset += K; 
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> b(sample + offset, q);
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > b(sample + offset, q);
       // offset += q;
-      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> theta_L(sample + offset, len_theta_L);
+      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > theta_L(sample + offset, len_theta_L);
 
       
       /* recreate transformed parameters from sample */
@@ -2720,8 +2719,6 @@ public:
         if (prior_dist_for_aux <= 2)
            aux += prior_mean_for_aux;
       }
-      
-      // Rprintf("aux, mem: %f, %f\n", aux, aux_memory);
       
       Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> beta(K);
       if (prior_dist == 0) {
@@ -2768,21 +2765,19 @@ public:
         }
       }
       
-      // Rprintf("beta, mem: %f, %f\n", beta(0), beta_memory(0));
-      
       Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> theta_L(len_theta_L);
       theta_L = make_theta_L(len_theta_L, p, aux, tau, scale, zeta, rho, z_T, NULL);
       
-      // Rprintf("theta_L, mem: %f, %f\n", theta_L(0), theta_L_memory(0));
-      
       Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> b(q);
       b = make_b(z_b, theta_L, p, l, NULL);
-      
-      // Rprintf("b, mem: %f, %f\n", b(0), b_memory(0));
       */
       
       Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> eta(N);
-      eta = X * beta;
+      if (K > 0) {
+        eta = X * beta;
+      } else {
+        eta = Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Zero(N);
+      }
       eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
       
       if (has_intercept) {

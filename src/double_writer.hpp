@@ -71,6 +71,9 @@ struct double_writer : public stan::callbacks::writer {
   void increment() {
     x_curr += num_pars;
   }
+  void decrement() {
+    x_curr -= num_pars;
+  }
   void reset() {
     x_curr = x_base;
   }
