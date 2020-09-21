@@ -76,7 +76,7 @@ mstan4bart <-
   mc <- match.call(expand.dots = FALSE)
   mc[[1L]] <- quote(lme4::lmer)
   mc$control <- lme4::lmerControl()
-  mc$formula <- subbart(mc$formula)
+  mc$formula <- nobart(mc$formula)
   mc$data <- data
   mc$verbose <- FALSE
   mc$prior_covariance <- mc$prior_aux <-
@@ -91,7 +91,7 @@ mstan4bart <-
                         prior_covariance,
                         adapt_delta = adapt_delta,
                         group = group,
-                        ranef_init = fitted(lmerFit, ranef.only = TRUE),
+                        bart_offset_init = fitted(lmerFit),
                         sigma_init = sigma(lmerFit),
                         ...)
   attr(fit, "Zt.obs") <- glmod$reTrms$Zt

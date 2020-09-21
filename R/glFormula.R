@@ -848,7 +848,6 @@ nobart_ <- function(term)
   
   if (length(term) == 2L) {
     if (term[[1]] == as.name("bart")) return(NULL)
-    browser()
     nb <- nobart_(term[[2]])
     if (is.null(nb)) return(NULL)
     term[[2]] <- nb

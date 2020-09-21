@@ -20,7 +20,7 @@ getRanef <- function(group, samples) {
   numRanefPerGroupingFactor <- unname(sapply(group$cnms, length))
   
   res <- lapply(seq_len(numGroupingFactors), function(j) {
-    ranef.group <- ranef[seq.int(group$Gp[j] + 1L, group$Gp[j + 1L]),]
+    ranef.group <- ranef[seq.int(group$Gp[j] + 1L, group$Gp[j + 1L]),,drop = FALSE]
     array(ranef.group, c(numRanefPerGroupingFactor[j], nrow(ranef.group) %/% numRanefPerGroupingFactor[j], ncol(ranef.group)),
           dimnames = list(group$cnms[[j]], levels(group$flist[[j]]), NULL))
   })
@@ -62,7 +62,7 @@ mstan4bart_fitforreal <- function(chain.num, bartControl, bartData, bartModel, s
 
 mstan4bart_fit <- 
   function(bartData, x, y,
-           ranef_init, sigma_init,
+           bart_offset_init, sigma_init,
            weights = rep(1, NROW(y)), 
            offset = rep(0, NROW(y)), 
            family = family,
@@ -471,7 +471,7 @@ mstan4bart_fit <-
   
   commonControl <- nlist(iter, warmup, verbose, refresh,
                          offset = offset, offset_type = offset_type,
-                         ranef_init = ranef_init, sigma_init = sigma_init)
+                         bart_offset_init = bart_offset_init, sigma_init = sigma_init)
   
   
   chainResults <- vector("list", chains)

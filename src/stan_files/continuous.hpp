@@ -637,7 +637,7 @@ struct decov_lp_functor__ {
     }
 };
 
-template <typename T0__, typename T1__, typename T2__, typename T3__, typename T4__, typename T5__>
+/* template <typename T0__, typename T1__, typename T2__, typename T3__, typename T4__, typename T5__>
 Eigen::Matrix<typename boost::math::tools::promote_args<T0__, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type, Eigen::Dynamic, 1>
 hs_prior(const Eigen::Matrix<T0__, Eigen::Dynamic, 1>& z_beta,
              const std::vector<T1__>& global,
@@ -645,7 +645,17 @@ hs_prior(const Eigen::Matrix<T0__, Eigen::Dynamic, 1>& z_beta,
              const T3__& global_prior_scale,
              const T4__& error_scale,
              const T5__& c2, std::ostream* pstream__) {
-    typedef typename boost::math::tools::promote_args<T0__, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type local_scalar_t__;
+    typedef typename boost::math::tools::promote_args<T0__, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type local_scalar_t__; */
+template <typename T0__, typename T1__, typename T2__, typename T3__, typename T4__, typename T5__>
+Eigen::Matrix<typename boost::math::tools::promote_args<typename T0__::Scalar, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type, Eigen::Dynamic, 1>
+hs_prior(const T0__& z_beta,
+             const std::vector<T1__>& global,
+             const std::vector<Eigen::Matrix<T2__, Eigen::Dynamic, 1> >& local,
+             const T3__& global_prior_scale,
+             const T4__& error_scale,
+             const T5__& c2, std::ostream* pstream__) {
+    typedef typename boost::math::tools::promote_args<typename T0__::Scalar, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type local_scalar_t__;
+
     typedef local_scalar_t__ fun_return_scalar_t__;
     const static bool propto__ = true;
     (void) propto__;
@@ -714,7 +724,7 @@ struct hs_prior_functor__ {
     }
 };
 
-template <typename T0__, typename T1__, typename T2__, typename T3__, typename T4__, typename T5__>
+/* template <typename T0__, typename T1__, typename T2__, typename T3__, typename T4__, typename T5__>
 Eigen::Matrix<typename boost::math::tools::promote_args<T0__, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type, Eigen::Dynamic, 1>
 hsplus_prior(const Eigen::Matrix<T0__, Eigen::Dynamic, 1>& z_beta,
                  const std::vector<T1__>& global,
@@ -722,7 +732,16 @@ hsplus_prior(const Eigen::Matrix<T0__, Eigen::Dynamic, 1>& z_beta,
                  const T3__& global_prior_scale,
                  const T4__& error_scale,
                  const T5__& c2, std::ostream* pstream__) {
-    typedef typename boost::math::tools::promote_args<T0__, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type local_scalar_t__;
+    typedef typename boost::math::tools::promote_args<T0__, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type local_scalar_t__; */
+template <typename T0__, typename T1__, typename T2__, typename T3__, typename T4__, typename T5__>
+Eigen::Matrix<typename boost::math::tools::promote_args<typename T0__::Scalar, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type, Eigen::Dynamic, 1>
+hsplus_prior(T0__ z_beta,
+                 const std::vector<T1__>& global,
+                 const std::vector<Eigen::Matrix<T2__, Eigen::Dynamic, 1> >& local,
+                 const T3__& global_prior_scale,
+                 const T4__& error_scale,
+                 const T5__& c2, std::ostream* pstream__) {
+    typedef typename boost::math::tools::promote_args<typename T0__::Scalar, T1__, T2__, T3__, typename boost::math::tools::promote_args<T4__, T5__>::type>::type local_scalar_t__;
     typedef local_scalar_t__ fun_return_scalar_t__;
     const static bool propto__ = true;
     (void) propto__;
@@ -2592,12 +2611,12 @@ public:
       
       size_t aux_offset = 
         has_intercept + // gammma
-        (logical_eq(prior_dist, 7) ? sum(num_normals) : K) + // z_beta
+        (prior_dist == 7 ? sum(num_normals) : K) + // z_beta
         hs + // global
         hs * K + //local
-        logical_gt(hs, 0) + // caux
-        (primitive_value(logical_eq(prior_dist, 5)) || primitive_value(logical_eq(prior_dist, 6))) * K + // mix
-        logical_eq(prior_dist, 6) + // one_over_lambda
+        (hs > 0 ? 1 : 0) + // caux
+        (prior_dist == 5 || prior_dist == 6 ? K : 0) + // mix
+        (prior_dist == 6 ? 1 : 0) + // one_over_lambda
         q + // z_b
         len_z_T + // z_T
         len_rho + // rho
@@ -2608,7 +2627,7 @@ public:
         // K // beta
         // q // b
         // len_theta_L // theta_L
-      
+
       return sample[aux_offset];
     }
     
@@ -2621,15 +2640,48 @@ public:
       local_scalar_t__ gamma;
       if (has_intercept) gamma = sample[offset++];
       
-      offset += 
-        (logical_eq(prior_dist, 7) ? sum(num_normals) : K) + // z_beta
-        hs + // global
-        hs * K + //local
-        logical_gt(hs, 0) + // caux
-        (primitive_value(logical_eq(prior_dist, 5)) || primitive_value(logical_eq(prior_dist, 6))) * K + // mix
-        logical_eq(prior_dist, 6); // one_over_lambda
+      size_t z_beta_length = (prior_dist == 7 ? sum(num_normals) : K);
+      /* Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> >
+        z_beta(sample + offset, z_beta_length); */
+      offset += z_beta_length;
+      
+      /*std::vector<local_scalar_t__> global;
+      std::vector<Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > local;
+      std::vector<local_scalar_t__> caux;
+      if (hs > 0) { 
+        global.push_back(sample[offset++]);
+        
+        local.reserve(K);
+        Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>temp(K);
+        for (size_t k = 0; k < static_cast<size_t>(K); ++k)
+          temp(k) = sample[offset + k];
+        local.push_back(temp);
+        offset += K;
+        
+        caux.push_back(sample[offset++]);
+      }*/
+      if (hs > 0) offset += 2 + K;
+      
+      /*std::vector<Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > mix;
+      size_t mix_length = (prior_dist == 5 || prior_dist == 6 ? K : 0);
+      mix.reserve(mix_length);
+      for (size_t i_mix = 0; i_mix < mix_length; ++i_mix) {
+        Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>temp(K);
+        for (int k = 0; k < K; ++k)
+          temp(k) = sample[offset + k];
+        mix.push_back(temp);
+        offset += K;
+      }*/
+      if (prior_dist == 5 || prior_dist == 6) offset += K;
+      
+      /*std::vector<local_scalar_t__> one_over_lambda;
+      if (prior_dist == 6)
+        one_over_lambda.push_back(sample[offset++]);*/
+      if (prior_dist == 6) offset += 1;
        
       Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > z_b(sample + offset, q);
+      offset += q;
+      // Rprintf("q: %d, len_z_T: %d, len_rho: %d, len_concentation: %d, t: %d\n", q, len_z_T, len_rho, len_concentration, t);
       
       Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > z_T(sample + offset, len_z_T);
       offset += len_z_T;
@@ -2642,20 +2694,92 @@ public:
       
       Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > tau(sample + offset, t);
       offset += t;
+      // Rprintf("gamma: %f, z_beta[0]: %f, z_b[0]: %f, z_b[17]: %f, tau[1] %f\n",
+      //        gamma, z_beta(0), z_b(0), z_b(17), tau(1));
       
+      //local_scalar_t__ aux_unscaled = sample[offset++];
+      offset += 1;
       
-      // extract transformed parameters, could recreate instead
-       
-      // local_scalar_t__ aux_unscaled = sample[offset];
-      
-      ++offset; // skip aux
-      
+      /* extract transformed parameters from sample */
+      //local_scalar_t__ aux = sample[offset++];
+      offset += 1;
       Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> beta(sample + offset, K);
-      offset += K;
-      
+      offset += K; 
       Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> b(sample + offset, q);
-      offset += q;
+      // offset += q;
+      // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>> theta_L(sample + offset, len_theta_L);
+
       
+      /* recreate transformed parameters from sample */
+      /*
+      local_scalar_t__ aux;
+      if (prior_dist_for_aux == 0) {
+        aux = aux_unscaled;
+      } else {
+        aux = prior_scale_for_aux * aux_unscaled;
+        if (prior_dist_for_aux <= 2)
+           aux += prior_mean_for_aux;
+      }
+      
+      // Rprintf("aux, mem: %f, %f\n", aux, aux_memory);
+      
+      Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> beta(K);
+      if (prior_dist == 0) {
+        beta = z_beta;
+      } else if (prior_dist == 1) {
+        beta = z_beta * prior_scale + prior_mean;
+      } else if (prior_dist == 2) {
+        for (int k = 0; k < K; ++k) {
+          beta(k) = CFt(z_beta(k), prior_df[k], NULL) * prior_scale[k] + prior_mean[k];
+        }
+      } else if (prior_dist == 3) {
+        local_scalar_t__ c2 = slab_scale * slab_scale * caux[0];
+        // because too many functions are not capable of handling Eigen maps
+        // got lazy and make a local copy instead 
+        Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> z_beta_copy(K);
+        z_beta_copy = z_beta;
+        if (is_continuous == 1 && family == 1) {
+          beta = hs_prior(z_beta_copy, global, local, global_prior_scale, aux, c2, NULL);
+        } else {
+          beta = hs_prior(z_beta_copy, global, local, global_prior_scale, 1, c2, NULL);
+        }
+      } else if (prior_dist == 4) {
+        local_scalar_t__ c2 = slab_scale * slab_scale * caux[0];
+        
+        Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> z_beta_copy(K);
+        z_beta_copy = z_beta;
+        if (is_continuous == 1 && family == 1) {
+          beta = hsplus_prior(z_beta_copy, global, local, global_prior_scale, aux, c2, NULL);
+        } else {
+          beta = hsplus_prior(z_beta_copy, global, local, global_prior_scale, 1, c2, NULL);
+        }
+      } else if (prior_dist == 5) {
+        beta = (prior_scale * sqrt(2 * mix[0])) * z_beta + prior_mean;
+      } else if (prior_dist == 6) {
+        beta = one_over_lambda[0] * prior_scale * sqrt(2 * mix[0]) * z_beta + prior_mean;
+      } else if (prior_dist == 7) {
+        int z_pos = 0;
+        for (int k = 0; k < K; ++k) {
+          beta(k) = z_beta[z_pos++];
+          for (int n = 1; n < num_normals[k]; ++n) {
+            beta(k) *= z_beta[z_pos++];
+          }
+          beta(k) = beta(k) * std::pow(prior_scale[k], num_normals[k]) + prior_mean(k);
+        }
+      }
+      
+      // Rprintf("beta, mem: %f, %f\n", beta(0), beta_memory(0));
+      
+      Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> theta_L(len_theta_L);
+      theta_L = make_theta_L(len_theta_L, p, aux, tau, scale, zeta, rho, z_T, NULL);
+      
+      // Rprintf("theta_L, mem: %f, %f\n", theta_L(0), theta_L_memory(0));
+      
+      Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> b(q);
+      b = make_b(z_b, theta_L, p, l, NULL);
+      
+      // Rprintf("b, mem: %f, %f\n", b(0), b_memory(0));
+      */
       
       Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> eta(N);
       eta = X * beta;
@@ -2668,7 +2792,7 @@ public:
           eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma - max(eta));
         else
           eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma - min(eta));
-      }      
+      }
       
       std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));
     }

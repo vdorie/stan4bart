@@ -115,15 +115,17 @@ extern "C" {
     std::unique_ptr<Sampler> samplerPtr(new Sampler);
     Sampler& sampler(*samplerPtr);
     
+    // Rprintf("initializing Sampler from common control\"n");
     initializeSamplerFromExpression(sampler, commonControlExpr);
     
-    const double* ranef_init = REAL(rc_getListElement(commonControlExpr, "ranef_init"));
+    const double* bart_offset_init = REAL(rc_getListElement(commonControlExpr, "bart_offset_init"));
     double sigma_init = rc_getDouble(rc_getListElement(commonControlExpr, "sigma_init"), "sigma_init",
       RC_VALUE | RC_GT, 0.0, RC_VALUE | RC_DEFAULT, 1.0,
       RC_END);
     
-    
+    // Rprintf("creating stan model from stanData\"n");
     sampler.stanModel = stan4bart::createStanModelFromExpression(stanDataExpr);
+    // Rprintf("initializing stan args\n");
     stan4bart::initializeStanArgsFromExpression(sampler.stanArgs, stanArgsExpr);
     if (sampler.stanArgs.thin == R_NaInt) {
       sampler.stanArgs.thin = (2000 - sampler.numWarmup) / 1000;
@@ -131,8 +133,10 @@ extern "C" {
     }
     
     int chain_id = 1;
+    // Rprintf("creating stan sampling from model and args\"n");
     sampler.stanSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanArgs, chain_id, sampler.numWarmup);
     
+    // Rprintf("creating bart stuff\"n");
     bartFunctions.initializeControl(&sampler.bartControl, bartControlExpr);
     bartFunctions.initializeData(&sampler.bartData, bartDataExpr);
     bartFunctions.initializeModel(&sampler.bartModel, bartModelExpr, &sampler.bartControl);
@@ -144,8 +148,8 @@ extern "C" {
     sampler.bartOffset = new double[n];
     sampler.stanOffset = new double[n];
     
-    if (ranef_init != NULL) {
-      std::memcpy(sampler.bartOffset, ranef_init, n * sizeof(double));
+    if (bart_offset_init != NULL) {
+      std::memcpy(sampler.bartOffset, bart_offset_init, n * sizeof(double));
     } else {
       for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] = 0.0;
     }

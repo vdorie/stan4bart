@@ -55,12 +55,12 @@ ranef_true <- with(testData, b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2])
 fixef_true <- testData$f.x
 
 getMSE <- function(x) {
-  fixef.hat <- apply(x$sample$bart$train, 1L, mean) + testData$x[,4] %*% x$sample$stan$fixef
-  ranef.hat <- lapply(x$sample$stan$ranef, function(ranef.j) apply(ranef.j, c(1, 2), mean))
-  ranef.full <- with(testData, ranef.hat$g.1[1,g.1] + x[,4] * ranef.hat$g.1[2,g.1] + ranef.hat$g.2[g.2])
-  c(fixef = mean((fixef_true - fixef.hat)^2),
-    ranef = (sum((testData$b.1 - t(ranef.hat$g.1))^2) + sum((testData$b.2 - ranef.hat$g.2)^2)) / (length(testData$b.1) + length(testData$b.2)),
-    obs   = mean((fixef_true + ranef_true - fixef.hat - ranef.full)^2))
+  fixef_hat <- apply(x$sample$bart$train, 1L, mean) + testData$x[,4] * apply(x$sample$stan$fixef, 1, mean)
+  ranef_hat <- lapply(x$sample$stan$ranef, function(ranef.j) apply(ranef.j, c(1, 2), mean))
+  ranef_full <- with(testData, ranef_hat$g.1[1,g.1] + x[,4] * ranef_hat$g.1[2,g.1] + ranef_hat$g.2[g.2])
+  c(fixef = mean((fixef_true - fixef_hat)^2),
+    ranef = (sum((testData$b.1 - t(ranef_hat$g.1))^2) + sum((testData$b.2 - ranef_hat$g.2)^2)) / (length(testData$b.1) + length(testData$b.2)),
+    obs   = mean((fixef_true + ranef_true - fixef_hat - ranef_full)^2))
 }
 
 fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4) + X4 + (1 + X4 | g.1) + (1 | g.2), df,
