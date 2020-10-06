@@ -61,7 +61,7 @@ fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4) + X4 + (1 + X4 | g.1) + (1 | g.2)
 # samples from the posterior of the expected value of the response
 mean((fitted(fit) - mean_true)^2)
 
-mean((fitted(fit, "mu.fixef") + stan4bart:::fitted.mstan4bartFit(fit, "bart") - fixef_true)^2)
+mean((fitted(fit, "mu.fixef") + fitted(fit, "bart") - fixef_true)^2)
 mean((fitted(fit, "mu.ranef") - ranef_true)^2)
 
 lmer_fit <- lme4::lmer(y ~ . - g.1 - g.2 - (1 + X4 | g.1) + (1 | g.2), df)
