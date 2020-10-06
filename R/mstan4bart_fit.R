@@ -12,7 +12,7 @@ getSigma <- function(cnms, samples) {
   Sigmas
 }
 getFixef <- function(samples)
-  samples[grep("^beta\\.", rownames(samples)),,drop = FALSE]
+  samples[grep("^(?:beta|gamma)\\.", rownames(samples), perl = TRUE),,drop = FALSE]
 
 getRanef <- function(group, samples) {
   ranef <- samples[grep("^b\\.", rownames(samples)),,drop = FALSE]

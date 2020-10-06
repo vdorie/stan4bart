@@ -1,6 +1,9 @@
 useDynLib(stan4bart, .registration = TRUE, .fixes = "C_")
 
 export(mstan4bart)
+S3method(extract, mstan4bartFit)
+S3method(fitted, mstan4bartFit)
 
+importFrom(dbarts, extract)
 importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao)
 importFrom(parallel, makeCluster, clusterExport, clusterEvalQ, clusterMap, stopCluster)

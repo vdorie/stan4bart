@@ -1,29 +1,33 @@
 glFormula <- function (formula, data = NULL, subset, weights, 
-    na.action, offset, contrasts = NULL, treatment = NULL, start, mustart, etastart, 
+    na.action, offset, contrasts = NULL,
+    test = NULL, test.offset = NULL, treatment = NULL,
+    start, mustart, etastart, 
     control = glmerControl(), ...) 
 {
     control <- control$checkControl
     mf <- mc <- match.call()
    
     if (!is.null(mc$treatment)) {
-        if (is.symbol(mc$treatment)) treatment <- as.character(mc$treatment)
-      mf$treatment <- NULL
+      if (is.symbol(mc$treatment)) treatment <- as.character(mc$treatment)
       if (!is.character(treatment))
         stop("'treament' argument must be a character or symbol")
     }
+    if (!is.null(test) && !is.null(treatment))
+      stop("only one of 'treatment' or 'test' can be specified")
     
     ignoreArgs <- c("start", "verbose", "devFunOnly", "optimizer", 
         "control", "nAGQ")
     l... <- list(...)
-    l... <- l...[!names(l...) %in% ignoreArgs]
+    l... <- l...[names(l...) %not_in% ignoreArgs]
     do.call(checkArgs, c(list("glmer"), l...))
     cstr <- "check.formula.LHS"
     checkCtrlLevels(cstr, control[[cstr]])
-    denv <- checkFormulaData(formula, data, checkLHS = control$check.formula.LHS == 
-        "stop")
+    denv <- checkFormulaData(formula, data,
+                             checkLHS = control$check.formula.LHS == "stop")
     mc$formula <- formula <- as.formula(formula, env = denv)
     m <- match(c("data", "subset", "weights", "na.action", "offset", 
-        "mustart", "etastart"), names(mf), 0L)
+                 "mustart", "etastart"),
+               names(mf), 0L)
     mf <- mf[c(1L, m)]
     mf$drop.unused.levels <- TRUE
     mf[[1L]] <- quote(stats::model.frame)
@@ -32,8 +36,8 @@ glFormula <- function (formula, data = NULL, subset, weights,
     fr.form <- subbart(subbars(formula))
     environment(fr.form) <- environment(formula)
     for (i in c("weights", "offset")) {
-        if (!eval(bquote(missing(x = .(i))))) 
-            assign(i, get(i, parent.frame()), environment(fr.form))
+      if (!eval(bquote(missing(x = .(i))))) 
+        assign(i, get(i, parent.frame()), environment(fr.form))
     }
     mf$formula <- fr.form
     fr <- eval(mf, parent.frame())
@@ -41,24 +45,37 @@ glFormula <- function (formula, data = NULL, subset, weights,
     attr(fr, "formula") <- formula
     attr(fr, "offset") <- mf$offset
     if (!missing(start) && is.list(start)) {
-        attr(fr, "start") <- start$fixef
+      attr(fr, "start") <- start$fixef
     }
     n <- nrow(fr)
     
     reTrms <- mkReTrms(findbars(RHSForm(formula)), fr)
     
+    # handle creating test frames
     if (!is.null(treatment)) {
       if (treatment %not_in% colnames(fr))
         stop("treament must be the name of a column in data")
       uq <- sort(unique(fr[[treatment]]))
       if (length(uq) != 2L || !all(uq == c(0, 1)))
         stop("treatment must in { 0, 1 }^n")
-      fr.cf <- fr
-      fr.cf[[treatment]] <- 1 - fr.cf[[treatment]]
-      reTrms.cf <- mkReTrms(findbars(RHSForm(formula)), fr.cf)
-      if (!all(sapply(seq_along(reTrms$cnms), function(i) all(reTrms$cnms[[i]] == reTrms.cf$cnms[[i]]))))
+      fr.test <- fr
+      fr.test[[treatment]] <- 1 - fr.test[[treatment]]
+      reTrms.test <- mkReTrms(findbars(RHSForm(formula)), fr.test)
+      if (!all(sapply(seq_along(reTrms$cnms), function(i) all(reTrms$cnms[[i]] == reTrms.test$cnms[[i]]))))
         stop("counterfactual random effect design matrix does not match observed: contact package author")
+    } else if (!is.null(test)) {
+      mf.test <- mf
+      mf.test$data <- test
+      mf.test$offset <- test.offset
+      fr.test <- eval(mf.test, parent.frame())
+      fr.test <- factorize(fr.form, fr.test, char.only = TRUE)
+      attr(fr, "formula") <- formula
+      attr(fr, "offset") <- mf.test$offset
+      reTrms.test <- mkReTrms(findbars(RHSForm(formula)), fr.test)
+      if (!all(sapply(seq_along(reTrms$cnms), function(i) all(reTrms$cnms[[i]] == reTrms.test$cnms[[i]]))))
+        stop("test random effect design matrix does not match observed: contact package author")
     }
+    
     wmsgNlev <- checkNlevels(reTrms$flist, n = n, control, allow.n = TRUE)
     wmsgZdims <- checkZdims(reTrms$Ztlist, n = n, control, allow.n = TRUE)
     wmsgZrank <- checkZrank(reTrms$Zt, n = n, control, nonSmall = 1e+06, 
@@ -92,16 +109,25 @@ glFormula <- function (formula, data = NULL, subset, weights,
     # dbartsData can't handle columns in the model frame not in the formula terms, so we
     # pull out  "(offset)" if it exists
     bartprednames <- as.character(attr(bartterms, "predvars"))[-1]
-    if (any(!(colnames(bartfr) %in% bartprednames))) {
+    if (any(colnames(bartfr) %not_in% bartprednames)) {
       keepcols <- colnames(bartfr) %in% bartprednames
       bartfr <- bartfr[,keepcols, drop = FALSE]
       attr(bartfr, "terms") <- bartterms
       attr(attr(bartfr, "terms"), "dataClasses") <- attr(bartterms, "dataClasses")[keepcols]
       bartterms <- attr(bartfr, "terms")
     }
-    bartData <- dbarts::dbartsData(bartform, bartfr)
+    bartData <- dbarts::dbartsData(bartform, bartfr, test = test)
     if (ncol(bartData@x) == 0L)
       stop("no bart component detected; consider using rstanarm instead")
+    
+    X <- model.matrix(fixedform, fr, contrasts)
+    if (is.null(rankX.chk <- control[["check.rankX"]])) 
+      rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
+    X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
+    if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
+      scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
+    X <- checkScaleX(X, kind = scaleX.chk)
+
     
     if (!is.null(treatment)) {
       bartData@x.test <- bartData@x
@@ -109,19 +135,13 @@ glFormula <- function (formula, data = NULL, subset, weights,
         bartData@x.test[,treatment] <- 1 - bartData@x.test[,treatment, drop = FALSE]
       bartData@testUsesRegularOffset <- FALSE
     }
-    X <- model.matrix(fixedform, fr, contrasts)
-    if (is.null(rankX.chk <- control[["check.rankX"]])) 
-       rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
-    X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
-    if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
-        scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
-    X <- checkScaleX(X, kind = scaleX.chk)
-    
     if (!is.null(treatment)) {
-      X <- X[,c(colnames(X)[colnames(X) != "treatment"], treatment)]
+      X <- X[,c(colnames(X)[colnames(X) %not_in% treatment], treatment)]
       X.test <- X
       if (treatment %in% colnames(X.test))
         X.test[,treatment] <- 1 - X.test[,treatment, drop = FALSE]
+    } else if (!is.null(test)) {
+      X.test <- model.matrix(fixedform, fr.test, contrasts)
     }
     
     terms <- attr(fr, "terms")
@@ -145,8 +165,8 @@ glFormula <- function (formula, data = NULL, subset, weights,
     family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
     result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, family = family, formula = formula, 
                    wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
-    if (!is.null(treatment)) {
-      result$reTrms.cf <- reTrms.cf
+    if (!is.null(treatment) || !is.null(test)) {
+      result$reTrms.test <- reTrms.test
       result$X.test <- X.test
     }
     result
