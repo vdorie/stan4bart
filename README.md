@@ -6,7 +6,7 @@ To install:
 
 Windows not tested yet.
 
-Here's some test code to get started with the package. It accepts an lme4 syntax and should be pretty flexible in that regard, but the results are not well packaged at present. You will have to manually dig into the samples, but they should at least have a familar structure.
+Here's some test code to get started with the package. It accepts an lme4 syntax and should be pretty flexible in that regard, but the results are not well packaged at present. There is an `extract` generic to retrieve samples that may be of some use. The use of test data has not yet been debugged.
 
 ```R
 require(stan4bart)
@@ -58,12 +58,17 @@ mean_true <- fixef_true + ranef_true
 fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4) + X4 + (1 + X4 | g.1) + (1 | g.2), df,
                   verbose = 2, chains = 1)
 
-# samples from the posterior of the expected value of the response
+# check the mean sequared error in individual level predictions
 mean((fitted(fit) - mean_true)^2)
 
+# MSE for fixed effect mean portion, including parametric and nonparametric components
 mean((fitted(fit, "mu.fixef") + fitted(fit, "bart") - fixef_true)^2)
 mean((fitted(fit, "mu.ranef") - ranef_true)^2)
 
+# MSE for parametric, random effects at the observation level
 lmer_fit <- lme4::lmer(y ~ . - g.1 - g.2 - (1 + X4 | g.1) + (1 | g.2), df)
 mean((fitted(lmer_fit) - mean_true)^2)
+
+# MSE for random effects themselves can be done as well, but they have a
+# tricky structure
 ```
