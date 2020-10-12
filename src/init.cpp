@@ -15,7 +15,7 @@
 #include <dbarts/model.hpp>
 #include <dbarts/results.hpp>
 
-#include <rstan/io/r_ostream.hpp>
+#include "rstan/io/r_ostream.hpp"
 
 #include "bart_util.hpp"
 #include "stan_sampler.hpp"

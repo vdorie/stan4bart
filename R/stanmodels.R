@@ -1,12 +1,12 @@
 
-MODELS_HOME <- "src"
-if (!file.exists(MODELS_HOME)) MODELS_HOME <- sub("R$", "src", getwd())
-
-stan_files <- dir(file.path(MODELS_HOME, "stan_files"),
-                  pattern = "stan$", full.names = TRUE)
-for (f in stan_files)
-  rstan::stanc(f, allow_undefined = TRUE, obfuscate_model_name = FALSE)
-rm(stan_files, MODELS_HOME)
+#MODELS_HOME <- "src"
+#if (!file.exists(MODELS_HOME)) MODELS_HOME <- sub("R$", "src", getwd())
+#
+#stan_files <- dir(file.path(MODELS_HOME, "stan_files"),
+#                  pattern = "stan$", full.names = TRUE)
+#for (f in stan_files)
+#  rstan::stanc(f, allow_undefined = TRUE, obfuscate_model_name = FALSE)
+#rm(stan_files, MODELS_HOME)
 
 #stanmodels <- lapply(stan_files, function(f) {
   #model_cppname <- sub("\\.stan$", "", basename(f))

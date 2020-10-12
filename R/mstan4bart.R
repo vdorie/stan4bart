@@ -124,12 +124,6 @@ mstan4bart <-
                na.action = attr(glmod$fr, "na.action"), contrasts, glmod)
   
   return(fit)
-  
-  #out <- stanreg(fit)
-  #class(out) <- c(class(out), add_classes)
-  #class(out) <- "rstanbartarm"
-  
-  #return(out)
 }
 
 package_samples <- function(chain_results, fixef_names, bart_var_names) {

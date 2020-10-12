@@ -392,12 +392,13 @@ mstan4bart_fit <-
     standata[[varName]] <- as.integer(standata[[varName]])
   
   dotsList <- list(...)
-  sampling <- getMethod("sampling", "stanmodel", asNamespace("rstan"))
-  
   # extract defaults from "sampling()" and use them if necessary
-  tryResult <- tryCatch(samplingFormals <- formals(body(sampling)[[2L]][[3L]]), error = function(e) e)
+  tryResult <- tryCatch({
+    sampling <- getMethod("sampling", "stanmodel", asNamespace("rstan"))
+    samplingFormals <- formals(body(sampling)[[2L]][[3L]])
+  }, error = function(e) e)
   if (is(tryResult, "error")) {
-    warning("sampling function in rstan has been updated - using hard coded defaults; please notify package author")
+    # warning("sampling function in rstan not found or has been updated - using hard coded defaults; please notify package author")
     samplingFormals <- list(iter = 2000L, warmup = quote(iter %/% 2L), thin = 1L, chains = 4L, cores = quote(getOption("mc.cores", 1L)))
   }
   
