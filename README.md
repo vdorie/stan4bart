@@ -110,10 +110,10 @@ samples.pate <- apply((samples.ppd.test - samples.ppd.test) * (2 * testData$z - 
 pate <- mean(samples.pate)
 
 
-fitted.train <- apply(samples.mu.train, 1, mean)
-fitted.test  <- apply(samples.mu.test,  1, mean)
+fitted.mu.train <- apply(samples.mu.train, 1, mean)
+fitted.mu.test  <- apply(samples.mu.test,  1, mean)
 
-mse.train <- with(testData, mean((fitted.train - mu.1 * z - mu.0 * (1 - z))^2))
-mse.test  <- with(testData, mean((fitted.test  - mu.1 * (1 - z) - mu.0 * z)^2))
+mse.train <- with(testData, mean((fitted.mu.train - mu.1 * z - mu.0 * (1 - z))^2))
+mse.test  <- with(testData, mean((fitted.mu.test  - mu.1 * (1 - z) - mu.0 * z)^2))
 
 ```
