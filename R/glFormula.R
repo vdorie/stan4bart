@@ -861,6 +861,11 @@ nobars <- nobars %ORifNotInLme4% function (term)
     nb
 }
 
+anyBars <- anyBars  %ORifNotInLme4% function (term) 
+{
+    any(c("|", "||") %in% all.names(term))
+}
+
 nobart_ <- function(term) 
 {
   if (length(term) == 1L)

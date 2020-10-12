@@ -75,6 +75,8 @@ mstan4bart <-
   group <- glmod$reTrms
   group$decov <- prior_covariance
     
+  # TODO: check for lme4, use lm if not present
+  #  browser()
   mc <- match.call(expand.dots = FALSE)
   mc[[1L]] <- quote(lme4::lmer)
   mc$control <- lme4::lmerControl()
@@ -96,7 +98,7 @@ mstan4bart <-
                                   bart_offset_init = fitted(lmerFit),
                                   sigma_init = sigma(lmerFit),
                                   ...)
-  # TODO: de-list results into md-array
+  
   result <- package_samples(chain_results, colnames(glmod$X), colnames(bartData@x))
   
   if (!is.null(glmod$X)) {

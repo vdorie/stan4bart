@@ -11,7 +11,7 @@ Here's some test code to get started with the package. It accepts an lme4 syntax
 ```R
 require(stan4bart)
 
-generateFriedmanData <- function(n = 100) {
+generateFriedmanData <- function(n, ranef, causal) {
   f <- function(x)
     10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 10 * x[,4] + 5 * x[,5]
   
@@ -19,56 +19,101 @@ generateFriedmanData <- function(n = 100) {
   sigma <- 1.0
   
   x <- matrix(runif(n * 10), n, 10)
-  y <- rnorm(n, f(x), sigma)
+  mu <- f(x)
   
-  list(x = x, y = y, f.x = f(x))
+  result <- list(x = x, sigma = sigma)
+  
+  if (ranef) {
+    n.g.1 <- 5L
+    n.g.2 <- 8L
+    
+    result <- within(result, {
+      g.1 <- sample(n.g.1, n, replace = TRUE)
+      
+      Sigma.b.1 <- matrix(c(1.5^2, .2, .2, 1^2), 2)
+      R.b <- chol(Sigma.b.1)
+      b.1 <- matrix(rnorm(2 * n.g.1), n.g.1) %*% R.b
+      rm(R.b)
+      
+      g.2 <- sample(n.g.2, n, replace = TRUE)
+      
+      Sigma.b.2 <- as.matrix(1.2)
+      b.2 <- rnorm(n.g.2, 0, sqrt(Sigma.b.2))
+      
+      mu.fixef <- mu
+      mu.ranef <- b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2]
+      mu <- mu.fixef + mu.ranef
+    })
+  }
+  
+  if (causal) {
+    result <- within(result, {
+      tau <- 5
+      z <- rbinom(n, 1, 0.2)
+    })
+    
+    if (ranef) {
+      result <- within(result, {
+        mu.fixef.0 <- mu.fixef
+        mu.fixef.1 <- mu.fixef.0 + tau
+        mu.ranef.0 <- mu.ranef.1 <- mu.ranef
+        
+        mu.0 <- mu.fixef.0 + mu.ranef.0
+        mu.1 <- mu.fixef.1 + mu.ranef.1
+      })
+    } else {
+      result <- within(result, {
+        mu.0 <- mu
+        mu.1 <- mu.0 + tau
+      })
+    }
+    
+    result <- within(result, {
+      y.0 <- mu.0 + rnorm(n, 0, sigma)
+      y.1 <- mu.1 + rnorm(n, 0, sigma)
+      y <- y.1 * z + y.0 * (1 - z)
+    })
+    
+    result$mu <- NULL
+    result$mu.fixef <- NULL
+    result$mu.ranef <- NULL
+  }
+  
+  result
 }
-testData <- generateFriedmanData(1000)
+testData <- generateFriedmanData(1000, TRUE, TRUE)
 rm(generateFriedmanData)
 
+df <- with(testData, data.frame(x, g.1, g.2, y, z))
 
-set.seed(0)
 
-n.g.1 <- 5L
-g.1 <- sample(n.g.1, length(testData$y), replace = TRUE)
+require(stan4bart)
+fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                  cores = 1, verbose = 1,
+                  treatment = z)
 
-Sigma.b <- matrix(c(1.5^2, .2, .2, 1^2), 2)
-R.b <- chol(Sigma.b)
-b.1 <- matrix(rnorm(2 * n.g.1), n.g.1) %*% R.b
+samples.mu.train <- extract(fit)
+samples.mu.test  <- extract(fit, sample = "test")
 
-n.g.2 <- 8L
-g.2 <- sample(n.g.2, length(testData$y), replace = TRUE)
+samples.icate <- (samples.mu.train - samples.mu.test) * (2 * testData$z - 1)
+samples.cate <- apply(samples.icate, 2, mean)
+cate <- mean(samples.cate)
 
-sigma.b <- 1.2
-b.2 <- rnorm(n.g.2, 0, sigma.b)
+samples.ppd.test <- extract(fit, type = "ppd", sample = "test")
 
-testData$y <- testData$y + b.1[g.1,1] + testData$x[,4] * b.1[g.1,2] + b.2[g.2]
-testData$g.1 <- g.1
-testData$b.1 <- b.1
-testData$g.2 <- g.2
-testData$b.2 <- b.2
-rm(Sigma.b, R.b, g.1, b.1, g.2, b.2, sigma.b)
+samples.ite <- (testData$y - samples.ppd.test) * (2 * testData$z - 1)
+samples.sate <- apply(samples.ite, 2, mean)
+sate <- mean(samples.sate)
 
-df <- with(testData, data.frame(x, g.1, g.2, y))
+samples.ppd.test <- extract(fit, type = "ppd", sample = "train")
+samples.pate <- apply((samples.ppd.test - samples.ppd.test) * (2 * testData$z - 1), 2, mean)
+pate <- mean(samples.pate)
 
-ranef_true <- with(testData, b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2])
-fixef_true <- testData$f.x
-mean_true <- fixef_true + ranef_true
 
-fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4) + X4 + (1 + X4 | g.1) + (1 | g.2), df,
-                  verbose = 2, chains = 1)
+fitted.train <- apply(samples.mu.train, 1, mean)
+fitted.test  <- apply(samples.mu.test,  1, mean)
 
-# check the mean sequared error in individual level predictions
-mean((fitted(fit) - mean_true)^2)
+mse.train <- with(testData, mean((fitted.train - mu.1 * z - mu.0 * (1 - z))^2))
+mse.test  <- with(testData, mean((fitted.test  - mu.1 * (1 - z) - mu.0 * z)^2))
 
-# MSE for fixed effect mean portion, including parametric and nonparametric components
-mean((fitted(fit, "mu.fixef") + fitted(fit, "bart") - fixef_true)^2)
-mean((fitted(fit, "mu.ranef") - ranef_true)^2)
-
-# MSE for parametric, random effects at the observation level
-lmer_fit <- lme4::lmer(y ~ . - g.1 - g.2 - (1 + X4 | g.1) + (1 | g.2), df)
-mean((fitted(lmer_fit) - mean_true)^2)
-
-# MSE for random effects themselves can be done as well, but they have a
-# tricky structure
 ```

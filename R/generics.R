@@ -1,11 +1,12 @@
+
 extract.mstan4bartFit <-
   function(object,
-           type = c("mu", "fixef", "mu.fixef", "ranef", "mu.ranef", "bart", "sigma"),
+           value = c("mu", "ppd", "fixef", "mu.fixef", "ranef", "mu.ranef", "bart", "sigma"),
            sample = c("train", "test"),
            combine_chains = TRUE,
            ...)
 {
-  type   <- match.arg(type)
+  value  <- match.arg(value)
   sample <- match.arg(sample)
   
   n_samples <- dim(object$bart_train)[2L]
@@ -37,7 +38,7 @@ extract.mstan4bartFit <-
   }
   
   mu.fixef <- mu.ranef <- 0
-  if (type %in% c("mu", "mu.fixef") && n_fixef > 0L) {
+  if (value %in% c("mu", "ppd", "mu.fixef") && n_fixef > 0L) {
     # b_0 + b_1 * (x_1 - mean(x_1)) + ... = 
     # b_0 - b_1 * mean(x_1) - b_2 * mean(x_2) + 
     fixef_flat <- matrix(object$fixef, dim(object$fixef)[1L], prod(dim(object$fixef)[-1L]),
@@ -50,7 +51,7 @@ extract.mstan4bartFit <-
                       c(n_obs_inf, n_samples, n_chains),
                       dimnames = list(observation = NULL, sample = NULL, chain = NULL))
   }
-  if (type %in% c("mu", "mu.ranef") %% n_ranef_levels > 0L) {
+  if (value %in% c("mu", "ppd", "mu.ranef") %% n_ranef_levels > 0L) {
     # put the dimensions of the random effects at the end so that they can be combined on
     # a per-sample, per-chain basis with the other random effects
     # then permute back to original
@@ -60,15 +61,24 @@ extract.mstan4bartFit <-
     # b_rows <- grep("^b\\.", rownames(object$chain_results[[1L]]$sample$stan$raw))
     # all(b[,,1] == object$chain_results[[1L]]$sample$stan$raw[b_rows,])
     # all(b[,,2] == object$chain_results[[2L]]$sample$stan$raw[b_rows,])
-
-    mu.ranef <- array(Matrix::crossprod(Zt, matrix(b, dim(b)[1L], prod(dim(b)[-1L]))),
+    
+    b_mat <- matrix(b, dim(b)[1L], prod(dim(b)[-1L]))
+    # Zb <- Matrix::crossprod(Zt, b_mat) # getting a memory error on this
+    Zb <- crossprod(as.matrix(Zt), b_mat)
+    mu.ranef <- array(Zb,
                       c(n_obs_inf, n_samples, n_chains),
                       dimnames = list(observation = NULL, sample = NULL, chain = NULL))
   }
   bart <- if (sample == "train") object$bart_train else object$bart_test
   
-  result <- switch(type,
+  if (value %in% "ppd") {
+    eps <- array(rnorm(n_obs_inf * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs_inf)),
+                 c(n_obs_inf, n_samples, n_chains))
+  }
+  
+  result <- switch(value,
                    mu       = bart + mu.fixef + mu.ranef,
+                   ppd      = bart + mu.fixef + mu.ranef + eps,
                    mu.fixef = mu.fixef,
                    mu.ranef = mu.ranef,
                    bart     = bart,
@@ -110,11 +120,11 @@ extract.mstan4bartFit <-
 
 fitted.mstan4bartFit <-
   function(object,
-           type = c("mu", "fixef", "mu.fixef", "ranef", "mu.ranef", "bart", "sigma"),
+           value = c("mu", "fixef", "mu.fixef", "ranef", "mu.ranef", "bart", "sigma"),
            sample = c("train", "test"),
            ...)
 {
-  samples <- extract(object, type, sample, combine_chains = TRUE)
+  samples <- extract(object, value, sample, combine_chains = TRUE)
   
   average_samples_f <- function(x) {
     if (is.array(x)) {
