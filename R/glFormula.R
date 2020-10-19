@@ -240,19 +240,20 @@ glmerControl <- glmerControl %ORifNotInLme4% function (optimizer = c("bobyqa", "
     ret
 }
 
-lmerControl <- lmerControl %ORifNotInLme4% 
-function (optimizer = "nloptwrap", restart_edge = TRUE, boundary.tol = 1e-05, 
-    calc.derivs = TRUE, use.last.params = FALSE, sparseX = FALSE, 
-    standardize.X = FALSE, check.nobs.vs.rankZ = "ignore", check.nobs.vs.nlev = "stop", 
-    check.nlev.gtreq.5 = "ignore", check.nlev.gtr.1 = "stop", 
-    check.nobs.vs.nRE = "stop", check.rankX = c("message+drop.cols", 
-        "silent.drop.cols", "warn+drop.cols", "stop.deficient", 
-        "ignore"), check.scaleX = c("warning", "stop", "silent.rescale", 
-        "message+rescale", "warn+rescale", "ignore"), check.formula.LHS = "stop", 
-    check.conv.grad = .makeCC("warning", tol = 0.002, relTol = NULL), 
-    check.conv.singular = .makeCC(action = "message", tol = formals(isSingular)$tol), 
-    check.conv.hess = .makeCC(action = "warning", tol = 1e-06), 
-    optCtrl = list(), mod.type = "lmer") 
+lmerControl <- lmerControl %ORifNotInLme4%
+  function(optimizer = "nloptwrap", restart_edge = TRUE, boundary.tol = 1e-05, 
+           calc.derivs = TRUE, use.last.params = FALSE, sparseX = FALSE, 
+           standardize.X = FALSE, check.nobs.vs.rankZ = "ignore", check.nobs.vs.nlev = "stop", 
+           check.nlev.gtreq.5 = "ignore", check.nlev.gtr.1 = "stop", 
+           check.nobs.vs.nRE = "stop",
+           check.rankX = c("message+drop.cols", "silent.drop.cols", "warn+drop.cols",
+                           "stop.deficient", "ignore"),
+           check.scaleX = c("warning", "stop", "silent.rescale", "message+rescale",
+                            "warn+rescale", "ignore"), check.formula.LHS = "stop", 
+           check.conv.grad = .makeCC("warning", tol = 0.002, relTol = NULL), 
+           check.conv.singular = .makeCC(action = "message", tol = formals(isSingular)$tol), 
+           check.conv.hess = .makeCC(action = "warning", tol = 1e-06), 
+           optCtrl = list(), mod.type = "lmer") 
 {
     stopifnot(is.list(optCtrl))
     if (mod.type == "glmer" && length(optimizer) == 1) {
@@ -446,7 +447,7 @@ mkReTrms <- mkReTrms %ORifNotInLme4% function (bars, fr, drop.unused.levels = TR
         }))))
     thet <- numeric(sum(nth))
     ll <- list(Zt = Matrix::drop0(Zt), theta = thet, Lind = as.integer(Lambdat@x), 
-        Gp = unname(c(0L, cumsum(nb))))
+               Gp = unname(c(0L, cumsum(nb))))
     ll$lower <- -Inf * (thet + 1)
     ll$lower[unique(Matrix::diag(Lambdat))] <- 0
     ll$theta[] <- is.finite(ll$lower)
@@ -866,6 +867,16 @@ anyBars <- anyBars  %ORifNotInLme4% function (term)
     any(c("|", "||") %in% all.names(term))
 }
 
+isBar <- isBar %ORifNotInLme4% function(term)
+{
+    if (is.call(term)) {
+        if ((term[[1]] == as.name("|")) || (term[[1]] == as.name("||"))) {
+            return(TRUE)
+        }
+    }
+    FALSE
+}
+
 nobart_ <- function(term) 
 {
   if (length(term) == 1L)
@@ -910,7 +921,6 @@ allbart_ <- function(term, inbart)
   
   if (length(term) == 2L) {
     if (term[[1]] == as.name("bart")) return(allbart_(term[[2L]], TRUE))
-    browser()
     ab <- allbart_(term[[2]], inbart)
     if (is.null(ab)) return(NULL)
     term[[2L]] <- ab

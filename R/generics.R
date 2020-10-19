@@ -63,8 +63,8 @@ extract.mstan4bartFit <-
     # all(b[,,2] == object$chain_results[[2L]]$sample$stan$raw[b_rows,])
     
     b_mat <- matrix(b, dim(b)[1L], prod(dim(b)[-1L]))
-    # Zb <- Matrix::crossprod(Zt, b_mat) # getting a memory error on this
-    Zb <- crossprod(as.matrix(Zt), b_mat)
+    Zb <- Matrix::crossprod(Zt, b_mat) # getting a memory error on this
+    # Zb <- crossprod(as.matrix(Zt), b_mat)
     mu.ranef <- array(Zb,
                       c(n_obs_inf, n_samples, n_chains),
                       dimnames = list(observation = NULL, sample = NULL, chain = NULL))
@@ -82,11 +82,11 @@ extract.mstan4bartFit <-
                    mu.fixef = mu.fixef,
                    mu.ranef = mu.ranef,
                    bart     = bart,
-                   varcount   = object$bart_varcount,
-                   ranef      = object$ranef,
-                   fixef      = object$fixef,
-                   Sigma      = object$Sigma,
-                   sigma      = object$sigma)
+                   varcount = object$bart_varcount,
+                   ranef    = object$ranef,
+                   fixef    = object$fixef,
+                   Sigma    = object$Sigma,
+                   sigma    = object$sigma)
   
   combine_chains_f <- function(x) {
     if (is.array(x)) {
@@ -120,7 +120,7 @@ extract.mstan4bartFit <-
 
 fitted.mstan4bartFit <-
   function(object,
-           value = c("mu", "fixef", "mu.fixef", "ranef", "mu.ranef", "bart", "sigma"),
+           value = c("mu", "ppd", "fixef", "mu.fixef", "ranef", "mu.ranef", "bart", "sigma"),
            sample = c("train", "test"),
            ...)
 {
