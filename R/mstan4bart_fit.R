@@ -494,9 +494,15 @@ mstan4bart_fit <-
       clusterEvalQ(cluster, require(stan4bart))
       
       tryResult <- tryCatch(
-        chainResults <- clusterMap(cluster, "mstan4bart_fitforreal", seq_len(chains), MoreArgs = nlist(bartControl, bartData, bartModel, standata, stan_args, commonControl, group)))
+        chainResults <- clusterMap(cluster, "mstan4bart_fitforreal", seq_len(chains), MoreArgs = nlist(bartControl, bartData, bartModel, standata, stan_args, commonControl, group)),
+                            error = function(e) e)
     
       stopCluster(cluster)
+      
+      if (is(tryResult, "error")) {
+        warning("error running multithreaded, defaulting to single: ", tryResult$message)
+        runSingleThreaded <- TRUE
+      }
     }
   }
   
