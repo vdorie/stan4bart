@@ -1,22 +1,3 @@
- # results are:
-  # named list of length = num chains
-  #   warmup - has same elements as sample
-  #   sample
-  #     stan
-  #       raw   - matrix of num pars x num samples
-  #       Sigma - list of length num grouping factors
-  #         g.XX - array of cov rows x cov cols x num samples
-  #       ranef - list of length num groupin factors
-  #         g.XX - array of num ranef @ factor x num groups x num samples
-  #     bart
-  #       sigma - length of num samples (use aux in stan$raw instead)
-  #       train - num obs x num samples
-  #       test  - num obs x num samples, contains counterfactuals
-  #       varcount - num predictors x num samples
-  # also present are two attributes:
-  #   Zt.obs - random effects design matrix for observed
-  #   Zt.cf  - random effects design matrix for counterfactuals
-
 mstan4bart <- 
   function(formula,
            data = NULL,
@@ -26,14 +7,19 @@ mstan4bart <-
            offset,
            contrasts = NULL,
            test = NULL,
-           test.offset = NULL,
+           offset_test = NULL,
+           verbose = FALSE,
+           iter = 2000L,
+           warmup = iter %/% 2L,
+           thin = 1L,
+           chains = 4L,
+           cores = getOption("mc.cores", 1L),
+           refresh = max(iter %/% 10L, 1L),
            treatment = NULL,
-           ...,
-           prior = default_prior_coef_gaussian(),
-           prior_intercept = default_prior_intercept_gaussian(),
-           prior_aux = exponential(),
            prior_covariance = decov(),
-           adapt_delta = NULL)
+           offset_type = c("default", "fixef", "ranef"),
+           stan_args = NULL,
+           bart_args = NULL)
 {
   
   call <- match.call(expand.dots = TRUE)
@@ -42,18 +28,21 @@ mstan4bart <-
     data <- as.data.frame(data)
     data <- drop_redundant_dims(data)
   }
-  mc[[1]] <- quoteInNamespace(glFormula)
-  mc$control <- make_glmerControl()
-  mc$data <- data
-  mc$prior_covariance <- mc$prior_aux <-
-    mc$adapt_delta <- mc$... <- NULL
+  gl_call <- mc
+  gl_call[[1L]] <- quoteInNamespace(glFormula)
+  gl_call$control <- make_glmerControl()
+  gl_call$data <- data
   
-  glmod <- eval(mc, parent.frame())
+  for (name in setdiff(names(formals(mstan4bart)), names(formals(glFormula)))) {
+    if (name %in% names(gl_call)) gl_call[[name]] <- NULL
+  }
+  
+  glmod <- eval(gl_call, parent.frame())
   family <- glmod$family
   
   bartData <- glmod$bartData
   if ("b" %in% colnames(bartData@x)) {
-    stop("mstan4bart does not allow the name 'b' for predictor variables.", 
+    stop("mstan4bart does not allow the name 'b' for predictor variables", 
          call. = FALSE)
   }
   
@@ -67,37 +56,69 @@ mstan4bart <-
 
   offset <- model.offset(glmod$fr) %ORifNULL% double(0)
   weights <- validate_weights(as.vector(model.weights(glmod$fr)))
+  offset_type <- match.arg(offset_type)
   
-  if (is.null(prior_aux)) 
-    prior_aux <- list()
   if (is.null(prior_covariance))
-    stop("'prior_covariance' can't be NULL.", call. = FALSE)
+    stop("'prior_covariance' cannot be NULL", call. = FALSE)
   group <- glmod$reTrms
   group$decov <- prior_covariance
     
-  # TODO: check for lme4, use lm if not present
-  #  browser()
-  mc <- match.call(expand.dots = FALSE)
-  mc[[1L]] <- quote(lme4::lmer)
-  mc$control <- lme4::lmerControl()
-  mc$formula <- nobart(mc$formula)
-  mc$data <- data
-  mc$verbose <- FALSE
-  mc$prior_covariance <- mc$prior_aux <-
-    mc$adapt_delta <- mc$treatment <- mc$... <- NULL
-  lmerFit <- suppressWarnings(eval(mc, parent.frame()))
-  chain_results <- mstan4bart_fit(bartData = bartData, x = glmod$X,
-                                  y = y, weights = weights, offset = offset,
-                                  family = family,
-                                  prior,
-                                  prior_intercept,
-                                  prior_aux,
-                                  prior_covariance,
-                                  adapt_delta = adapt_delta,
-                                  group = group,
-                                  bart_offset_init = fitted(lmerFit),
-                                  sigma_init = sigma(lmerFit),
-                                  ...)
+  init_call <- mc
+    
+  bart_offset_init <- NULL
+  sigma_init <- NULL
+  
+  if (nzchar(system.file(package = "lme4"))) {
+    init_call[[1L]] <- quote(lme4::lmer)
+    for (name in setdiff(names(formals(mstan4bart)), names(formals(lme4::lmer)))) {
+      if (name %in% names(init_call)) init_call[[name]] <- NULL
+    }
+
+    init_call$control <- lme4::lmerControl()
+    init_call$formula <- nobart(mc$formula)
+    init_call$verbose <- FALSE
+    try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
+    if (!is(try_result, "error")) {
+      bart_offset_init <- fitted(init_fit)
+      sigma_init <- sigma(init_fit)
+    }
+  }
+  if (is.null(bart_offset_init)) {
+    init_call[[1L]] <- quote(stats::lm)
+    for (name in setdiff(names(formals(mstan4bart)), names(formals(stats::lm)))) {
+      if (name %in% names(init_call)) init_call[[name]] <- NULL
+    }
+    init_call$control <- NULL
+    init_call$formula <- subbars(nobart(mc$formula))
+    init_call$verbose <- NULL
+    try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
+    if (!is(try_result, "error")) {
+      bart_offset_init <- fitted(init_fit)
+      sigma_init <- sigma(init_fit)
+    }
+  }
+  if (is.null(bart_offset_init)) {
+    init_call$formula <- nobars(nobart(mc$formula))
+    init_fit <- eval(init_call, parent.frame())
+    bart_offset_init <- fitted(init_fit)
+    sigma_init <- sigma(init_fit)
+  }
+  
+  chain_results <- mstan4bart_fit(bartData, glmod$X, y,
+                                  weights, offset,
+                                  family,
+                                  group,
+                                  bart_offset_init,
+                                  sigma_init,
+                                  verbose,
+                                  iter,
+                                  warmup,
+                                  thin,
+                                  chains,
+                                  cores,
+                                  refresh,
+                                  offset_type,
+                                  stan_args, bart_args)
   
   result <- package_samples(chain_results, colnames(glmod$X), colnames(bartData@x))
   
@@ -108,24 +129,14 @@ mstan4bart <-
   if (!is.null(glmod$X.test))      result$X.test <- glmod$X.test
   if (!is.null(glmod$reTrms))      result$Zt <- glmod$reTrms$Zt
   if (!is.null(glmod$reTrms.test)) result$Zt.test <- glmod$reTrms.test$Zt
+  if (!is.null(offset_test))       result$offset_test <- offset_test
+  if (!is.null(glmod$treatment))   result$treatment <- glmod$treatment
   
-  # result$chain_results <- chain_results
+  result$formula <- formula
+  result$na.action <- na.action
   
   class(result) <- "mstan4bartFit"
-  return(result)
-  
-  sel <- apply(X, 2L, function(x) !all(x == 1) && length(unique(x)) < 2)
-  X <- X[, !sel, drop = FALSE]
-  Z <- pad_reTrms(Ztlist = group$Ztlist, cnms = group$cnms, 
-                  flist = group$flist)$Z
-  # colnames(Z) <- b_names(names(fit), value = TRUE)
-  colnames(Z) <- colnames(fit[[1L]]$ranef)
-  
-  fit <- nlist(stanfit, family, formula, offset, weights, 
-               x = cbind(X, Z), y = y, data, call, terms = NULL, model = NULL,
-               na.action = attr(glmod$fr, "na.action"), contrasts, glmod)
-  
-  return(fit)
+  result
 }
 
 package_samples <- function(chain_results, fixef_names, bart_var_names) {
@@ -212,17 +223,17 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
     result$warmup <- list()
     result$warmup$bart_train <- array(sapply(seq_along(n_chains), function(i_chains)
                                         chain_results[[i_chains]]$warmup$bart$train),
-                                      dim = c(n_obs, n_samples, n_chains),
+                                      dim = c(n_obs, n_warmup, n_chains),
                                       dimnames = list(obseration = NULL, sample = NULL, chain = NULL))
     if (n_obs_test > 0L) {
       result$warmup$bart_test <- array(sapply(seq_along(n_chains), function(i_chains)
                                          chain_results[[i_chains]]$warmup$bart$test),
-                                       dim = c(n_obs_test, n_samples, n_chains),
+                                       dim = c(n_obs_test, n_warmup, n_chains),
                                        dimnames = list(obseration = NULL, sample = NULL, chain = NULL))
     }
     result$warmup$bart_varcount <- array(sapply(seq_along(n_chains), function(i_chains)
                                            chain_results[[i_chains]]$sample$bart$varcount),
-                                         dim = c(n_bart_vars, n_samples, n_chains),
+                                         dim = c(n_bart_vars, n_warmup, n_chains),
                                          dimnames = list(predictor = bart_var_names, sample = NULL, chain = NULL))
     if (length(aux_row) > 0L) {
       result$warmup$sigma <- sapply(seq_len(n_chains), function(i_chain) {
@@ -238,7 +249,7 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
         names(names) <- c("predictor", "group", "sample", "chain")
         array(sapply(seq_len(n_chains), function(j_chain)
                 chain_results[[j_chain]]$warmup$stan$ranef[[i_level]]),
-              c(n_ranef_at_level[i_level], n_groups_at_level[i_level], n_samples, n_chains),
+              c(n_ranef_at_level[i_level], n_groups_at_level[i_level], n_warmup, n_chains),
               dimnames = names)
       })
       result$warmup$Sigma <- lapply(seq_len(n_ranef_levels), function(i_level) {
@@ -247,7 +258,7 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
         names(names)[3L:4L] <- c("sample", "chain")
         array(sapply(seq_len(n_chains), function(i_chain)
                 chain_results[[i_chain]]$warmup$stan$Sigma[[i_level]]),
-              c(n_ranef_at_level[i_level], n_ranef_at_level[i_level], n_samples, n_chains),
+              c(n_ranef_at_level[i_level], n_ranef_at_level[i_level], n_warmup, n_chains),
               dimnames = names)
       })
     }
@@ -259,10 +270,14 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
       
       result$warmup$fixef <- array(sapply(seq_len(n_chains), function(i_chain)
                                      chain_results[[i_chain]]$warmup$stan$fixef),
-                                   c(n_fixef, n_samples, n_chains),
+                                   c(n_fixef, n_warmup, n_chains),
                                    dimnames = names)
     }
   }
+  
+  if (!is.null(attr(chain_results, "sampler.bart")))
+    result$sampler.bart <- attr(chain_results, "sampler.bart")
+  
   
   # TODO: turn into test
   # all(as.vector(result$ranef[[1]][,,,1]) == as.vector(chain_results[[1L]]$sample$stan$ranef[[1]]))

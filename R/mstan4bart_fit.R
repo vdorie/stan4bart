@@ -29,22 +29,22 @@ getRanef <- function(group, samples) {
 }
 
 # putting this out here so we can export it when parallelizing
-mstan4bart_fitforreal <- function(chain.num, bartControl, bartData, bartModel, standata, stan_args, commonControl, group)
+mstan4bart_fitforreal <- function(chain.num, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
 {
   chain.num <- "ignored"
   # TODO: figure out why the C refs aren't reachable when dispatched to cluster
   ns <- asNamespace("stan4bart")
   
-  sampler <- .Call(ns$C_stan4bart_create, bartControl, bartData, bartModel, standata, stan_args, commonControl)
-  if (commonControl$verbose > 0L)
+  sampler <- .Call(ns$C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
+  if (control.common$verbose > 0L)
     .Call(ns$C_stan4bart_printInitialSummary, sampler)
   results <- list()
-  if (commonControl$warmup > 0L)
-    results$warmup  <- .Call(ns$C_stan4bart_run, sampler, commonControl$warmup, TRUE, "both")
+  if (control.common$warmup > 0L)
+    results$warmup  <- .Call(ns$C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
   .Call(ns$C_stan4bart_disengageAdaptation, sampler)
-  results$sample <- .Call(ns$C_stan4bart_run, sampler, commonControl$iter, FALSE, "both")
+  results$sample <- .Call(ns$C_stan4bart_run, sampler, control.common$iter, FALSE, "both")
   
-  if (commonControl$warmup > 0L) {
+  if (control.common$warmup > 0L) {
     stan_warmup <- list(raw = results$warmup$stan)
     stan_warmup$Sigma <- ns$getSigma(group$cnms, stan_warmup$raw)
     stan_warmup$fixef <- ns$getFixef(stan_warmup$raw)
@@ -57,36 +57,41 @@ mstan4bart_fitforreal <- function(chain.num, bartControl, bartData, bartModel, s
   stan_sample$ranef <- ns$getRanef(group, stan_sample$raw)
   results$sample$stan <- stan_sample
   
+  if (control.bart@keepTrees)
+    results$state.bart <- .Call(ns$C_stan4bart_exportBARTState, sampler)
+  
   results
 }
 
 mstan4bart_fit <- 
-  function(bartData, x, y,
+  function(data.bart, x, y,
+           weights,
+           offset,
+           family,
+           group,
            bart_offset_init, sigma_init,
-           weights = rep(1, NROW(y)), 
-           offset = rep(0, NROW(y)), 
-           family = family,
-           ...,
-           prior = default_prior_coef_gaussian(),
-           prior_intercept = default_prior_intercept_gaussian(),
-           prior_aux = exponential(autoscale = TRUE),
-           group = list(),
-           adapt_gamma = NULL,
-           adapt_delta = NULL,
-           adapt_kappa = NULL)
-           #QR = FALSE) # not implementing for now, since output has to be changed
+           verbose,
+           iter,
+           warmup,
+           thin,
+           chains,
+           cores,
+           refresh,
+           offset_type,
+           stan_args,
+           bart_args)
 {  
   supported_families <- c("binomial", "gaussian")
   fam <- which(pmatch(supported_families, family$family, nomatch = 0L) == 1L)
-  
-  # useless assignments to pass R CMD check
-  prior_df <- prior_df_for_intercept <- prior_df_for_aux <- 
-    prior_dist <- prior_dist_for_intercept <- prior_dist_for_aux <-
-    prior_mean <- prior_mean_for_intercept <- prior_mean_for_aux <- 
-    prior_scale <- prior_scale_for_intercept <- prior_scale_for_aux <-
-    prior_autoscale <- prior_autoscale_for_intercept <- prior_autoscale_for_aux <- 
-    global_prior_scale <- global_prior_df <- slab_df <- 
-    slab_scale <- NULL
+    
+  if (is.null(stan_args))
+    stan_args <- list()
+  if (is.null(stan_args[["prior"]]))
+    stan_args$prior <- default_prior_coef_gaussian()
+  if (is.null(stan_args[["prior_intercept"]]))
+    stan_args$prior_intercept <- default_prior_intercept_gaussian()
+  if (is.null(stan_args[["prior_aux"]]))
+    stan_args$prior_aux <- exponential(autoscale = TRUE)
   
   x_stuff <- center_x(x, FALSE)
   for (i in names(x_stuff)) # xtemp, xbar, has_intercept
@@ -99,7 +104,7 @@ mstan4bart_fit <-
   ok_aux_dists <- c(ok_dists[1:3], exponential = "exponential")
   
   prior_stuff <- handle_glm_prior(
-  prior,
+    stan_args$prior,
     nvars = nvars.fixef,
     default_scale = 2.5,
     link = family$link, 
@@ -107,19 +112,19 @@ mstan4bart_fit <-
   )
   # prior_{dist, mean, scale, df, dist_name, autoscale}, 
   # global_prior_df, global_prior_scale, slab_df, slab_scale
-  for (i in names(prior_stuff))
-    assign(i, prior_stuff[[i]])
+  for (name in names(prior_stuff))
+    stan_args[[name]] <- prior_stuff[[name]]
   
-  if (isTRUE(is.list(prior_intercept)) && 
-      isTRUE(prior_intercept$default)) {
+  if (isTRUE(is.list(stan_args$prior_intercept)) && 
+      isTRUE(stan_args$prior_intercept$default)) {
     m_y <- 0
     if (family$family == "gaussian" && family$link == "identity") {
       if (!is.null(y)) m_y <- mean(y) # y can be NULL if prior_PD=TRUE
     }
-    prior_intercept$location <- m_y
+    stan_args$prior_intercept$location <- m_y
   }
   prior_intercept_stuff <- handle_glm_prior(
-    prior_intercept,
+    stan_args$prior_intercept,
     nvars = 1,
     default_scale = 2.5,
     link = family$link,
@@ -127,12 +132,12 @@ mstan4bart_fit <-
   )
    # prior_{dist, mean, scale, df, dist_name, autoscale}_for_intercept
   names(prior_intercept_stuff) <- paste0(names(prior_intercept_stuff), "_for_intercept")
-  for (i in names(prior_intercept_stuff))
-    assign(i, prior_intercept_stuff[[i]])
+  for (name in names(prior_intercept_stuff))
+    stan_args[[name]] <- prior_intercept_stuff[[name]]
   
   prior_aux_stuff <-
     handle_glm_prior(
-      prior_aux,
+      stan_args$prior_aux,
       nvars = 1,
       default_scale = 1,
       link = NULL, # don't need to adjust scale based on logit vs probit
@@ -141,11 +146,11 @@ mstan4bart_fit <-
   
   # prior_{dist, mean, scale, df, dist_name, autoscale}_for_aux
   names(prior_aux_stuff) <- paste0(names(prior_aux_stuff), "_for_aux")
-  if (is.null(prior_aux))
+  if (is.null(stan_args$prior_aux))
     prior_aux_stuff$prior_scale_for_aux <- Inf
   
-  for (i in names(prior_aux_stuff)) 
-    assign(i, prior_aux_stuff[[i]])
+  for (name in names(prior_aux_stuff)) 
+    stan_args[[name]] <-  prior_aux_stuff[[name]]
   
   famname <- supported_families[fam]
   is_bernoulli <- famname == "binomial"
@@ -159,40 +164,41 @@ mstan4bart_fit <-
       is_gamma && linkname == "inverse" ||
       is.binomial(famname) && linkname == "log"
     if (needs_intercept)
-      stop("To use this combination of family and link ", 
-           "the model must have an intercept.")
+      stop("to use this combination of family and link ", 
+           "the model must have an intercept")
   }
   
   if (is_gaussian) {
     ss <- sd(y)
-    if (prior_dist > 0L && prior_autoscale) 
-      prior_scale <- ss * prior_scale
-    if (prior_dist_for_intercept > 0L && prior_autoscale_for_intercept) 
-      prior_scale_for_intercept <-  ss * prior_scale_for_intercept
-    if (prior_dist_for_aux > 0L && prior_autoscale_for_aux)
-      prior_scale_for_aux <- ss * prior_scale_for_aux
+    if (stan_args$prior_dist > 0L && stan_args$prior_autoscale) 
+      stan_args$prior_scale <- ss * stan_args$prior_scale
+    if (stan_args$prior_dist_for_intercept > 0L && stan_args$prior_autoscale_for_intercept) 
+      stan_args$prior_scale_for_intercept <- ss * stan_args$prior_scale_for_intercept
+    if (stan_args$prior_dist_for_aux > 0L && stan_args$prior_autoscale_for_aux)
+      stan_args$prior_scale_for_aux <- ss * stan_args$prior_scale_for_aux
   }
   
   #if (!QR && prior_dist > 0L && prior_autoscale) {
-  if (prior_dist > 0L && prior_autoscale) {
+  if (stan_args$prior_dist > 0L && stan_args$prior_autoscale) {
     min_prior_scale <- 1e-12
-    prior_scale <- pmax(min_prior_scale, prior_scale / 
-                          apply(xtemp, 2L, FUN = function(x) {
-                            num.categories <- length(unique(x))
-                            x.scale <- 1
-                            if (num.categories == 1) {
-                              x.scale <- 1
-                            } else {
-                              x.scale <- sd(x)
-                            }
-                            return(x.scale)
-                          }))
+    stan_args$prior_scale <-
+      pmax(min_prior_scale, stan_args$prior_scale / 
+             apply(xtemp, 2L, FUN = function(x) {
+               num.categories <- length(unique(x))
+               x.scale <- 1
+               if (num.categories == 1) {
+                 x.scale <- 1
+               } else {
+                 x.scale <- sd(x)
+               }
+               return(x.scale)
+            }))
   }
   
-  prior_scale <- 
-    as.array(pmin(.Machine$double.xmax, prior_scale))
-  prior_scale_for_intercept <- 
-    min(.Machine$double.xmax, prior_scale_for_intercept)
+  stan_args$prior_scale <- 
+    as.array(pmin(.Machine$double.xmax, stan_args$prior_scale))
+  stan_args$prior_scale_for_intercept <- 
+    min(.Machine$double.xmax, stan_args$prior_scale_for_intercept)
   
   #if (QR) {
   #  if (ncol(xtemp) <= 1)
@@ -214,17 +220,14 @@ mstan4bart_fit <-
   if (length(offset)  > 0L && all(offset  == 0)) offset  <- double()
   
   # create entries in the data block of the .stan file
-  standata <- nlist(
+  data.stan <- with(stan_args, nlist(
     N = length(y),
     has_weights = length(weights) > 0L,
-    prior_dist_for_aux = prior_dist_for_aux
-  )
-  standata <- nlist(
+    prior_dist_for_aux = prior_dist_for_aux,
     N = nrow(xtemp),
     K = ncol(xtemp),
     #family = stan_family_number(famname),  # hard-coded in model
     #link,                                  # hard-coded in model
-    has_weights = length(weights) > 0,
     has_intercept,
     prior_dist,
     prior_mean,
@@ -239,7 +242,7 @@ mstan4bart_fit <-
     prior_dist_for_aux = prior_dist_for_aux,
     num_normals = if(prior_dist == 7) as.integer(prior_df) else integer(0)
     # mean,df,scale for aux added below depending on family
-  )
+  ))
 
   # make a copy of user specification before modifying 'group' (used for keeping
   # track of priors)
@@ -266,114 +269,114 @@ mstan4bart_fit <-
     g_nms <- unlist(lapply(1:t, FUN = function(i) {
       paste(group$cnms[[i]], names(group$cnms)[i], sep = "|")
     }))
-    standata$t <- t
-    standata$p <- as.array(p)
-    standata$l <- as.array(l)
-    standata$q <- ncol(Z)
-    standata$len_theta_L <- sum(choose(p, 2), p)
+    data.stan$t <- t
+    data.stan$p <- as.array(p)
+    data.stan$l <- as.array(l)
+    data.stan$q <- ncol(Z)
+    data.stan$len_theta_L <- sum(choose(p, 2), p)
     if (is_bernoulli) {
       stop("implement me!")
       parts0 <- extract_sparse_parts(Z[y == 0, , drop = FALSE])
       parts1 <- extract_sparse_parts(Z[y == 1, , drop = FALSE])
-      standata$num_non_zero <- c(length(parts0$w), length(parts1$w))
-      standata$w0 <- as.array(parts0$w)
-      standata$w1 <- as.array(parts1$w)
-      standata$v0 <- as.array(parts0$v - 1L)
-      standata$v1 <- as.array(parts1$v - 1L)
-      standata$u0 <- as.array(parts0$u - 1L)
-      standata$u1 <- as.array(parts1$u - 1L)
+      data.stan$num_non_zero <- c(length(parts0$w), length(parts1$w))
+      data.stan$w0 <- as.array(parts0$w)
+      data.stan$w1 <- as.array(parts1$w)
+      data.stan$v0 <- as.array(parts0$v - 1L)
+      data.stan$v1 <- as.array(parts1$v - 1L)
+      data.stan$u0 <- as.array(parts0$u - 1L)
+      data.stan$u1 <- as.array(parts1$u - 1L)
     } else {
       parts <- extract_sparse_parts(Z)
-      standata$num_non_zero <- length(parts$w)
-      standata$w <- parts$w
-      standata$v <- parts$v - 1L
-      standata$u <- parts$u - 1L
+      data.stan$num_non_zero <- length(parts$w)
+      data.stan$w <- parts$w
+      data.stan$v <- parts$v - 1L
+      data.stan$u <- parts$u - 1L
     }
-    standata$shape <- as.array(maybe_broadcast(decov$shape, t))
-    standata$scale <- as.array(maybe_broadcast(decov$scale, t))
-    standata$len_concentration <- sum(p[p > 1])
-    standata$concentration <- 
+    data.stan$shape <- as.array(maybe_broadcast(decov$shape, t))
+    data.stan$scale <- as.array(maybe_broadcast(decov$scale, t))
+    data.stan$len_concentration <- sum(p[p > 1])
+    data.stan$concentration <- 
       as.array(maybe_broadcast(decov$concentration, sum(p[p > 1])))
-    standata$len_regularization <- sum(p > 1)
-    standata$regularization <- 
+    data.stan$len_regularization <- sum(p > 1)
+    data.stan$regularization <- 
       as.array(maybe_broadcast(decov$regularization, sum(p > 1)))
   } else {
-    standata$t <- 0L
-    standata$p <- integer(0)
-    standata$l <- integer(0)
-    standata$q <- 0L
-    standata$len_theta_L <- 0L
+    data.stan$t <- 0L
+    data.stan$p <- integer(0)
+    data.stan$l <- integer(0)
+    data.stan$q <- 0L
+    data.stan$len_theta_L <- 0L
     if (is_bernoulli) {
       stop("implement me!")
-      standata$num_non_zero <- rep(0L, 2)
-      standata$w0 <- standata$w1 <- double(0)
-      standata$v0 <- standata$v1 <- integer(0)
-      standata$u0 <- standata$u1 <- integer(0)
+      data.stan$num_non_zero <- rep(0L, 2)
+      data.stan$w0 <- data.stan$w1 <- double(0)
+      data.stan$v0 <- data.stan$v1 <- integer(0)
+      data.stan$u0 <- data.stan$u1 <- integer(0)
     } else {
-      standata$num_non_zero <- 0L
-      standata$w <- double(0)
-      standata$v <- integer(0)
-      standata$u <- integer(0)
+      data.stan$num_non_zero <- 0L
+      data.stan$w <- double(0)
+      data.stan$v <- integer(0)
+      data.stan$u <- integer(0)
     }
-    standata$shape <- standata$scale <- standata$concentration <-
-      standata$regularization <- rep(0, 0)
-    standata$len_concentration <- 0L
-    standata$len_regularization <- 0L
+    data.stan$shape <- data.stan$scale <- data.stan$concentration <-
+      data.stan$regularization <- rep(0, 0)
+    data.stan$len_concentration <- 0L
+    data.stan$len_regularization <- 0L
   }
   
   if (!is_bernoulli) {
-    standata$X <- xtemp
+    data.stan$X <- xtemp
     
-    standata$y <- y
-    standata$weights <- weights
-    standata$offset_ <- numeric(length(y))
+    data.stan$y <- y
+    data.stan$weights <- weights
+    data.stan$offset_ <- numeric(length(y))
   }
 
   if (is_continuous) {
-    standata$ub_y <- Inf
-    standata$lb_y <- if (is_gaussian) -Inf else 0
-    standata$prior_scale_for_aux <- prior_scale_for_aux %ORifINF% 0
-    standata$prior_df_for_aux <- c(prior_df_for_aux)
-    standata$prior_mean_for_aux <- c(prior_mean_for_aux)
-    standata$len_y <- length(y)
+    data.stan$ub_y <- Inf
+    data.stan$lb_y <- if (is_gaussian) -Inf else 0
+    data.stan$prior_scale_for_aux <- stan_args$prior_scale_for_aux %ORifINF% 0
+    data.stan$prior_df_for_aux <- c(stan_args$prior_df_for_aux)
+    data.stan$prior_mean_for_aux <- c(stan_args$prior_mean_for_aux)
+    data.stan$len_y <- length(y)
   } else if (is_bernoulli) {
-    standata$prior_scale_for_aux <- 
-      if (!length(group) || prior_scale_for_aux == Inf) 
-        0 else prior_scale_for_aux
-    standata$prior_mean_for_aux <- 0
-    standata$prior_df_for_aux <- 0
+    data.stan$prior_scale_for_aux <- 
+      if (!length(group) || stan.args$prior_scale_for_aux == Inf) 
+        0 else stan.args$prior_scale_for_aux
+    data.stan$prior_mean_for_aux <- 0
+    data.stan$prior_df_for_aux <- 0
     if (is_bernoulli) {
       stop("implement me!")
       y0 <- y == 0
       y1 <- y == 1
-      standata$N <- c(sum(y0), sum(y1))
-      standata$X0 <- array(xtemp[y0, , drop = FALSE], dim = c(1, sum(y0), ncol(xtemp)))
-      standata$X1 <- array(xtemp[y1, , drop = FALSE], dim = c(1, sum(y1), ncol(xtemp)))
+      data.stan$N <- c(sum(y0), sum(y1))
+      data.stan$X0 <- array(xtemp[y0, , drop = FALSE], dim = c(1, sum(y0), ncol(xtemp)))
+      data.stan$X1 <- array(xtemp[y1, , drop = FALSE], dim = c(1, sum(y1), ncol(xtemp)))
       if (length(weights) > 0L) {
         # nocov start
         # this code is unused because weights are interpreted as number of 
         # trials for binomial glms
-        standata$weights0 <- weights[y0]
-        standata$weights1 <- weights[y1]
+        data.stan$weights0 <- weights[y0]
+        data.stan$weights1 <- weights[y1]
         # nocov end
       } else {
-        standata$weights0 <- double(0)
-        standata$weights1 <- double(0)
+        data.stan$weights0 <- double(0)
+        data.stan$weights1 <- double(0)
       }
       if (length(offset) > 0L) {
         # TODO: fix this!
         # nocov start
-        standata$offset0 <- offset[y0]
-        standata$offset1 <- offset[y1]
+        data.stan$offset0 <- offset[y0]
+        data.stan$offset1 <- offset[y1]
         # nocov end
       } else {
-        standata$offset0 <- double(0)
-        standata$offset1 <- double(0)
+        data.stan$offset0 <- double(0)
+        data.stan$offset1 <- double(0)
       }
     }
   }
     
-  prior_info <- summarize_glm_prior(
+  prior_info <- with(stan_args, summarize_glm_prior(
     user_prior = prior_stuff,
     user_prior_intercept = prior_intercept_stuff,
     user_prior_aux = prior_aux_stuff,
@@ -384,31 +387,15 @@ mstan4bart_fit <-
     adjusted_prior_intercept_scale = prior_scale_for_intercept,
     adjusted_prior_aux_scale = prior_scale_for_aux,
     family = family
-  )
+  ))
  
-  for (varName in names(standata))
-    if (is.logical(standata[[varName]])) standata[[varName]] <- as.integer(standata[[varName]])
+  for (varName in names(data.stan))
+    if (is.logical(data.stan[[varName]]))
+      data.stan[[varName]] <- as.integer(data.stan[[varName]])
   for (varName in c("len_theta_L"))
-    standata[[varName]] <- as.integer(standata[[varName]])
+    data.stan[[varName]] <- as.integer(data.stan[[varName]])
   
-  dotsList <- list(...)
-  # extract defaults from "sampling()" and use them if necessary
-  tryResult <- tryCatch({
-    sampling <- getMethod("sampling", "stanmodel", asNamespace("rstan"))
-    samplingFormals <- formals(body(sampling)[[2L]][[3L]])
-  }, error = function(e) e)
-  if (is(tryResult, "error")) {
-    # warning("sampling function in rstan not found or has been updated - using hard coded defaults; please notify package author")
-    samplingFormals <- list(iter = 2000L, warmup = quote(iter %/% 2L), thin = 1L, chains = 4L, cores = quote(getOption("mc.cores", 1L)))
-  }
-  
-  iter <- warmup <- thin <- chains <- NULL
-  varNames <- c("iter", "warmup", "thin", "chains", "cores")
-  for (varName in varNames) {
-    assign(varName, if (!is.null(dotsList[[varName]])) dotsList[[varName]] else eval(samplingFormals[[varName]]))
-    dotsList[[varName]] <- NULL
-  } 
-  
+   
   if (!is.numeric(iter) || length(iter) != 1L || iter <= 0)
     stop("'iter' must be a positive integer")
   iter <- as.integer(iter) # could include a warning about info lost if coercing from double
@@ -434,45 +421,50 @@ mstan4bart_fit <-
     stop("'cores' must be a positive integer")
   cores <- as.integer(cores)
   
-  verbose <- if (!is.null(dotsList[["verbose"]])) dotsList[["verbose"]] else 1L
+  
   if (is.logical(verbose)) verbose <- as.integer(verbose)
   if (!is.numeric(verbose) || length(verbose) != 1L || is.na(verbose))
     stop("'verbose' must an integer")
   verbose <- as.integer(verbose)
   
-  refresh <- if (!is.null(dotsList[["refresh"]])) dotsList[["refresh"]] else NA_integer_
+  if (is.na(refresh)) refresh <- max(iter %/% 10L, 1L)
   if (!is.numeric(refresh) || length(refresh) != 1L || (!is.na(refresh) && refresh < 0))
     stop("'refresh' must be a non-negative integer")
   refresh <- as.integer(refresh)
   
-  offset_type <- if (!is.null(dotsList[["offset_type"]])) dotsList[["offset_type"]] else "default"
-  offset_type <- match.arg(offset_type, c("default", "fixef", "ranef"))
   offset_type <- which(offset_type == c("default", "fixef", "ranef")) - 1L
   
-  bartData@sigma <- sigma_init
-  bartControl <- dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
-                                       n.thin = thin.bart, n.threads = 1L,
-                                       updateState = FALSE)
+  if (is.null(bart_args)) bart_args <- list()
+  data.bart@sigma <- sigma_init
+  control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
+                                              n.thin = thin.bart, n.threads = 1L,
+                                              updateState = FALSE))
+  for (name in intersect(names(bart_args), names(formals(dbarts::dbartsControl)))) {
+    control_call[[name]] <- bart_args[[name]]
+  }
+  control.bart <- eval(control_call)
+  if (!is.null(bart_args[["n.cuts"]]))
+    attr(control.bart, "n.cuts") <- bart_args[["n.cuts"]]
   
-  bartData@n.cuts <- rep_len(attr(bartControl, "n.cuts"), ncol(bartData@x))
-  bartControl@binary <- !is_continuous
+  data.bart@n.cuts <- rep_len(attr(control.bart, "n.cuts"), ncol(data.bart@x))
+  control.bart@binary <- !is_continuous
   evalEnv <- sys.frame(sys.nframe())
-  bartPriors <- dbarts:::parsePriors(bartControl, bartData, cgm, normal, fixed(1), evalEnv)
-  bartModel <- new("dbartsModel", bartPriors$tree.prior, bartPriors$node.prior, bartPriors$resid.prior,
+  bartPriors <- dbarts:::parsePriors(control.bart, data.bart, cgm, normal, fixed(1), evalEnv)
+  model.bart <- new("dbartsModel", bartPriors$tree.prior, bartPriors$node.prior, bartPriors$resid.prior,
                     node.scale = if (!is_continuous) 3.0 else 0.5)
   
-  # TODO: make more stan args user setable
-  stan_args <- list(
+  control.stan <- list(
     seed = sample.int(.Machine$integer.max, 1L),
-    init_r = 2.0,
+    init_r = stan_args[["init_r"]] %ORifNULL% 2.0,
     thin = thin.stan,
-    adapt_gamma = adapt_gamma,
-    adapt_delta = adapt_delta,
-    adapt_kappa = adapt_kappa)
+    adapt_gamma = stan_args[["adapt_gamma"]],
+    adapt_delta = stan_args[["adapt_delta"]],
+    adapt_kappa = stan_args[["adapt_kappa"]]
+  )
   
-  commonControl <- nlist(iter, warmup, verbose, refresh,
-                         offset = offset, offset_type = offset_type,
-                         bart_offset_init = bart_offset_init, sigma_init = sigma_init)
+  control.common <- nlist(iter, warmup, verbose, refresh,
+                          offset = offset, offset_type = offset_type,
+                          bart_offset_init = bart_offset_init, sigma_init = sigma_init)
   
   
   chainResults <- vector("list", chains)
@@ -486,15 +478,15 @@ mstan4bart_fit <-
       warning("unable to multithread, defaulting to single: ", tryResult$message)
       runSingleThreaded <- TRUE
     } else {
-      if (commonControl$verbose > 0L)
+      if (control.common$verbose > 0L)
         cat("starting multithreaded fit, futher output silenced\n")
-      commonControl$verbose <- 0L
+      control.common$verbose <- 0L
       
       clusterExport(cluster, "mstan4bart_fitforreal", asNamespace("stan4bart"))
       clusterEvalQ(cluster, require(stan4bart))
       
       tryResult <- tryCatch(
-        chainResults <- clusterMap(cluster, "mstan4bart_fitforreal", seq_len(chains), MoreArgs = nlist(bartControl, bartData, bartModel, standata, stan_args, commonControl, group)),
+        chainResults <- clusterMap(cluster, "mstan4bart_fitforreal", seq_len(chains), MoreArgs = nlist(control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)),
                             error = function(e) e)
     
       stopCluster(cluster)
@@ -508,9 +500,19 @@ mstan4bart_fit <-
   
   if (runSingleThreaded) {
     for (chainNum in seq_len(chains))
-      chainResults[[chainNum]] <- mstan4bart_fitforreal(1L, bartControl, bartData, bartModel, standata, stan_args, commonControl, group)
+      chainResults[[chainNum]] <- mstan4bart_fitforreal(1L, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
   }
-          
+  
+  if (!is.null(chainResults[[1L]]$state.bart)) {
+    all_state <- chainResults[[1L]]$state.bart
+    if (chains > 1L) for (i in seq.int(2L, chains))
+      all_state[[i]] <- chainResults[[i]]$state.bart[[1L]]
+    
+    
+    attr(chainResults, "sampler.bart") <- 
+      .Call(C_stan4bart_createStoredBARTSampler, control.bart, data.bart, model.bart, all_state)
+  }
+  
   chainResults
 }
 

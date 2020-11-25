@@ -6,7 +6,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
 {
     control <- control$checkControl
     mf <- mc <- match.call()
-   
+    
     if (!is.null(mc$treatment)) {
       if (is.symbol(mc$treatment)) treatment <- as.character(mc$treatment)
       if (!is.character(treatment))
@@ -160,14 +160,17 @@ glFormula <- function (formula, data = NULL, subset, weights,
     if (any(mixedvars))
       warning("variable(s) '", paste0(bartprednames[mixedvars], collapse = "', '"), "' appear in both parametric and nonparametric are not identifiable; model will fit but some results may be uninterpretable")
     
-    y <- model.response(fr)
-    u.y <- unique(y)
-    family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
-    result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, family = family, formula = formula, 
+    result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, formula = formula, 
                    wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
+    y <- model.response(fr)
+    if (length(y) > 0L) {
+      u.y <- unique(y)
+      result$family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
+    }
     if (!is.null(treatment) || !is.null(test)) {
+      result$treatment   <- treatment
       result$reTrms.test <- reTrms.test
-      result$X.test <- X.test
+      result$X.test      <- X.test
     }
     result
 }

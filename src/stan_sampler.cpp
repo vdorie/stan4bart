@@ -78,7 +78,7 @@ const char* const dataNames[] = {
   "num_non_zero", "w", "v", "u"
 };
 
-const char* const argNames[] = {
+const char* const controlNames[] = {
   "seed",
   "init_r",
   "thin",
@@ -369,22 +369,22 @@ void deleteStanModel(StanModel* model) {
   delete model;
 }
 
-void initializeStanArgsFromExpression(StanArgs& args, SEXP argsExpr)
+void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
 {
-  SEXP argNamesExpr = rc_getNames(argsExpr);
-  if (Rf_isNull(argNamesExpr))
-    Rf_error("names for stanArgs object cannot be NULL");
+  SEXP controlNamesExpr = rc_getNames(controlExpr);
+  if (Rf_isNull(controlNamesExpr))
+    Rf_error("names for stanControl object cannot be NULL");
   
-  size_t numArgNames = sizeof(argNames) / sizeof(argNames[0]);
-  size_t* matchPos = misc_stackAllocate(numArgNames, size_t);
+  size_t numControlNames = sizeof(controlNames) / sizeof(controlNames[0]);
+  size_t* matchPos = misc_stackAllocate(numControlNames, size_t);
   
-  size_t numInputArgNames = rc_getLength(argNamesExpr);
-  const char** inputArgNames = misc_stackAllocate(numInputArgNames, const char*);
-  for (size_t i = 0; i < numInputArgNames; ++i)
-    inputArgNames[i] = CHAR(STRING_ELT(argNamesExpr, i));
+  size_t numInputControlNames = rc_getLength(controlNamesExpr);
+  const char** inputControlNames = misc_stackAllocate(numInputControlNames, const char*);
+  for (size_t i = 0; i < numInputControlNames; ++i)
+    inputControlNames[i] = CHAR(STRING_ELT(controlNamesExpr, i));
   
-  int errorCode = misc_str_matchAllInArray(argNames, numArgNames, inputArgNames, numInputArgNames, matchPos);
-  misc_stackFree(inputArgNames);
+  int errorCode = misc_str_matchAllInArray(controlNames, numControlNames, inputControlNames, numInputControlNames, matchPos);
+  misc_stackFree(inputControlNames);
   
   if (errorCode != 0) {
     misc_stackFree(matchPos);
@@ -392,49 +392,49 @@ void initializeStanArgsFromExpression(StanArgs& args, SEXP argsExpr)
   }
   
   if (matchPos[0] == MISC_STR_NO_MATCH)
-    Rf_error("stanArgs requires 'seed' to be specified");
+    Rf_error("stanControl requires 'seed' to be specified");
   
-  args.random_seed = static_cast<unsigned int>(rc_getInt0(VECTOR_ELT(argsExpr, matchPos[0]), "seed"));
-  args.init_radius = rc_getDoubleAt(argsExpr, matchPos[1], "init_r",
+  control.random_seed = static_cast<unsigned int>(rc_getInt0(VECTOR_ELT(controlExpr, matchPos[0]), "seed"));
+  control.init_radius = rc_getDoubleAt(controlExpr, matchPos[1], "init_r",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 2.0, RC_END);
-  args.thin = rc_getIntAt(argsExpr, matchPos[2], "thin",
+  control.thin = rc_getIntAt(controlExpr, matchPos[2], "thin",
     RC_VALUE | RC_GT, 0,
     RC_NA | RC_YES, RC_END);
-  args.adapt_gamma = rc_getDoubleAt(argsExpr, matchPos[3], "adapt_gamma",
+  control.adapt_gamma = rc_getDoubleAt(controlExpr, matchPos[3], "adapt_gamma",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 0.05, RC_END);
-  args.adapt_delta = rc_getDoubleAt(argsExpr, matchPos[4], "adapt_delta",
+  control.adapt_delta = rc_getDoubleAt(controlExpr, matchPos[4], "adapt_delta",
     RC_VALUE | RC_GT, 0.0,
     RC_VALUE | RC_LT, 1.0,
     RC_VALUE | RC_DEFAULT, 0.8, RC_END);
-  args.adapt_kappa = rc_getDoubleAt(argsExpr, matchPos[5], "adapt_kappa",
+  control.adapt_kappa = rc_getDoubleAt(controlExpr, matchPos[5], "adapt_kappa",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 0.75, RC_END);
-  args.adapt_init_buffer = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[6], "adapt_init_buffer",
+  control.adapt_init_buffer = static_cast<unsigned int>(rc_getIntAt(controlExpr, matchPos[6], "adapt_init_buffer",
     RC_VALUE | RC_DEFAULT, 75u, RC_END));
-  args.adapt_term_buffer = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[7], "adapt_term_buffer",
+  control.adapt_term_buffer = static_cast<unsigned int>(rc_getIntAt(controlExpr, matchPos[7], "adapt_term_buffer",
     RC_VALUE | RC_DEFAULT, 50u, RC_END));
-  args.adapt_window = static_cast<unsigned int>(rc_getIntAt(argsExpr, matchPos[8], "adapt_window",
+  control.adapt_window = static_cast<unsigned int>(rc_getIntAt(controlExpr, matchPos[8], "adapt_window",
     RC_VALUE | RC_DEFAULT, 25u, RC_END));
-  args.adapt_t0 = rc_getDoubleAt(argsExpr, matchPos[9], "adapt_t0",
+  control.adapt_t0 = rc_getDoubleAt(controlExpr, matchPos[9], "adapt_t0",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 10.0, RC_END);
-  args.stepsize = rc_getDoubleAt(argsExpr, matchPos[10], "stepsize",
+  control.stepsize = rc_getDoubleAt(controlExpr, matchPos[10], "stepsize",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 1.0, RC_END);
-  args.stepsize_jitter = rc_getDoubleAt(argsExpr, matchPos[11], "stepsize_jitter",
+  control.stepsize_jitter = rc_getDoubleAt(controlExpr, matchPos[11], "stepsize_jitter",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_LEQ, 1.0,
     RC_VALUE | RC_DEFAULT, 0.0, RC_END);
-  args.max_treedepth = rc_getIntAt(argsExpr, matchPos[12], "max_treedepth",
+  control.max_treedepth = rc_getIntAt(controlExpr, matchPos[12], "max_treedepth",
     RC_VALUE | RC_GEQ, 0,
     RC_VALUE | RC_DEFAULT, 10, RC_END);
   
   misc_stackFree(matchPos);
 }
 
-StanSampler::StanSampler(StanModel& stanModel, const StanArgs& stanArgs, int chain_id, int num_warmup) :
+StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup) :
   logger(nullout, nullout, nullout, nullout, nullout),
   diagnostic_writer(diagnostic_stream, "# "),
   init_context_ptr(new stan::io::empty_var_context()),
@@ -465,21 +465,21 @@ StanSampler::StanSampler(StanModel& stanModel, const StanArgs& stanArgs, int cha
     stanModel,
     *init_context_ptr,
     unit_e_metric,
-    stanArgs.random_seed,
+    stanControl.random_seed,
     chain_id,
-    stanArgs.init_radius,
+    stanControl.init_radius,
     num_warmup,
-    stanArgs.thin,
-    stanArgs.stepsize,
-    stanArgs.stepsize_jitter,
-    stanArgs.max_treedepth,
-    stanArgs.adapt_delta,
-    stanArgs.adapt_gamma,
-    stanArgs.adapt_kappa,
-    stanArgs.adapt_t0,
-    stanArgs.adapt_init_buffer,
-    stanArgs.adapt_term_buffer,
-    stanArgs.adapt_window,
+    stanControl.thin,
+    stanControl.stepsize,
+    stanControl.stepsize_jitter,
+    stanControl.max_treedepth,
+    stanControl.adapt_delta,
+    stanControl.adapt_gamma,
+    stanControl.adapt_kappa,
+    stanControl.adapt_t0,
+    stanControl.adapt_init_buffer,
+    stanControl.adapt_term_buffer,
+    stanControl.adapt_window,
     interrupt, 
     logger,
     init_writer,
@@ -532,7 +532,7 @@ SEXP createStanResultsExpr(const double_writer& sample_writer)
   return resultExpr;
 }
 
-void printStanArgs(const StanArgs& args)
+void printStanControl(const StanControl& control)
 {
   Rprintf("  seed: %u\n"
           "  init_r: %f\n"
@@ -547,11 +547,11 @@ void printStanArgs(const StanArgs& args)
           "  stepsize: %f\n"
           "  stepsize_jitter: %f\n"
           "  max_treedepth: %d\n",
-          args.random_seed, args.init_radius,
-          args.thin, args.adapt_gamma, args.adapt_delta,
-          args.adapt_kappa, args.adapt_init_buffer, args.adapt_term_buffer,
-          args.adapt_window, args.adapt_t0, args.stepsize,
-          args.stepsize_jitter, args.max_treedepth);
+          control.random_seed, control.init_radius,
+          control.thin, control.adapt_gamma, control.adapt_delta,
+          control.adapt_kappa, control.adapt_init_buffer, control.adapt_term_buffer,
+          control.adapt_window, control.adapt_t0, control.stepsize,
+          control.stepsize_jitter, control.max_treedepth);
 }
 
 }

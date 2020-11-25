@@ -51,7 +51,7 @@ namespace model_continuous_namespace {
 
 namespace stan4bart {
   
-  struct StanArgs {
+  struct StanControl {
     unsigned int random_seed;
     double init_radius;
     int thin;
@@ -105,7 +105,7 @@ namespace stan4bart {
     
     stan4bart::interruptable_sampler<StanModel>* sampler;
     
-    StanSampler(StanModel& stanModel, const StanArgs& stanArgs, int chain_id, int num_warmup);
+    StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup);
     void run(bool isWarmup);
   };
   
@@ -113,7 +113,7 @@ namespace stan4bart {
    
   StanModel* createStanModelFromExpression(SEXP dataExpr);
   void deleteStanModel(StanModel* stanModel);
-  void initializeStanArgsFromExpression(StanArgs& args, SEXP argsExpr);
+  void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr);
   interruptable_sampler<StanModel>* createStanSampler();
   
   void setStanOffset(StanModel& model, const double* offset);
@@ -121,7 +121,7 @@ namespace stan4bart {
   double getSigma(const StanSampler& sampler, const StanModel& model);
   
   SEXP createStanResultsExpr(const double_writer& sample_writer);
-  void printStanArgs(const StanArgs& args);
+  void printStanControl(const StanControl& control);
 }
 
 #endif // STAN_SAMPLER_HPP
