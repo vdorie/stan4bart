@@ -1,3 +1,21 @@
+combine_chains_f <- function(x) {
+  if (is.array(x)) {
+    d <- dim(x)
+    l_d <- length(d)
+    t_d <- seq.int(l_d - 1L, l_d)
+    dn <- dimnames(x)
+    if (!is.null(dn)) {
+      dn <- dn[seq.int(1L, l_d - 2L)]
+      dn[l_d - 1L] <- list(NULL)
+      names(dn)[l_d - 1L] <- "sample"
+    }
+    array(x, c(d[-t_d], prod(d[t_d])), dimnames = dn)
+  } else if (is.matrix(x)) {
+    as.vector(x)
+  }
+}
+
+
 extract.mstan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma"),
@@ -27,11 +45,11 @@ extract.mstan4bartFit <-
     
   if (sample == "train") {
     if (n_fixef > 0L)        X <- object$X
-    if (n_ranef_levels > 0L) Zt <- object$Zt
+    if (n_ranef_levels > 0L) Zt <- object$reTrms$Zt
     n_obs_inf <- n_obs
   } else {
     if (n_fixef > 0L)        X <- object$X.test
-    if (n_ranef_levels > 0L) Zt <- object$Zt.test
+    if (n_ranef_levels > 0L) Zt <- object$reTrms$Zt.test
     n_obs_inf <- n_obs_test
   }
   
@@ -86,23 +104,7 @@ extract.mstan4bartFit <-
                    Sigma       = object$Sigma,
                    sigma       = object$sigma)
   
-  combine_chains_f <- function(x) {
-    if (is.array(x)) {
-      d <- dim(x)
-      l_d <- length(d)
-      t_d <- seq.int(l_d - 1L, l_d)
-      dn <- dimnames(x)
-      if (!is.null(dn)) {
-        dn <- dn[seq.int(1L, l_d - 2L)]
-        dn[l_d - 1L] <- list(NULL)
-        names(dn)[l_d - 1L] <- "sample"
-      }
-      array(x, c(d[-t_d], prod(d[t_d])), dimnames = dn)
-    } else if (is.matrix(x)) {
-      as.vector(x)
-    }
-  }
-  
+    
   if (combine_chains) {
     if (is.list(result)) {
       result <- lapply(result, combine_chains_f)
@@ -209,7 +211,8 @@ predict.mstan4bartFit <-
 
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef")) {
-    fixef <- extract(object, "fixef", combine_chains = combine_chains)
+    fixef <- extract(object, "fixef", combine_chains = TRUE)
+    
     a <- colnames(glmod$X)
     b <- dimnames(fixef)$predictor
     if (any(a %not_in% b))
@@ -217,22 +220,122 @@ predict.mstan4bartFit <-
     if (any(b %not_in% a))
       stop("newdata has unrecognized fixef names: '", paste0(b[b %not_in% a], collapse = "', '"), "'")
     glmod$X <- glmod$X[,b,drop = FALSE]
+    rm(a, b)
     
-    if (length(dim(fixef)) > 2L) {
-      indiv.fixef <- array(glmod$X %*% matrix(fixef, dim(fixef)[1L], prod(dim(fixef)[2L:3L])),
-                           c(nrow(glmod$X), dim(fixef)[2L:3L]),
-                           dimnames = list(row = rownames(glmod$X), sample = NULL, chain = NULL))
-    } else {
-      indiv.fixef <- glmod$X %*% fixef
-      names(dimnames(indiv.fixef)) <- c("row", "sample")
-    }
+    fixef <- extract(object, "fixef", combine_chains = TRUE)
+    
+    keep_cols <- names(object$X_means) != "(Intercept)"
+    intercept_delta <- apply(fixef[keep_cols,,drop = FALSE] * object$X_means[keep_cols], 2L, sum)
+    
+    indiv.fixef <- array(t(t(glmod$X %*% fixef) - intercept_delta),
+                         c(n_obs, n_samples, n_chains),
+                         dimnames = list(observation = NULL, sample = NULL, chain = NULL))
   }
   if (type %in% c("ev", "ppd", "indiv.bart")) {
     if (is.null(object$sampler.bart))
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
     indiv.bart <- .Call(C_stan4bart_predictBART, object$sampler.bart, glmod$bartData@x, glmod$bartData@offset)
-    # browser()
+    dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
   }
-  stop("predict not yet implemented")
+  if (type %in% c("ev", "ppd", "indiv.ranef")) {
+    stop("predict for random effects not yet implemented")
+    re.form <- reOnly(formula(object))
+    newRE <- get_test_reterms(object, newdata, re.form, allow.new.levels = TRUE)
+    REvals <- base::drop(as(newRE$b %*% newRE$Zt, "matrix"))
+    pred <- pred + REvals
+     
+    re_terms.test <- get_test_reterms(object, newdata)
+  }
+  
+  if (type %in% "ppd") {
+    eps <- array(rnorm(n_obs * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs)),
+                 c(n_obs, n_samples, n_chains))
+  }
+  
+  result <- switch(type,
+                   ev          = indiv.bart + indiv.fixef + indiv.ranef,
+                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + eps,
+                   indiv.fixef = indiv.fixef,
+                   indiv.ranef = indiv.ranef,
+                   indiv.bart  = indiv.bart)
+  
+    
+  if (combine_chains) {
+    if (is.list(result)) {
+      result <- lapply(result, combine_chains_f)
+  } else {
+      result <- combine_chains_f(result)
+    }
+  }
+  
+  result
 }
+
+get_test_reterms <- function(object, newdata, re.form = NULL, na.action = na.pass, 
+    allow.new.levels = FALSE, sparse = max(lengths(orig.random.levs)) > 100) 
+{
+  fixed.na.action <- NULL
+  if (!identical(na.action, na.pass)) {
+    fixed.terms <- terms(object, type = "fixed")
+    mfnew <- model.frame(delete.response(terms(object, type = "fixed")), newdata, na.action = na.action)
+    fixed.na.action <- attr(mfnew, "na.action")
+  }
+  newdata.NA <- newdata
+  if (!is.null(fixed.na.action)) {
+    newdata.NA <- newdata.NA[-fixed.na.action,]
+  }
+  tt <- delete.response(terms(object, type = "random"))
+  orig.random.levs <- get.orig.levs(object, type = "random", newdata = newdata.NA)
+  sparse_eval <- suppressWarnings(sparse)
+  orig.random.cntr <- get.orig.levs(object, type = "random", FUN = contrasts, sparse = sparse_eval)
+  if (inherits(re.form, "formula")) {
+    pv <- attr(tt, "predvars")
+    for (i in 2:(length(pv))) {
+      missvars <- setdiff(all.vars(pv[[i]]), all.vars(re.form))
+      for (mv in missvars) {
+        newdata.NA[[mv]] <- NA
+      }
+    }
+  }
+  rfd <- suppressWarnings(model.frame(tt, newdata.NA, na.action = na.pass, 
+                                      xlev = orig.random.levs))
+  termvars <- unique(unlist(lapply(findbars(formula(object, type = "random")), function(x) all.vars(x[[2]]))))
+  for (fn in Reduce(intersect, list(names(orig.random.cntr), termvars, names(rfd)))) {
+    if (!is.factor(rfd[[fn]])) 
+      rfd[[fn]] <- factor(rfd[[fn]])
+      contrasts(rfd[[fn]]) <- orig.random.cntr[[fn]]
+  }
+  if (!is.null(fixed.na.action)) 
+    attr(rfd, "na.action") <- fixed.na.action
+  
+  
+  re_new <- NULL
+  if (inherits(re.form, "formula")) {
+    if (length(fixed.na.action) > 0) {
+      newdata <- newdata[-fixed.na.action, ]
+    }
+    ReTrms <- mkReTrms(findbars(re.form[[2]]), rfd)
+    ReTrms <- within(ReTrms, Lambdat@x <- unname(object$reTrms$theta[Lind]))
+    if (!allow.new.levels && any(vapply(ReTrms$flist, anyNA, NA))) 
+      stop("NAs are not allowed in prediction data", " for grouping variables unless allow.new.levels is TRUE")
+    ns.re <- names(re <- object$ranef)
+    nRnms <- names(Rcnms <- ReTrms$cnms)
+    if (!all(nRnms %in% ns.re)) 
+      stop("grouping factors specified in re.form that were not present in original model")
+    new_levels <- lapply(ReTrms$flist, function(x) levels(factor(x)))
+    # TODO: rewrite levelfun to use samples for levels and not set to 0
+    re_x <- Map(function(r, n) levelfun(r, n, allow.new.levels = allow.new.levels), 
+                re[names(new_levels)], new_levels)
+    re_new <- lapply(seq_along(nRnms), function(i) {
+      rname <- nRnms[i]
+      if (!all(Rcnms[[i]] %in% dimnames(re[[rname]])[["predictor"]])) 
+        stop("random effects specified in re.form that were not present in original model")
+      re_x[[rname]][Rcnms[[i]],,,,drop = FALSE]
+    })
+  }
+  Zt <- ReTrms$Zt
+  attr(Zt, "na.action") <- attr(re_new, "na.action") <- fixed.na.action
+  list(Zt = Zt, b = re_new, Lambdat = ReTrms$Lambdat)
+}
+
 

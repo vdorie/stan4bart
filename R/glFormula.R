@@ -161,6 +161,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
       warning("variable(s) '", paste0(bartprednames[mixedvars], collapse = "', '"), "' appear in both parametric and nonparametric are not identifiable; model will fit but some results may be uninterpretable")
     
     result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, formula = formula, 
+                   terms = terms,
                    wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
     y <- model.response(fr)
     if (length(y) > 0L) {
@@ -991,6 +992,100 @@ mkVarCorr <- mkVarCorr %ORifNotInLme4% function (sc, cnms, nc, theta, nms)
         names(ans) <- nms
     }
     structure(ans, sc = sc)
+}
+
+levelfun <- function (x, nl.n, allow.new.levels = FALSE) 
+{
+  old_levels <- dimnames(x)[["group"]]
+  if (!all(nl.n %in% old_levels)) {
+    if (!allow.new.levels) 
+      stop("new levels detected in newdata")
+    nl.n.comb <- union(old_levels, nl.n)
+    d <- dim(x)
+    dn <- dimnames(x)
+    newx <- array(0, c(d[1L], length(nl.n.comb), d[3L:4L]),
+                  dimnames = list(dn[[1L]], nl.n.comb, dn[[3L]], dn[[4L]]))
+    newx[,old_levels,,] <- x
+    x <- newx
+  }
+  if (!all(r.inn <- old_levels %in% nl.n)) {
+    x <- x[,r.inn,,,drop = FALSE]
+  }
+  x
+}
+
+# can't use lme4 version, as we need to use model.frame.mstan4bartFit
+get.orig.levs <- function (object, FUN = levels, newdata = NULL, sparse = FALSE, ...) 
+{
+  Terms <- terms(object, ...)
+  mf <- model.frame(object, ...)
+  isFac <- vapply(mf, is.factor, FUN.VALUE = TRUE)
+  isFac[attr(Terms, "response")] <- FALSE
+  mf <- mf[isFac]
+  hasSparse <- any(grepl("sparse", names(formals(FUN))))
+  orig_levs <- if (any(isFac) && hasSparse) lapply(mf, FUN, sparse = sparse) else if(any(isFac) && !hasSparse) lapply(mf, FUN)
+  
+  if (!is.null(newdata)) {      
+    for (n in names(mf)) {
+      orig_levs[[n]] <- c(orig_levs[[n]],
+                          setdiff(unique(as.character(newdata[[n]])), orig_levs[[n]]))
+    }
+    
+  }
+  if (!is.null(orig_levs)) attr(orig_levs, "isFac") <- isFac
+  orig_levs
+}
+
+formula.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"), ...)
+{
+  type <- match.arg(type) 
+  
+  if (is.null(form <- x$formula)) {
+    if (!grepl("mstan4bart$", deparse(x$call[[1]]))) 
+      stop("can't find formula stored in model frame or call")
+    form <- as.formula(formula(x$call, ...))
+  }
+  if (type == "fixed") {
+    RHSForm(form) <- nobart(nobars(RHSForm(form)))
+  } else if (type == "random") {
+    form <- reOnly(form, response = TRUE)
+  } else if (type == "bart") {
+    RHSForm(form) <- allbart(nobars(RHSForm(form)))
+  }
+  form
+}
+
+terms.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"), ...) 
+{
+  type <- match.arg(type)
+  
+  tt <- x$terms
+  if (type == "fixed") {
+    tt <- terms.formula(formula(x, type))
+    attr(tt, "predvars") <- attr(x$terms, "predvars.fixed")
+  } else if (type == "random") {
+    tt <- terms.formula(subbars(formula(x, type)))
+    attr(tt, "predvars") <- attr(terms(x$terms), "predvars.random")
+  } else if (type == "bart") {
+    tt <- terms.formula(subbars(formula(x, type)))
+     attr(tt, "predvars") <- attr(terms(x$terms), "predvars.bart")
+  }
+  tt
+}
+
+model.frame.mstan4bartFit <- function (formula, type = c("all", "fixed", "random", "bart"), ...) 
+{
+  type <- match.arg(type)
+  
+  fr <- formula$frame
+  if (type == "fixed") {
+    fr <- fr[as.character(attr(terms(formula), "predvars.fixed"))[-1L]]
+  } else if (type == "random") {
+    fr <- fr[as.character(attr(terms(formula), "predvars.random"))[-1L]]
+  } else if (type == "bart") {
+    fr <- fr[as.character(attr(terms(formula), "predvars.bart"))[-1L]]
+  }
+  fr
 }
 
 rm(`%ORifNotInLme4%`)
