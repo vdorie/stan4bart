@@ -64,11 +64,9 @@ mstan4bart_fitforreal <- function(chain.num, control.bart, data.bart, model.bart
 }
 
 mstan4bart_fit <- 
-  function(data.bart, x, y,
-           weights,
-           offset,
+  function(object,
            family,
-           group,
+           decov,
            bart_offset_init, sigma_init,
            verbose,
            iter,
@@ -77,13 +75,12 @@ mstan4bart_fit <-
            chains,
            cores,
            refresh,
-           offset_type,
            stan_args,
            bart_args)
 {  
   supported_families <- c("binomial", "gaussian")
   fam <- which(pmatch(supported_families, family$family, nomatch = 0L) == 1L)
-    
+  
   if (is.null(stan_args))
     stan_args <- list()
   if (is.null(stan_args[["prior"]]))
@@ -92,6 +89,14 @@ mstan4bart_fit <-
     stan_args$prior_intercept <- default_prior_intercept_gaussian()
   if (is.null(stan_args[["prior_aux"]]))
     stan_args$prior_aux <- exponential(autoscale = TRUE)
+  
+  x <- object$X
+  y <- object$y
+  data.bart   <- object$bartData
+  weights     <- object$weights
+  offset      <- object$offset
+  offset_type <- object$offset_type
+  group       <- object$reTrms
   
   x_stuff <- center_x(x, FALSE)
   for (i in names(x_stuff)) # xtemp, xbar, has_intercept
@@ -246,11 +251,10 @@ mstan4bart_fit <-
 
   # make a copy of user specification before modifying 'group' (used for keeping
   # track of priors)
-  user_covariance <- if (length(group) == 0L) NULL else group[["decov"]]
+  user_covariance <- decov
   
   if (length(group) > 0 && length(group$flist) > 0) {
     check_reTrms(group)
-    decov <- group$decov
     
     Z <- t(group$Zt)
     

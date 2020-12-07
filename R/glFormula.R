@@ -1,19 +1,10 @@
 glFormula <- function (formula, data = NULL, subset, weights, 
     na.action, offset, contrasts = NULL,
-    test = NULL, test.offset = NULL, treatment = NULL,
     start, mustart, etastart, 
     control = glmerControl(), ...) 
 {
     control <- control$checkControl
     mf <- mc <- match.call()
-    
-    if (!is.null(mc$treatment)) {
-      if (is.symbol(mc$treatment)) treatment <- as.character(mc$treatment)
-      if (!is.character(treatment))
-        stop("'treament' argument must be a character or symbol")
-    }
-    if (!is.null(test) && !is.null(treatment))
-      stop("only one of 'treatment' or 'test' can be specified")
     
     ignoreArgs <- c("start", "verbose", "devFunOnly", "optimizer", 
         "control", "nAGQ")
@@ -52,30 +43,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     reTrms <- mkReTrms(findbars(RHSForm(formula)), fr)
     
     # handle creating test frames
-    if (!is.null(treatment)) {
-      if (treatment %not_in% colnames(fr))
-        stop("treament must be the name of a column in data")
-      uq <- sort(unique(fr[[treatment]]))
-      if (length(uq) != 2L || !all(uq == c(0, 1)))
-        stop("treatment must in { 0, 1 }^n")
-      fr.test <- fr
-      fr.test[[treatment]] <- 1 - fr.test[[treatment]]
-      reTrms.test <- mkReTrms(findbars(RHSForm(formula)), fr.test)
-      if (!all(sapply(seq_along(reTrms$cnms), function(i) all(reTrms$cnms[[i]] == reTrms.test$cnms[[i]]))))
-        stop("counterfactual random effect design matrix does not match observed: contact package author")
-    } else if (!is.null(test)) {
-      mf.test <- mf
-      mf.test$data <- test
-      mf.test$offset <- test.offset
-      fr.test <- eval(mf.test, parent.frame())
-      fr.test <- factorize(fr.form, fr.test, char.only = TRUE)
-      attr(fr, "formula") <- formula
-      attr(fr, "offset") <- mf.test$offset
-      reTrms.test <- mkReTrms(findbars(RHSForm(formula)), fr.test)
-      if (!all(sapply(seq_along(reTrms$cnms), function(i) all(reTrms$cnms[[i]] == reTrms.test$cnms[[i]]))))
-        stop("test random effect design matrix does not match observed: contact package author")
-    }
-    
+        
     wmsgNlev <- checkNlevels(reTrms$flist, n = n, control, allow.n = TRUE)
     wmsgZdims <- checkZdims(reTrms$Ztlist, n = n, control, allow.n = TRUE)
     wmsgZrank <- checkZrank(reTrms$Zt, n = n, control, nonSmall = 1e+06, 
@@ -116,7 +84,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
       attr(attr(bartfr, "terms"), "dataClasses") <- attr(bartterms, "dataClasses")[keepcols]
       bartterms <- attr(bartfr, "terms")
     }
-    bartData <- dbarts::dbartsData(bartform, bartfr, test = test)
+    bartData <- dbarts::dbartsData(bartform, bartfr)
     if (ncol(bartData@x) == 0L)
       stop("no bart component detected; consider using rstanarm instead")
     
@@ -127,22 +95,6 @@ glFormula <- function (formula, data = NULL, subset, weights,
     if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
       scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
     X <- checkScaleX(X, kind = scaleX.chk)
-
-    
-    if (!is.null(treatment)) {
-      bartData@x.test <- bartData@x
-      if (treatment %in% colnames(bartData@x.test))
-        bartData@x.test[,treatment] <- 1 - bartData@x.test[,treatment, drop = FALSE]
-      bartData@testUsesRegularOffset <- FALSE
-    }
-    if (!is.null(treatment)) {
-      X <- X[,c(colnames(X)[colnames(X) %not_in% treatment], treatment)]
-      X.test <- X
-      if (treatment %in% colnames(X.test))
-        X.test[,treatment] <- 1 - X.test[,treatment, drop = FALSE]
-    } else if (!is.null(test)) {
-      X.test <- model.matrix(fixedform, fr.test, contrasts)
-    }
     
     terms <- attr(fr, "terms")
     responsename   <- as.character(attr(terms, "variables"))[1 + attr(terms, "response")]
@@ -168,11 +120,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
       u.y <- unique(y)
       result$family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
     }
-    if (!is.null(treatment) || !is.null(test)) {
-      result$treatment   <- treatment
-      result$reTrms.test <- reTrms.test
-      result$X.test      <- X.test
-    }
+    
     result
 }
 
@@ -994,19 +942,35 @@ mkVarCorr <- mkVarCorr %ORifNotInLme4% function (sc, cnms, nc, theta, nms)
     structure(ans, sc = sc)
 }
 
-levelfun <- function (x, nl.n, allow.new.levels = FALSE) 
+levelfun <- function (x, nl.n, sample_new_levels, Sigma) 
 {
   old_levels <- dimnames(x)[["group"]]
   if (!all(nl.n %in% old_levels)) {
-    if (!allow.new.levels) 
-      stop("new levels detected in newdata")
     nl.n.comb <- union(old_levels, nl.n)
     d <- dim(x)
     dn <- dimnames(x)
+    dnn <- names(dn)
     newx <- array(0, c(d[1L], length(nl.n.comb), d[3L:4L]),
                   dimnames = list(dn[[1L]], nl.n.comb, dn[[3L]], dn[[4L]]))
     newx[,old_levels,,] <- x
+    
+    if (sample_new_levels) {
+      new_levels <- nl.n.comb[!(nl.n.comb %in% old_levels)]
+      L <- apply(Sigma, c(3L, 4L), function(x) t(base::chol(x)))
+      n_predictors <- d[1L]
+      n_groups  <- length(new_levels)
+      n_samples <- d[3L]
+      n_chains  <- d[4L]
+      L <- array(Sigma, c(n_predictors, n_predictors, n_samples * n_chains))
+      L <- bdiag(lapply(seq_len(n_samples * n_chains), function(i) t(base::chol(L[,,i]))))
+      
+      u <- rnorm(n_predictors * n_groups * n_samples * n_chains)
+      
+      newx[,new_levels,,] <- as.vector(L %*% u)
+    }
     x <- newx
+    names(dimnames(x)) <- dnn
+    old_levels <- dimnames(x)[["group"]]
   }
   if (!all(r.inn <- old_levels %in% nl.n)) {
     x <- x[,r.inn,,,drop = FALSE]
@@ -1017,16 +981,17 @@ levelfun <- function (x, nl.n, allow.new.levels = FALSE)
 # can't use lme4 version, as we need to use model.frame.mstan4bartFit
 get.orig.levs <- function (object, FUN = levels, newdata = NULL, sparse = FALSE, ...) 
 {
-  Terms <- terms(object, ...)
-  mf <- model.frame(object, ...)
-  isFac <- vapply(mf, is.factor, FUN.VALUE = TRUE)
-  isFac[attr(Terms, "response")] <- FALSE
-  mf <- mf[isFac]
+  terms <- terms(object, ...)
+  frame <- model.frame(object, ...)
+  
+  isFac <- vapply(frame, is.factor, FUN.VALUE = TRUE)
+  isFac[attr(terms, "response")] <- FALSE
+  frame <- frame[isFac]
   hasSparse <- any(grepl("sparse", names(formals(FUN))))
-  orig_levs <- if (any(isFac) && hasSparse) lapply(mf, FUN, sparse = sparse) else if(any(isFac) && !hasSparse) lapply(mf, FUN)
+  orig_levs <- if (any(isFac) && hasSparse) lapply(frame, FUN, sparse = sparse) else if(any(isFac) && !hasSparse) lapply(frame, FUN)
   
   if (!is.null(newdata)) {      
-    for (n in names(mf)) {
+    for (n in names(frame)) {
       orig_levs[[n]] <- c(orig_levs[[n]],
                           setdiff(unique(as.character(newdata[[n]])), orig_levs[[n]]))
     }
@@ -1036,56 +1001,62 @@ get.orig.levs <- function (object, FUN = levels, newdata = NULL, sparse = FALSE,
   orig_levs
 }
 
-formula.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"), ...)
+formula.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
 {
-  type <- match.arg(type) 
-  
-  if (is.null(form <- x$formula)) {
+  if (is.null(formula <- x$formula)) {
     if (!grepl("mstan4bart$", deparse(x$call[[1]]))) 
       stop("can't find formula stored in model frame or call")
     form <- as.formula(formula(x$call, ...))
   }
+  
+  type <- match.arg(type)
+  
   if (type == "fixed") {
-    RHSForm(form) <- nobart(nobars(RHSForm(form)))
+    RHSForm(formula) <- nobart(nobars(RHSForm(formula)))
   } else if (type == "random") {
-    form <- reOnly(form, response = TRUE)
+    formula <- reOnly(formula, response = TRUE)
   } else if (type == "bart") {
-    RHSForm(form) <- allbart(nobars(RHSForm(form)))
+    RHSForm(formula) <- allbart(nobars(RHSForm(formula)))
   }
-  form
+  
+  formula
 }
 
-terms.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"), ...) 
+terms.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart")) 
 {
   type <- match.arg(type)
   
-  tt <- x$terms
+  terms <- attr(x$frame, "terms")
+  if (type == "all")
+    return(terms)
+  
   if (type == "fixed") {
-    tt <- terms.formula(formula(x, type))
-    attr(tt, "predvars") <- attr(x$terms, "predvars.fixed")
+    tt <- terms.formula(formula(x, type = "fixed"), data = x$frame)
+    attr(tt, "predvars") <- attr(terms, "predvars.fixed")
   } else if (type == "random") {
-    tt <- terms.formula(subbars(formula(x, type)))
-    attr(tt, "predvars") <- attr(terms(x$terms), "predvars.random")
+    tt <- terms.formula(subbars(formula(x, type = "random")), data = x$frame)
+    attr(tt, "predvars") <- attr(terms, "predvars.random")
   } else if (type == "bart") {
-    tt <- terms.formula(subbars(formula(x, type)))
-     attr(tt, "predvars") <- attr(terms(x$terms), "predvars.bart")
+    tt <- terms.formula(subbart(formula(x, type = "bart")), data = x$frame)
+    attr(tt, "predvars") <- attr(terms, "predvars.random")
   }
   tt
 }
 
-model.frame.mstan4bartFit <- function (formula, type = c("all", "fixed", "random", "bart"), ...) 
+model.frame.mstan4bartFit <- function (formula, type = c("all", "fixed", "random", "bart"))
 {
   type <- match.arg(type)
   
-  fr <- formula$frame
+  frame <- formula$frame
+  
   if (type == "fixed") {
-    fr <- fr[as.character(attr(terms(formula), "predvars.fixed"))[-1L]]
+    frame <- frame[as.character(attr(terms(formula), "predvars.fixed"))[-1L]]
   } else if (type == "random") {
-    fr <- fr[as.character(attr(terms(formula), "predvars.random"))[-1L]]
+    frame <- frame[as.character(attr(terms(formula), "predvars.random"))[-1L]]
   } else if (type == "bart") {
-    fr <- fr[as.character(attr(terms(formula), "predvars.bart"))[-1L]]
+    frame <- frame[as.character(attr(terms(formula), "predvars.bart"))[-1L]]
   }
-  fr
+  frame
 }
 
 rm(`%ORifNotInLme4%`)

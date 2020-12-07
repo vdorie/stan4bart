@@ -6,5 +6,7 @@ S3method(fitted, mstan4bartFit)
 S3method(predict, mstan4bartFit)
 
 importFrom(dbarts, extract)
-importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao)
+importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao, bdiag)
 importFrom(parallel, makeCluster, clusterExport, clusterEvalQ, clusterMap, stopCluster)
+
+importFrom(stats, rnorm)

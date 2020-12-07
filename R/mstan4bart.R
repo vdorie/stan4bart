@@ -21,7 +21,6 @@ mstan4bart <-
            stan_args = NULL,
            bart_args = NULL)
 {
-  
   call <- match.call(expand.dots = TRUE)
   mc <- match.call(expand.dots = FALSE)
   if (!is.null(data)) {
@@ -60,11 +59,56 @@ mstan4bart <-
   
   if (is.null(prior_covariance))
     stop("'prior_covariance' cannot be NULL", call. = FALSE)
-  group <- glmod$reTrms
-  group$decov <- prior_covariance
+  
+  result <- list(y         = y,
+                 weights   = weights,
+                 offset    = offset,
+                 offset_type = offset_type,
+                 frame     = glmod$fr,
+                 formula   = formula,
+                 na.action = na.action,
+                 call      = mc,
+                 bartData  = bartData)
+  if (!is.null(glmod$X)) {
+    result$X <- glmod$X
+    result$X_means <- apply(glmod$X, 2L, mean)
+  }
+  if (!is.null(glmod$reTrms)) {
+    result$reTrms <- glmod$reTrms
+  }
+  class(result) <- "mstan4bartFit"
+  
+  if (!is.null(mc$test) && !is.null(mc$treatment))
+    stop("only one of 'treatment' or 'test' can be specified")
+  
+  if (!is.null(mc$treatment)) {
+    trtCall <- quote(getTreatmentData(result, treatment))
+    trtCall[[1L]] <- quoteInNamespace(getTreatmentData)
+    trtCall[[2L]] <- result
+    trtCall[[3L]] <- mc$treatment
     
+    trtResult <- eval(trtCall, parent.frame())
+    result$treatment <- trtResult$treatment
+    test <- trtResult$fr.test
+  }
+  
+  if (!is.null(test)) {
+    testDataFrames <- getTestDataFrames(result, test, na.action)
+    result$test <- testDataFrames
+    
+    if (!is.null(offset_test)) result$test$offset_test <- offset_test
+    
+    result$bartData@x.test <- testDataFrames$X.bart
+    result$bartData@testUsesRegularOffset <- FALSE
+    
+    result$test$X.bart <- NULL
+  }
+  
+  if (iter == 0L)
+    return(result)
+  
   init_call <- mc
-    
+  
   bart_offset_init <- NULL
   sigma_init <- NULL
   
@@ -73,7 +117,7 @@ mstan4bart <-
     for (name in setdiff(names(formals(mstan4bart)), names(formals(lme4::lmer)))) {
       if (name %in% names(init_call)) init_call[[name]] <- NULL
     }
-
+    
     init_call$control <- lme4::lmerControl()
     init_call$formula <- nobart(mc$formula)
     init_call$verbose <- FALSE
@@ -104,10 +148,9 @@ mstan4bart <-
     sigma_init <- sigma(init_fit)
   }
   
-  chain_results <- mstan4bart_fit(bartData, glmod$X, y,
-                                  weights, offset,
+  chain_results <- mstan4bart_fit(result,
                                   family,
-                                  group,
+                                  prior_covariance,
                                   bart_offset_init,
                                   sigma_init,
                                   verbose,
@@ -117,30 +160,12 @@ mstan4bart <-
                                   chains,
                                   cores,
                                   refresh,
-                                  offset_type,
                                   stan_args, bart_args)
   
-  result <- package_samples(chain_results, colnames(glmod$X), colnames(bartData@x))
+  samples <- package_samples(chain_results, colnames(glmod$X), colnames(bartData@x))
+  for (name in names(samples)) 
+    result[[name]] <- samples[[name]]
   
-  if (!is.null(glmod$X)) {
-    result$X <- glmod$X
-    result$X_means <- apply(glmod$X, 2L, mean)
-  }
-  if (!is.null(glmod$X.test))      result$X.test <- glmod$X.test
-  if (!is.null(glmod$reTrms)) {
-    result$reTrms <- glmod$reTrms
-    if (!is.null(glmod$reTrms.test)) result$reTrms$Zt.test <- glmod$reTrms.test$Zt
-  }
-  if (!is.null(offset_test))       result$offset_test <- offset_test
-  if (!is.null(glmod$treatment))   result$treatment <- glmod$treatment
-  
-  result$formula   <- formula
-  result$terms     <- glmod$terms
-  result$na.action <- na.action
-  result$call      <- mc
-  result$frame     <- glmod$fr
-  
-  class(result) <- "mstan4bartFit"
   result
 }
 
@@ -377,5 +402,24 @@ validate_parameter_value <- function(x) {
         stop(nm, " should be positive", call. = FALSE)
   }
   invisible(TRUE)
+}
+
+getTreatmentData <- function(object, treatment) {
+  mc <- match.call()
+  if (!is.null(mc$treatment)) {
+    if (is.symbol(mc$treatment)) treatment <- as.character(mc$treatment)
+    if (!is.character(treatment))
+      stop("'treament' argument must be a character or symbol")
+  }
+  
+  if (treatment %not_in% colnames(object$frame))
+      stop("treament must be the name of a column in data")
+  uq <- sort(unique(object$frame[[treatment]]))
+  if (length(uq) != 2L || !all(uq == c(0, 1)))
+    stop("treatment must in { 0, 1 }^n")
+  fr.test <- object$frame
+  fr.test[[treatment]] <- 1 - fr.test[[treatment]]
+  
+  nlist(fr.test, treatment)
 }
 
