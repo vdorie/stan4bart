@@ -54,35 +54,37 @@ glFormula <- function (formula, data = NULL, subset, weights,
     RHSForm(mf$formula) <- RHSForm(fixedform)
     fixedfr <- eval(mf, parent.frame())
     fixedterms <- attr(fixedfr, "terms")
-    attr(attr(fr, "terms"), "predvars.fixed") <-
-      attr(fixedterms, "variables")[c(1L, 1L + attr(fixedterms, "response"), which(as.character(attr(fixedterms, "variables")) %in% attr(fixedterms, "term.labels")))]
+    attr(attr(fr, "terms"), "predvars.fixed") <- attr(fixedterms, "predvars")
+    attr(attr(fr, "terms"), "varnames.fixed") <- names(fixedfr)
     
     bartform <- formula
     RHSForm(bartform) <- allbart(nobars(RHSForm(bartform)))
     RHSForm(mf$formula) <- RHSForm(bartform)
+    mf$drop.unused.levels <- FALSE
     bartfr <- eval(mf, parent.frame())
     bartterms <- attr(bartfr, "terms")
-    attr(attr(fr, "terms"), "predvars.bart") <-
-      attr(bartterms, "variables")[c(1L, 1L + attr(bartterms, "response"), which(as.character(attr(bartterms, "variables")) %in% attr(bartterms, "term.labels")))]
+    attr(attr(fr, "terms"), "predvars.bart") <- attr(bartterms, "predvars")
+    attr(attr(fr, "terms"), "varnames.bart") <- names(bartfr)
     
     ranform <- formula
     RHSForm(ranform) <- subbars(RHSForm(reOnly(formula)))
     mf$formula <- ranform
+    mf$drop.unused.levels <- TRUE
     ranfr <- eval(mf, parent.frame())
     ranterms <- attr(ranfr, "terms")
-    attr(attr(fr, "terms"), "predvars.random") <-
-      attr(ranterms, "variables")[c(1L, 1L + attr(ranterms, "response"), which(as.character(attr(ranterms, "variables")) %in% attr(ranterms, "term.labels")))]
-    
+    attr(attr(fr, "terms"), "predvars.random") <- attr(ranterms, "predvars")
+    attr(attr(fr, "terms"), "varnames.random") <- names(ranfr)
     
     # dbartsData can't handle columns in the model frame not in the formula terms, so we
     # pull out  "(offset)" if it exists
-    bartprednames <- as.character(attr(bartterms, "predvars"))[-1]
-    if (any(colnames(bartfr) %not_in% bartprednames)) {
-      keepcols <- colnames(bartfr) %in% bartprednames
+    bartprednames <- as.character(attr(bartterms, "predvars"))[-1L]
+    if (any(names(bartfr) %not_in% bartprednames)) {
+      keepcols <- names(bartfr) %in% bartprednames
       bartfr <- bartfr[,keepcols, drop = FALSE]
       attr(bartfr, "terms") <- bartterms
       attr(attr(bartfr, "terms"), "dataClasses") <- attr(bartterms, "dataClasses")[keepcols]
       bartterms <- attr(bartfr, "terms")
+      attr(attr(fr, "terms"), "varnames.bart") <- names(bartfr)
     }
     bartData <- dbarts::dbartsData(bartform, bartfr)
     if (ncol(bartData@x) == 0L)
@@ -97,20 +99,16 @@ glFormula <- function (formula, data = NULL, subset, weights,
     X <- checkScaleX(X, kind = scaleX.chk)
     
     terms <- attr(fr, "terms")
-    responsename   <- as.character(attr(terms, "variables"))[1 + attr(terms, "response")]
     
-    ranprednames   <- as.character(attr(terms, "predvars.random"))[-1]
-    ranprednames   <- ranprednames[ranprednames != responsename]
+    varnames.random <- attr(ranterms,   "termlabels")[attr(ranterms,   "order") == 1]
+    varnames.fixed  <- attr(fixedterms, "termlabels")[attr(fixedterms, "order") == 1]
+    varnames.bart   <- attr(bartterms,  "termlabels")[attr(bartterms,  "order") == 1]
     
-    fixedprednames <- as.character(attr(terms, "predvars.fixed"))[-1]
-    fixedprednames <- fixedprednames[fixedprednames != responsename]
-    
-    bartprednames  <- as.character(attr(terms, "predvars.bart"))[-1]
-    bartprednames  <- bartprednames[bartprednames != responsename]
-    
-    mixedvars <- bartprednames %in% ranprednames | bartprednames %in% fixedprednames
-    if (any(mixedvars))
-      warning("variable(s) '", paste0(bartprednames[mixedvars], collapse = "', '"), "' appear in both parametric and nonparametric are not identifiable; model will fit but some results may be uninterpretable")
+    varnames.mixed <- varnames.bart %in% varnames.random | varnames.bart %in% varnames.fixed
+    if (any(varnames.mixed))
+      warning("variable(s) '", paste0(varnames.bart[varnames.mixed], collapse = "', '"),
+              "' appear in both parametric and nonparametric are not identifiable; ",
+              "model will fit but some results may be uninterpretable")
     
     result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, formula = formula, 
                    terms = terms,
@@ -978,7 +976,7 @@ levelfun <- function (x, nl.n, sample_new_levels, Sigma)
   x
 }
 
-# can't use lme4 version, as we need to use model.frame.mstan4bartFit
+# can't use lme4 version, as we need to use mstan4bartFit terms and model.frame
 get.orig.levs <- function (object, FUN = levels, newdata = NULL, sparse = FALSE, ...) 
 {
   terms <- terms(object, ...)
@@ -1037,9 +1035,17 @@ terms.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
     tt <- terms.formula(subbars(formula(x, type = "random")), data = x$frame)
     attr(tt, "predvars") <- attr(terms, "predvars.random")
   } else if (type == "bart") {
-    tt <- terms.formula(subbart(formula(x, type = "bart")), data = x$frame)
-    attr(tt, "predvars") <- attr(terms, "predvars.random")
+    tt <- terms.formula(formula(x, type = "bart"), data = x$frame)
+    attr(tt, "predvars") <- attr(terms, "predvars.bart")
   }
+  # Possibly re-order terms in case they apepared in a different order in
+  # the original, which happens if, for example, a variable appears in the
+  # fixed formula and again in the bart one (or in a . expression)
+  
+  vnames  <- as.character(attr(tt, "variables"))
+  pvnames <- as.character(attr(tt, "predvars"))
+  attr(tt, "variables")[vnames %in% pvnames] <- attr(tt, "variables")[match(pvnames, vnames)]
+  
   tt
 }
 
@@ -1050,11 +1056,11 @@ model.frame.mstan4bartFit <- function (formula, type = c("all", "fixed", "random
   frame <- formula$frame
   
   if (type == "fixed") {
-    frame <- frame[as.character(attr(terms(formula), "predvars.fixed"))[-1L]]
+    frame <- frame[attr(terms(formula), "varnames.fixed")]
   } else if (type == "random") {
-    frame <- frame[as.character(attr(terms(formula), "predvars.random"))[-1L]]
+    frame <- frame[attr(terms(formula), "varnames.random")]
   } else if (type == "bart") {
-    frame <- frame[as.character(attr(terms(formula), "predvars.bart"))[-1L]]
+    frame <- frame[attr(terms(formula), "varnames.bart")]
   }
   frame
 }

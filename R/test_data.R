@@ -22,7 +22,7 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
     
     mfnew <- suppressWarnings(
       model.frame(delete.response(terms.fixed), newdata,
-                                  na.action = fixed.na.action, xlev = orig.fixed.levs)
+                  na.action = fixed.na.action, xlev = orig.fixed.levs)
     )
     X <- model.matrix(RHS, data = mfnew, contrasts.arg = attr(X, "contrasts"))
     if (is.numeric(X.col.dropped) && length(X.col.dropped) > 0)
@@ -30,7 +30,14 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
     result$X <- X
   }
   if (type %in% c("all", "bart")) {
-    result$X.bart <- dbarts::makeTestModelMatrix(object$bartData, newdata)
+    orig.bart.levs <- get.orig.levs(object, type = "bart")
+    
+    mf.bart <- suppressWarnings(
+      model.frame.default(delete.response(terms(object, type = "bart")), newdata,
+                  na.action = fixed.na.action, xlev = orig.bart.levs)
+    )
+
+    result$X.bart <- dbarts::makeTestModelMatrix(object$bartData, mf.bart)
   }
   if (type %in% c("all", "random") && !is.null(object$reTrms)) {
     terms.random <- terms(object, type = "random")
