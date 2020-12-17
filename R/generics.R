@@ -1,5 +1,5 @@
 combine_chains_f <- function(x) {
-  if (is.array(x)) {
+  if (is.array(x) && length(dim(x)) > 2L) {
     d <- dim(x)
     l_d <- length(d)
     t_d <- seq.int(l_d - 1L, l_d)
@@ -10,11 +10,10 @@ combine_chains_f <- function(x) {
       names(dn)[l_d - 1L] <- "sample"
     }
     array(x, c(d[-t_d], prod(d[t_d])), dimnames = dn)
-  } else if (is.matrix(x)) {
+  } else if (is.matrix(x) || (!is.null(dim(x)) && length(dim(x)) == 2L)) {
     as.vector(x)
   }
 }
-
 
 extract.mstan4bartFit <-
   function(object,
@@ -24,6 +23,8 @@ extract.mstan4bartFit <-
            sample_new_levels = TRUE,
            ...)
 {
+  if (length(list(...)) > 0) warning("unused arguments ignored")
+  
   type   <- match.arg(type)
   sample <- match.arg(sample)
   
@@ -69,9 +70,18 @@ extract.mstan4bartFit <-
                  c(n_obs_inf, n_samples, n_chains))
   }
   
+  offset <- 0
+  if (type %in% c("ev", "ppd")) {
+    if (sample == "train" && !is.null(object$offset) && length(object$offset) > 0L) {
+      offset <- object$offset
+    } else if (sample == "test" && !is.null(object$test$offset) && length(object$offset) > 0L) {
+      offset <- object$test$offset
+    }
+  }
+  
   result <- switch(type,
-                   ev          = indiv.bart + indiv.fixef + indiv.ranef,
-                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + eps,
+                   ev          = indiv.bart + indiv.fixef + indiv.ranef + offset,
+                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + offset + eps,
                    indiv.fixef = indiv.fixef,
                    indiv.ranef = indiv.ranef,
                    indiv.bart  = indiv.bart,
@@ -80,12 +90,11 @@ extract.mstan4bartFit <-
                    fixef       = object$fixef,
                    Sigma       = object$Sigma,
                    sigma       = object$sigma)
-  
     
   if (combine_chains) {
     if (is.list(result)) {
       result <- lapply(result, combine_chains_f)
-  } else {
+    } else {
       result <- combine_chains_f(result)
     }
   }
@@ -99,9 +108,12 @@ fitted.mstan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma"),
            sample = c("train", "test"),
+           sample_new_levels = TRUE,
            ...)
 {
-  samples <- extract(object, type, sample, combine_chains = TRUE)
+  if (length(list(...)) > 0) warning("unused arguments ignored")
+  
+  samples <- extract(object, type, sample, combine_chains = TRUE, sample_new_levels = sample_new_levels)
   
   average_samples_f <- function(x) {
     if (is.array(x)) {
@@ -247,7 +259,6 @@ predict.mstan4bartFit <-
 
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef")) {
-    
     if (!is.null(testData$X)) {
       indiv.fixef <- fitted_fixed(object, testData$X)
     } else {
@@ -278,14 +289,17 @@ predict.mstan4bartFit <-
                  c(n_obs, n_samples, n_chains))
   }
   
+  if (type %in% c("ev", "ppd") && is.null(mc$offset)) {
+    offset <- 0
+  }
+  
   result <- switch(type,
-                   ev          = indiv.bart + indiv.fixef + indiv.ranef,
-                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + eps,
+                   ev          = indiv.bart + indiv.fixef + indiv.ranef + offset,
+                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + offset + eps,
                    indiv.fixef = indiv.fixef,
                    indiv.ranef = indiv.ranef,
                    indiv.bart  = indiv.bart)
   
-    
   if (combine_chains) {
     if (is.list(result)) {
       result <- lapply(result, combine_chains_f)

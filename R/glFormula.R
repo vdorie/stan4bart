@@ -1004,7 +1004,7 @@ formula.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
   if (is.null(formula <- x$formula)) {
     if (!grepl("mstan4bart$", deparse(x$call[[1]]))) 
       stop("can't find formula stored in model frame or call")
-    form <- as.formula(formula(x$call, ...))
+    form <- as.formula(formula(x$call))
   }
   
   type <- match.arg(type)

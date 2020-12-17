@@ -2791,7 +2791,68 @@ public:
       
       std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));
     }
-
+    
+    template <typename T__>
+    void get_parametric_mean(const T__* sample,  T__* result, bool include_fixed, bool include_random) const
+    {
+      typedef T__ local_scalar_t__;
+      
+      size_t offset = 0;
+      
+      local_scalar_t__ gamma;
+      if (has_intercept) gamma = sample[offset++];
+      
+      size_t z_beta_length = (prior_dist == 7 ? sum(num_normals) : K);
+      offset += z_beta_length;
+      
+      if (hs > 0) offset += 2 + K;
+      
+      if (prior_dist == 5 || prior_dist == 6) offset += K;
+      
+      if (prior_dist == 6) offset += 1;
+       
+      offset += q;
+      
+      offset += len_z_T;
+      
+      offset += len_rho;
+      
+      offset += len_concentration;
+      
+      offset += t;
+      
+      offset += 1;
+      
+      /* extract transformed parameters from sample */
+      offset += 1;
+      
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > beta(sample + offset, K);
+      offset += K; 
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > b(sample + offset, q);
+      
+      
+      Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> eta(N);
+      eta = Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Zero(N);
+      
+      if (include_fixed) {
+        if (K > 0)
+          eta += X * beta;
+                
+        if (has_intercept) {
+          if ((family == 1 || link == 2) || (family == 4 && link != 5))
+            eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma);
+          else if (family == 4 && link == 5)
+            eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma - max(eta));
+          else
+            eta += Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1>::Constant(N, gamma - min(eta));
+        }
+      }
+      if (include_random) {
+        eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
+      }
+      
+      std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));
+    }
 
     void get_param_names(std::vector<std::string>& names__) const {
         names__.resize(0);

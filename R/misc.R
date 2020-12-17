@@ -253,3 +253,28 @@ default_stan_control <- function(prior, adapt_delta = NULL,
   nlist(adapt_delta, max_treedepth)
 }
 
+is.gaussian <- function(x) x == "gaussian"
+is.binomial <- function(x) x == "binomial"
+is.poisson  <- function(x) x == "poisson"
+is.gamma    <- function(x) x == "Gamma"
+is.ig       <- function(x) x == "inverse.gaussian"
+is.nb       <- function(x) x == "neg_binomial_2"
+
+
+get_m_stub <- function(m, stub = "Long") 
+{
+  if (is.null(m))           return(NULL)
+  else if (is.numeric(m))   return(paste0(stub, m, "|"))
+  else if (is.character(m)) return(paste0(m, "|"))
+}
+
+fac2bin <- function(y) 
+{
+  if (!is.factor(y)) 
+    stop("Bug found: non-factor as input to fac2bin.", call. = FALSE)
+  if (!identical(nlevels(y), 2L)) 
+    stop("Bug found: factor with nlevels != 2 as input to fac2bin.", 
+         call. = FALSE)
+  as.integer(y != levels(y)[1L])
+}
+

@@ -58,7 +58,17 @@ namespace {
   enum UserOffsetType {
     OFFSET_DEFAULT = 0,
     OFFSET_FIXEF,
-    OFFSET_RANEF
+    OFFSET_RANEF,
+    OFFSET_BART,
+    OFFSET_PARAMETRIC
+  };
+  
+  const char* const userOffsetTypeNames[] = {
+    "default",
+    "fixef",
+    "ranef",
+    "bart",
+    "parametric"
   };
   
   enum ResultsType {
@@ -165,7 +175,7 @@ extern "C" {
     sampler.keepTrees = sampler.bartControl.keepTrees;
     sampler.bartControl.keepTrees = false;
     if (sampler.keepTrees) {
-      sampler.bartControl.defaultNumSamples = sampler.defaultIter;
+      sampler.bartControl.defaultNumSamples = sampler.defaultIter - sampler.defaultWarmup;
       sampler.bartControl.defaultNumBurnIn  = sampler.defaultWarmup;
     }
     bartFunctions.initializeData(&sampler.bartData, bartDataExpr);
@@ -196,7 +206,6 @@ extern "C" {
     bartFunctions.sampleTreesFromPrior(sampler.bartSampler);
     
     for (size_t i = 0; i < sampler.bartData.numObservations; ++i) sampler.stanOffset[i] = 0.0;
-    // sampler.stanModel->set_offset(sampler.stanOffset);
     stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
     
     
@@ -375,7 +384,7 @@ extern "C" {
           if (sampler.offsetType == OFFSET_DEFAULT)
             for (size_t j = 0; j < n; ++j)
               sampler.stanOffset[j] += sampler.userOffset[j];
-          else if (sampler.offsetType == OFFSET_FIXEF)
+          else if (sampler.offsetType == OFFSET_BART)
             std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
         }
         stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
@@ -386,12 +395,35 @@ extern "C" {
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN) {
         sampler.stanSampler->run(isWarmup);
         
-        stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
-        if (sampler.userOffset != NULL) {
-          if (sampler.offsetType == OFFSET_DEFAULT)
+        if (sampler.userOffset == NULL) {
+          stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
+        } else {
+          switch (sampler.offsetType) {
+            case OFFSET_DEFAULT:
+            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
             for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
-          else if (sampler.offsetType == OFFSET_RANEF)
+            break;
+            
+            case OFFSET_BART:
+            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
+            break;
+            
+            case OFFSET_RANEF:
+            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset,
+                                         true, false);
+            for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
+            break;
+            
+            case OFFSET_FIXEF:
+            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset,
+                                         false, true);
+            for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
+            break;
+            
+            case OFFSET_PARAMETRIC:
             std::memcpy(sampler.bartOffset, sampler.userOffset, n * sizeof(double));
+            break;
+          }
         }
         double sigma = getSigma(*sampler.stanSampler, *sampler.stanModel);
         sampler.stanSampler->sample_writer.increment();
@@ -442,7 +474,7 @@ extern "C" {
         Rprintf(", %f", sampler.userOffset[i]);
       if (sampler.bartData.numObservations > 5) Rprintf("...");
       Rprintf("\n");
-      if (sampler.offsetType != OFFSET_DEFAULT) Rprintf("  type: %s\n", sampler.offsetType == OFFSET_RANEF ? "ranef" : "fixef");
+      if (sampler.offsetType != OFFSET_DEFAULT) Rprintf("  type: %s\n", userOffsetTypeNames[sampler.offsetType]);
     }
     
     return R_NilValue;

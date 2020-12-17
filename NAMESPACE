@@ -9,4 +9,14 @@ importFrom(dbarts, extract)
 importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao, bdiag)
 importFrom(parallel, makeCluster, clusterExport, clusterEvalQ, clusterMap, stopCluster)
 
-importFrom(stats, rnorm)
+importFrom(stats, rnorm, dnorm, dlogis, qexp, runif, qbeta)
+importFrom(stats, binomial, gaussian)
+importFrom(stats, formula, as.formula, terms.formula, reformulate, terms)
+
+importFrom(stats, contrasts, "contrasts<-")
+importFrom(stats, model.frame, model.frame.default, model.matrix,
+           model.offset, model.response, model.weights,
+           delete.response)
+importFrom(stats, fitted, uniroot, sigma, sd, na.pass)
+
+importFrom("methods", "as", "is", "new")

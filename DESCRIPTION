@@ -4,7 +4,7 @@ Date: 2020-04-01
 Title: I Stan for BART
 Authors@R: c(
   person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
-  person("Ben", "Goodrich", role = "aut"))
+  person("Ben", "Goodrich", role = "ctb"))
 Depends:
   R (>= 3.5-0),
   methods,
@@ -26,6 +26,6 @@ Suggests:
 Description: Does things.
 License: GPL (>= 2)
 NeedsCompilation: yes
-SystemRequirements: GNU make
+Biarch: yes
 URL: https://github.com/vdorie/stan4bart
 BugReports: https://github.com/vdorie/stan4bart/issues

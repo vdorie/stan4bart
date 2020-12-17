@@ -87,7 +87,6 @@ rm(generateFriedmanData)
 df <- with(testData, data.frame(x, g.1, g.2, y, z))
 
 
-require(stan4bart)
 fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                   cores = 1, verbose = 1,
                   treatment = z)

@@ -501,6 +501,13 @@ void getParametricMean(const StanSampler& sampler, const StanModel& model, doubl
   model.get_parametric_mean(sampler.sample_writer.x_curr + sampler.sample_writer_offset, result);
 }
 
+void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result,
+                       bool includeFixed, bool includeRandom)
+{
+  model.get_parametric_mean(sampler.sample_writer.x_curr + sampler.sample_writer_offset, result,
+                            includeFixed, includeRandom);
+}
+
 double getSigma(const StanSampler& sampler, const StanModel& model)
 {
   return model.get_aux(sampler.sample_writer.x_curr + sampler.sample_writer_offset);

@@ -42,7 +42,8 @@ mstan4bart_fitforreal <- function(chain.num, control.bart, data.bart, model.bart
   if (control.common$warmup > 0L)
     results$warmup  <- .Call(ns$C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
   .Call(ns$C_stan4bart_disengageAdaptation, sampler)
-  results$sample <- .Call(ns$C_stan4bart_run, sampler, control.common$iter, FALSE, "both")
+  results$sample <- .Call(ns$C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
+                          FALSE, "both")
   
   if (control.common$warmup > 0L) {
     stan_warmup <- list(raw = results$warmup$stan)
@@ -66,7 +67,6 @@ mstan4bart_fitforreal <- function(chain.num, control.bart, data.bart, model.bart
 mstan4bart_fit <- 
   function(object,
            family,
-           decov,
            bart_offset_init, sigma_init,
            verbose,
            iter,
@@ -81,14 +81,23 @@ mstan4bart_fit <-
   supported_families <- c("binomial", "gaussian")
   fam <- which(pmatch(supported_families, family$family, nomatch = 0L) == 1L)
   
+  supported_links <- supported_glm_links(supported_families[fam])
+  link <- which(supported_links == family$link)
+  if (!length(link)) 
+    stop("'link' must be one of ", paste(supported_links, collapse = ", "))
+  
   if (is.null(stan_args))
     stan_args <- list()
+  if (is.null(stan_args[["prior_covariance"]]))
+    stan_args$prior_covariance <- decov()
+  decov <- stan_args[["prior_covariance"]]
   if (is.null(stan_args[["prior"]]))
     stan_args$prior <- default_prior_coef_gaussian()
   if (is.null(stan_args[["prior_intercept"]]))
     stan_args$prior_intercept <- default_prior_intercept_gaussian()
   if (is.null(stan_args[["prior_aux"]]))
     stan_args$prior_aux <- exponential(autoscale = TRUE)
+  
   
   x <- object$X
   y <- object$y
@@ -98,7 +107,9 @@ mstan4bart_fit <-
   offset_type <- object$offset_type
   group       <- object$reTrms
   
+  
   x_stuff <- center_x(x, FALSE)
+  xtemp <- has_intercept <- NULL # R CMD check
   for (i in names(x_stuff)) # xtemp, xbar, has_intercept
     assign(i, x_stuff[[i]])
   nvars.fixef <- ncol(xtemp)
@@ -166,7 +177,7 @@ mstan4bart_fit <-
   if (!has_intercept) {
     linkname <- supported_links[link]
     needs_intercept <- !is_gaussian && linkname == "identity" ||
-      is_gamma && linkname == "inverse" ||
+      # is_gamma && linkname == "inverse" ||
       is.binomial(famname) && linkname == "log"
     if (needs_intercept)
       stop("to use this combination of family and link ", 
@@ -345,8 +356,8 @@ mstan4bart_fit <-
     data.stan$len_y <- length(y)
   } else if (is_bernoulli) {
     data.stan$prior_scale_for_aux <- 
-      if (!length(group) || stan.args$prior_scale_for_aux == Inf) 
-        0 else stan.args$prior_scale_for_aux
+      if (!length(group) || stan_args$prior_scale_for_aux == Inf) 
+        0 else stan_args$prior_scale_for_aux
     data.stan$prior_mean_for_aux <- 0
     data.stan$prior_df_for_aux <- 0
     if (is_bernoulli) {
@@ -384,7 +395,7 @@ mstan4bart_fit <-
     user_prior = prior_stuff,
     user_prior_intercept = prior_intercept_stuff,
     user_prior_aux = prior_aux_stuff,
-    user_prior_covariance = user_covariance,
+    user_prior_covariance = prior_covariance,
     has_intercept = has_intercept,
     has_predictors = nvars.fixef > 0,
     adjusted_prior_scale = prior_scale,
@@ -436,14 +447,16 @@ mstan4bart_fit <-
     stop("'refresh' must be a non-negative integer")
   refresh <- as.integer(refresh)
   
-  offset_type <- which(offset_type == c("default", "fixef", "ranef")) - 1L
+  offset_type <- which(offset_type == c("default", "fixef", "ranef", "bart")) - 1L
   
   if (is.null(bart_args)) bart_args <- list()
   data.bart@sigma <- sigma_init
   control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
                                               n.thin = thin.bart, n.threads = 1L,
                                               updateState = FALSE))
-  for (name in intersect(names(bart_args), names(formals(dbarts::dbartsControl)))) {
+  for (name in intersect(names(bart_args), setdiff(names(formals(dbarts::dbartsControl)),
+                                                   names(control_call))))
+  {
     control_call[[name]] <- bart_args[[name]]
   }
   control.bart <- eval(control_call)
@@ -453,6 +466,8 @@ mstan4bart_fit <-
   data.bart@n.cuts <- rep_len(attr(control.bart, "n.cuts"), ncol(data.bart@x))
   control.bart@binary <- !is_continuous
   evalEnv <- sys.frame(sys.nframe())
+  
+  cgm <- normal <- fixed <- NULL # R CMD check
   bartPriors <- dbarts:::parsePriors(control.bart, data.bart, cgm, normal, fixed(1), evalEnv)
   model.bart <- new("dbartsModel", bartPriors$tree.prior, bartPriors$node.prior, bartPriors$resid.prior,
                     node.scale = if (!is_continuous) 3.0 else 0.5)
@@ -676,32 +691,6 @@ pad_reTrms <- function(Ztlist, cnms, flist) {
 #   stats)
 # @param columns Do the columns (TRUE) or rows (FALSE) correspond to the 
 #   variables?
-unpad_reTrms <- function(x, ...) UseMethod("unpad_reTrms")
-unpad_reTrms.default <- function(x, ...) {
-  if (is.matrix(x) || is.array(x))
-    return(unpad_reTrms.array(x, ...))
-  keep <- !grepl("_NEW_", names(x), fixed = TRUE)
-  x[keep]
-}
-
-unpad_reTrms.array <- function(x, columns = TRUE, ...) {
-  ndim <- length(dim(x))
-  if (ndim > 3)
-    stop("'x' should be a matrix or 3-D array")
-  
-  nms <- if (columns) 
-    last_dimnames(x) else rownames(x)
-  keep <- !grepl("_NEW_", nms, fixed = TRUE)
-  if (length(dim(x)) == 2) {
-    x_keep <- if (columns) 
-      x[, keep, drop = FALSE] else x[keep, , drop = FALSE]
-  } else {
-    x_keep <- if (columns) 
-      x[, , keep, drop = FALSE] else x[keep, , , drop = FALSE]
-  }
-  return(x_keep)
-}
-
 make_b_nms <- function(group, m = NULL, stub = "Long") {
   group_nms <- names(group$cnms)
   b_nms <- character()

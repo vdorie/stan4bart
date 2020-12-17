@@ -118,6 +118,8 @@ namespace stan4bart {
   
   void setStanOffset(StanModel& model, const double* offset);
   void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result);
+  void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result,
+                         bool includeFixed, bool includeRandom);
   double getSigma(const StanSampler& sampler, const StanModel& model);
   
   SEXP createStanResultsExpr(const double_writer& sample_writer);

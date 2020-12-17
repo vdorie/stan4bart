@@ -1,6 +1,6 @@
-STANHEADERS_SRC=/Users/vdorie/Library/R/4.0/library/StanHeaders/include/src
-TBB=/Users/vdorie/Library/R/4.0/library/RcppParallel/lib
-PKG_CPPFLAGS = -I"include" -I"../inst/include" -I"$(STANHEADERS_SRC)" -DBOOST_DISABLE_ASSERTS -DEIGEN_NO_DEBUG  -I'/Users/vdorie/Library/R/4.0/library/RcppParallel/include' -D_REENTRANT -DSTAN_THREADS  
+STANHEADERS_SRC=@STANHEADERS_SRC@
+TBB=@TBB@
+PKG_CPPFLAGS = -I"include" -I"../inst/include" -I"$(STANHEADERS_SRC)" -DBOOST_DISABLE_ASSERTS -DEIGEN_NO_DEBUG @EXTRA_CPPFLAGS@
 PKG_LIBS = -L"$(TBB)$(R_ARCH)" -Wl,-rpath,"$(TBB)$(R_ARCH)" -ltbb -ltbbmalloc
 
 CXX_STD = CXX14

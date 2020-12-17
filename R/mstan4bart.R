@@ -7,6 +7,7 @@ mstan4bart <-
            offset,
            contrasts = NULL,
            test = NULL,
+           treatment = NULL,
            offset_test = NULL,
            verbose = FALSE,
            iter = 2000L,
@@ -15,9 +16,7 @@ mstan4bart <-
            chains = 4L,
            cores = getOption("mc.cores", 1L),
            refresh = max(iter %/% 10L, 1L),
-           treatment = NULL,
-           prior_covariance = decov(),
-           offset_type = c("default", "fixef", "ranef"),
+           offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
            stan_args = NULL,
            bart_args = NULL)
 {
@@ -57,9 +56,6 @@ mstan4bart <-
   weights <- validate_weights(as.vector(model.weights(glmod$fr)))
   offset_type <- match.arg(offset_type)
   
-  if (is.null(prior_covariance))
-    stop("'prior_covariance' cannot be NULL", call. = FALSE)
-  
   result <- list(y         = y,
                  weights   = weights,
                  offset    = offset,
@@ -96,7 +92,7 @@ mstan4bart <-
     testDataFrames <- getTestDataFrames(result, test, na.action)
     result$test <- testDataFrames
     
-    if (!is.null(offset_test)) result$test$offset_test <- offset_test
+    if (!is.null(offset_test)) result$test$offset <- offset_test
     
     result$bartData@x.test <- testDataFrames$X.bart
     result$bartData@testUsesRegularOffset <- FALSE
@@ -118,7 +114,9 @@ mstan4bart <-
       if (name %in% names(init_call)) init_call[[name]] <- NULL
     }
     
-    init_call$control <- lme4::lmerControl()
+    init_call$control <- lme4::lmerControl(check.conv.grad     = "ignore",
+                                           check.conv.singular = "ignore",
+                                           check.conv.hess     = "ignore")
     init_call$formula <- nobart(mc$formula)
     init_call$verbose <- FALSE
     try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
@@ -150,7 +148,6 @@ mstan4bart <-
   
   chain_results <- mstan4bart_fit(result,
                                   family,
-                                  prior_covariance,
                                   bart_offset_init,
                                   sigma_init,
                                   verbose,
@@ -194,12 +191,12 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
   result$bart_train <- array(sapply(seq_along(n_chains), function(i_chains)
                                chain_results[[i_chains]]$sample$bart$train),
                              dim = c(n_obs, n_samples, n_chains),
-                             dimnames = list(obseration = NULL, sample = NULL, chain = NULL))
+                             dimnames = list(observation = NULL, sample = NULL, chain = NULL))
   if (n_obs_test > 0L) {
       result$bart_test <- array(sapply(seq_along(n_chains), function(i_chains)
                                   chain_results[[i_chains]]$sample$bart$test),
                                 dim = c(n_obs_test, n_samples, n_chains),
-                                dimnames = list(obseration = NULL, sample = NULL, chain = NULL))
+                                dimnames = list(observation = NULL, sample = NULL, chain = NULL))
   }
   result$bart_varcount <- array(sapply(seq_along(n_chains), function(i_chains)
                                chain_results[[i_chains]]$sample$bart$varcount),
@@ -256,12 +253,12 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
     result$warmup$bart_train <- array(sapply(seq_along(n_chains), function(i_chains)
                                         chain_results[[i_chains]]$warmup$bart$train),
                                       dim = c(n_obs, n_warmup, n_chains),
-                                      dimnames = list(obseration = NULL, sample = NULL, chain = NULL))
+                                      dimnames = list(observation = NULL, sample = NULL, chain = NULL))
     if (n_obs_test > 0L) {
       result$warmup$bart_test <- array(sapply(seq_along(n_chains), function(i_chains)
                                          chain_results[[i_chains]]$warmup$bart$test),
                                        dim = c(n_obs_test, n_warmup, n_chains),
-                                       dimnames = list(obseration = NULL, sample = NULL, chain = NULL))
+                                       dimnames = list(observation = NULL, sample = NULL, chain = NULL))
     }
     result$warmup$bart_varcount <- array(sapply(seq_along(n_chains), function(i_chains)
                                            chain_results[[i_chains]]$sample$bart$varcount),
