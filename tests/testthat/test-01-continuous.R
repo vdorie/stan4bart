@@ -54,7 +54,7 @@ test_that("predict matches supplied data", {
 
   samples.pred <- predict(fit, df.train, type = "indiv.bart")
   samples.ev   <- extract(fit, "indiv.bart", "train")
-  #expect_equal(samples.pred, samples.ev)
+  expect_equal(samples.pred, samples.ev)
   
   samples.pred <- predict(fit, df.train, type = "indiv.fixef")
   samples.ev   <- extract(fit, "indiv.fixef", "train")
@@ -63,16 +63,27 @@ test_that("predict matches supplied data", {
   samples.pred <- predict(fit, df.train, type = "indiv.ranef")
   samples.ev   <- extract(fit, "indiv.ranef", "train")
   expect_equal(samples.pred, samples.ev)
-  
-  
+   
   samples.pred <- predict(fit, df.train, type = "ev")
   samples.ev   <- extract(fit, "ev", "train")
-  #expect_equal(samples.pred, samples.ev)
+  expect_equal(samples.pred, samples.ev)
   
+  
+  samples.pred <- predict(fit, df.test, type = "indiv.bart")
+  samples.ev   <- extract(fit, "indiv.bart", "test")
+  expect_equal(samples.pred, samples.ev)
+  
+  samples.pred <- predict(fit, df.test, type = "indiv.fixef")
+  samples.ev   <- extract(fit, "indiv.fixef", "test")
+  expect_equal(samples.pred, samples.ev)
+  
+  samples.pred <- predict(fit, df.test, type = "indiv.ranef")
+  samples.ev   <- extract(fit, "indiv.ranef", "test")
+  expect_equal(samples.pred, samples.ev)
+   
   samples.pred <- predict(fit, df.test, type = "ev")
   samples.ev   <- extract(fit, "ev", "test")
-  
-  #expect_equal(samples.pred, samples.ev)
+  expect_equal(samples.pred, samples.ev)
 })
 
 test_that("ppd has approximately right amount of noise", {

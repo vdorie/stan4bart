@@ -272,6 +272,10 @@ predict.mstan4bartFit <-
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
     indiv.bart <- .Call(C_stan4bart_predictBART, object$sampler.bart, testData$X.bart, NULL)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
+    for (i_chain in seq_len(n_chains)) {
+      indiv.bart[,,i_chain] <- object$range.bart["min",i_chain] +
+        (0.5 + indiv.bart[,,i_chain]) * (object$range.bart["max",i_chain] - object$range.bart["min",i_chain])
+    }
   }
   if (type %in% c("ev", "ppd", "indiv.ranef")) {
     

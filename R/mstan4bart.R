@@ -188,20 +188,22 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
   n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
   aux_row <- which(rownames(chain_results[[1]]$sample$stan$raw) == "aux")
   
-  result$bart_train <- array(sapply(seq_along(n_chains), function(i_chains)
+  result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
                                chain_results[[i_chains]]$sample$bart$train),
                              dim = c(n_obs, n_samples, n_chains),
                              dimnames = list(observation = NULL, sample = NULL, chain = NULL))
   if (n_obs_test > 0L) {
-      result$bart_test <- array(sapply(seq_along(n_chains), function(i_chains)
+      result$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
                                   chain_results[[i_chains]]$sample$bart$test),
                                 dim = c(n_obs_test, n_samples, n_chains),
                                 dimnames = list(observation = NULL, sample = NULL, chain = NULL))
   }
-  result$bart_varcount <- array(sapply(seq_along(n_chains), function(i_chains)
+  result$bart_varcount <- array(sapply(seq_len(n_chains), function(i_chains)
                                chain_results[[i_chains]]$sample$bart$varcount),
                              dim = c(n_bart_vars, n_samples, n_chains),
                              dimnames = list(predictor = bart_var_names, sample = NULL, chain = NULL))
+  
+  
   if (length(aux_row) > 0L) {
     result$sigma <- sapply(seq_len(n_chains), function(i_chain) {
       chain_results[[i_chain]]$sample$stan$raw[aux_row,]
@@ -250,17 +252,17 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
   }
   if (n_warmup > 0L) {
     result$warmup <- list()
-    result$warmup$bart_train <- array(sapply(seq_along(n_chains), function(i_chains)
+    result$warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
                                         chain_results[[i_chains]]$warmup$bart$train),
                                       dim = c(n_obs, n_warmup, n_chains),
                                       dimnames = list(observation = NULL, sample = NULL, chain = NULL))
     if (n_obs_test > 0L) {
-      result$warmup$bart_test <- array(sapply(seq_along(n_chains), function(i_chains)
+      result$warmup$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
                                          chain_results[[i_chains]]$warmup$bart$test),
                                        dim = c(n_obs_test, n_warmup, n_chains),
                                        dimnames = list(observation = NULL, sample = NULL, chain = NULL))
     }
-    result$warmup$bart_varcount <- array(sapply(seq_along(n_chains), function(i_chains)
+    result$warmup$bart_varcount <- array(sapply(seq_len(n_chains), function(i_chains)
                                            chain_results[[i_chains]]$sample$bart$varcount),
                                          dim = c(n_bart_vars, n_warmup, n_chains),
                                          dimnames = list(predictor = bart_var_names, sample = NULL, chain = NULL))
@@ -306,9 +308,13 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
     }
   }
   
-  if (!is.null(attr(chain_results, "sampler.bart")))
+  if (!is.null(attr(chain_results, "sampler.bart"))) {
     result$sampler.bart <- attr(chain_results, "sampler.bart")
-  
+    result$range.bart <- matrix(sapply(seq_len(n_chains), function(i_chains)
+                                       chain_results[[i_chains]]$range.bart),
+                                nrow = 2L, ncol = n_chains,
+                                dimnames = list(c("min", "max"), chain = NULL))
+  }
   
   # TODO: turn into test
   # all(as.vector(result$ranef[[1]][,,,1]) == as.vector(chain_results[[1L]]$sample$stan$ranef[[1]]))

@@ -193,11 +193,8 @@ extern "C" {
     } else {
       for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] = 0.0;
     }
-    if (sampler.userOffset != NULL) {
-      if (sampler.offsetType == OFFSET_FIXEF)
-        for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] = 0.0;
-      else
-        for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] += sampler.userOffset[i];
+    if (sampler.userOffset != NULL && sampler.offsetType != OFFSET_BART) {
+      for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] += sampler.userOffset[i];
     }
     
     bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, true);
@@ -205,9 +202,32 @@ extern "C" {
 
     bartFunctions.sampleTreesFromPrior(sampler.bartSampler);
     
-    for (size_t i = 0; i < sampler.bartData.numObservations; ++i) sampler.stanOffset[i] = 0.0;
+    // draw once before running
+    dbarts::Control bartControl = sampler.bartSampler->control;
+    bool oldVerbose = bartControl.verbose;
+    bartControl.verbose = false;
+    bartFunctions.setControl(sampler.bartSampler, &bartControl);
+    dbarts::Results* first_draw = new dbarts::Results(n,
+                                                      sampler.bartSampler->data.numPredictors,
+                                                      sampler.bartSampler->data.numTestObservations,
+                                                      1, bartControl.numChains,
+                                                      sampler.bartSampler->model.kPrior != NULL);
+    bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, first_draw);
+    
+    for (size_t j = 0; j < n; ++j) first_draw->trainingSamples[j] -= sampler.bartOffset[j];
+    std::memcpy(sampler.stanOffset, const_cast<const double*>(first_draw->trainingSamples), n * sizeof(double));
+    if (sampler.userOffset != NULL) {
+      if (sampler.offsetType != OFFSET_BART)
+        for (size_t j = 0; j < n; ++j)
+          sampler.stanOffset[j] += sampler.userOffset[j];
+      else if (sampler.offsetType == OFFSET_BART)
+        std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
+    }
     stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
     
+    delete first_draw;
+    bartControl.verbose = oldVerbose;
+    bartFunctions.setControl(sampler.bartSampler, &bartControl);
     
     
     SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, R_NilValue));
@@ -222,10 +242,26 @@ extern "C" {
     return result;
   }
   
-  static SEXP get_parametric_mean(SEXP samplerExpr)
+  static SEXP getBARTDataRange(SEXP samplerExpr)
   {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
-    if (samplerPtr == NULL) Rf_error("get_parametric_mean called on NULL external pointer");
+    if (samplerPtr == NULL) Rf_error("getBARTDataRange called on NULL external pointer");
+    Sampler& sampler(*samplerPtr);
+    
+    SEXP resultExpr = PROTECT(rc_newReal(2));
+    double* result = REAL(resultExpr);
+    result[0] = sampler.bartSampler->sharedScratch.dataScale.min;
+    result[1] = sampler.bartSampler->sharedScratch.dataScale.max;
+    
+    UNPROTECT(1);
+    
+    return resultExpr;
+  }
+  
+  static SEXP getParametricMean(SEXP samplerExpr)
+  {
+    Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
+    if (samplerPtr == NULL) Rf_error("getParametricMean called on NULL external pointer");
     Sampler& sampler(*samplerPtr);
     
     sampler.stanSampler->sample_writer.decrement();
@@ -249,7 +285,7 @@ extern "C" {
     // const dbarts::Data& data(sampler.data);
     // const dbarts::Model& model(sampler.model);
     const dbarts::BARTFit* fit(sampler.fit);
-    
+        
     if (Rf_isNull(x_testExpr)) return R_NilValue;
     
     if (!Rf_isReal(x_testExpr)) Rf_error("x.test must be of type real");
@@ -262,7 +298,6 @@ extern "C" {
     
     size_t numSamples = control.keepTrees ? fit->currentNumSamples : 1;
     size_t numTestObservations = static_cast<size_t>(dims[0]);
-    
     
     double* testOffset = NULL;
     if (!Rf_isNull(offset_testExpr)) {
@@ -315,6 +350,9 @@ extern "C" {
     bartFunctions.initializeFit(sampler.fit, &sampler.control, &sampler.model, &sampler.data);
     
     bartFunctions.initializeState(sampler.fit, stateExpr);
+    sampler.fit->sharedScratch.dataScale.min = -0.5;
+    sampler.fit->sharedScratch.dataScale.max = 0.5;
+    sampler.fit->sharedScratch.dataScale.range = 1.0;
     
     SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, R_NilValue));
     samplerPtr.release();
@@ -369,29 +407,8 @@ extern "C" {
       if (sampler.refresh > 0 && sampler.verbose > 1 && (iter + 1) % sampler.refresh == 0)
           Rprintf("  iter %.3d / %.3d\n", iter + 1, numIter);
       
-      if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {
-        
-        bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, bartSamples);
-        
-        // bart with an offset will produce predictions that have the offset added;
-        // in order to just get the tree predictions, subtract out that offset
-        for (size_t j = 0; j < n; ++j)
-          bartSamples->trainingSamples[j] -= sampler.bartOffset[j];
-        
-        std::memcpy(sampler.stanOffset, const_cast<const double*>(bartSamples->trainingSamples), n * sizeof(double));
-        
-        if (sampler.userOffset != NULL) {
-          if (sampler.offsetType == OFFSET_DEFAULT)
-            for (size_t j = 0; j < n; ++j)
-              sampler.stanOffset[j] += sampler.userOffset[j];
-          else if (sampler.offsetType == OFFSET_BART)
-            std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
-        }
-        stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
-        
-        bartSamples->incrementPointers();
-      }
-      
+      // order of update matters - need to store a parametric components that go with a bart prediction
+      // or else when they're added together they won't be consistent with `predict`
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN) {
         sampler.stanSampler->run(isWarmup);
         
@@ -430,6 +447,29 @@ extern "C" {
         
         bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
         bartFunctions.setSigma(sampler.bartSampler, &sigma);
+      }
+      
+      if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {
+        
+        bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, bartSamples);
+        
+        // bart with an offset will produce predictions that have the offset added;
+        // in order to just get the tree predictions, subtract out that offset
+        for (size_t j = 0; j < n; ++j)
+          bartSamples->trainingSamples[j] -= sampler.bartOffset[j];
+        
+        std::memcpy(sampler.stanOffset, const_cast<const double*>(bartSamples->trainingSamples), n * sizeof(double));
+        
+        if (sampler.userOffset != NULL) {
+          if (sampler.offsetType == OFFSET_DEFAULT)
+            for (size_t j = 0; j < n; ++j)
+              sampler.stanOffset[j] += sampler.userOffset[j];
+          else if (sampler.offsetType == OFFSET_BART)
+            std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
+        }
+        stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
+        
+        bartSamples->incrementPointers();
       }
     }
     if (bartSamples != NULL) bartSamples->resetPointers();
@@ -629,7 +669,8 @@ static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_exportBARTState", exportBARTState, 1),
   DEF_FUNC("stan4bart_createStoredBARTSampler", createStoredBARTSampler, 4),
   DEF_FUNC("stan4bart_predictBART", predictBART, 3),
-  DEF_FUNC("stan4bart_get_parametric_mean", get_parametric_mean, 1),
+  DEF_FUNC("stan4bart_getParametricMean", getParametricMean, 1),
+  DEF_FUNC("stan4bart_getBARTDataRange", getBARTDataRange, 1),
   {NULL, NULL, 0}
 };
 

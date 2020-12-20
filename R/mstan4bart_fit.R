@@ -45,6 +45,7 @@ mstan4bart_fitforreal <- function(chain.num, control.bart, data.bart, model.bart
   results$sample <- .Call(ns$C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
                           FALSE, "both")
   
+  
   if (control.common$warmup > 0L) {
     stan_warmup <- list(raw = results$warmup$stan)
     stan_warmup$Sigma <- ns$getSigma(group$cnms, stan_warmup$raw)
@@ -58,8 +59,10 @@ mstan4bart_fitforreal <- function(chain.num, control.bart, data.bart, model.bart
   stan_sample$ranef <- ns$getRanef(group, stan_sample$raw)
   results$sample$stan <- stan_sample
   
-  if (control.bart@keepTrees)
+  if (control.bart@keepTrees) {
     results$state.bart <- .Call(ns$C_stan4bart_exportBARTState, sampler)
+    results$range.bart <- .Call(ns$C_stan4bart_getBARTDataRange, sampler)
+  }
   
   results
 }

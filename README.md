@@ -1,4 +1,4 @@
-This mess is an initial stab at a C++ version of sampler that optionally uses BART for non-parametric mean components and Stan for multilevel/parametric ones.
+This package is a early implementation of a C++ sampler that uses BART for non-parametric mean components and Stan for multilevel/parametric ones.
 
 To install:
   1. Install all prerequisites (see DESCRIPTION file)
@@ -6,7 +6,7 @@ To install:
 
 Windows not tested yet.
 
-Here's some test code to get started with the package. It accepts an lme4 syntax and should be pretty flexible in that regard, but the results are not well packaged at present. There is an `extract` generic to retrieve samples that may be of some use. The use of test data has not yet been debugged.
+Here's some test code to get started with the package. It accepts an lme4 syntax and should be pretty flexible in that regard. There is an `extract` generic to retrieve samples that may be of some use. See the package documentation `?mstan4bart` and `?stan4bart::mstan4bart-generics` for more information.
 
 ```R
 require(stan4bart)
@@ -87,6 +87,7 @@ rm(generateFriedmanData)
 df <- with(testData, data.frame(x, g.1, g.2, y, z))
 
 
+# Causal inference example
 fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                   cores = 1, verbose = 1,
                   treatment = z)
@@ -94,24 +95,32 @@ fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (
 samples.mu.train <- extract(fit)
 samples.mu.test  <- extract(fit, sample = "test")
 
+# Individual conditional treatment effects
 samples.icate <- (samples.mu.train - samples.mu.test) * (2 * testData$z - 1)
+# Conditional average treatment effect
 samples.cate <- apply(samples.icate, 2, mean)
 cate <- mean(samples.cate)
 
 samples.ppd.test <- extract(fit, type = "ppd", sample = "test")
 
+# Individual sample treatment effects
 samples.ite <- (testData$y - samples.ppd.test) * (2 * testData$z - 1)
+# Sample average treatment effect
 samples.sate <- apply(samples.ite, 2, mean)
 sate <- mean(samples.sate)
 
+# Population average treatment effect
 samples.ppd.test <- extract(fit, type = "ppd", sample = "train")
 samples.pate <- apply((samples.ppd.test - samples.ppd.test) * (2 * testData$z - 1), 2, mean)
 pate <- mean(samples.pate)
 
 
-fitted.mu.train <- apply(samples.mu.train, 1, mean)
-fitted.mu.test  <- apply(samples.mu.test,  1, mean)
+fitted.mu.train <- fitted(fit)
+# equal to: apply(samples.mu.train, 1, mean)
+fitted.mu.test  <- fitted(fit, sample = "test")
+# equal to: apply(samples.mu.test,  1, mean)
 
+# Observed and conterfactual MSE
 mse.train <- with(testData, mean((fitted.mu.train - mu.1 * z - mu.0 * (1 - z))^2))
 mse.test  <- with(testData, mean((fitted.mu.test  - mu.1 * (1 - z) - mu.0 * z)^2))
 

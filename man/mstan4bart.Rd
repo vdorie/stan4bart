@@ -211,6 +211,8 @@ mstan4bart(formula,
   the results subsection}
   \item{\code{sampler.bart}}{external points to BART samplers; used only for
   \code{\link[=mstan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
+  \item{\code{range.bart}}{internal scale used by BART samplers, used by 
+  \code{\link[=mstan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
 }
 \author{
   Vincent Dorie: \email{vdorie@gmail.com}.
