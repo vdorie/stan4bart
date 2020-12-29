@@ -1,10 +1,19 @@
 Package: stan4bart
 Version: 0.0-1
-Date: 2020-04-01
-Title: I Stan for BART
+Date: 2020-12-31
+Title: Bayesian Additive Regression Trees with Stan-Sampled Parametric Extensions 
 Authors@R: c(
   person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
-  person("Ben", "Goodrich", role = "ctb"))
+  person("Ben", "Goodrich", role = "cph", email = "benjamin.goodrich@columbia.edu", comment = "rstanarm_functions.R"),
+  person("Jonah", "Gabry", role = "cph", email = "jsg2201@columbia.edu", comment = "rstanarm_functions.R"),
+  person("Imad", "Ali", role = "cph", comment = "rstanarm_functions.R"),
+  person("Sam", "Brilleman", role = "cph", comment = "rstanarm_functions.R"),
+  person("Paul-Christian", "Burkner", role = "cph", email = "paul.buerkner@gmail.com", comment = c("rstanarm_functions.R", ORCID = "0000-0001-5765-8995")),
+  person("Douglas", "Bates", role = "cph", comment = c("lme4_functions.R", ORCID = "0000-0001-8316-9503")),
+  person("Martin", "Maechler", role = "cph", comment = c("lme4_functions.R", ORCID = "0000-0002-8685-9910")),
+  person("Ben", "Bolker", role = "cph", comment = c("lme4_functions.R", ORCID = "0000-0002-2127-0443")),
+  person("Steve", "Walker", role = "cph", comment = c("lme4_functions.R", ORCID = "0000-0002-4394-9078")),
+  person("Armon", "Dadgar", role = "cph", comment = "adaptive radix tree"))
 Depends:
   R (>= 3.5-0),
   methods,
@@ -23,7 +32,7 @@ LinkingTo:
 Suggests:
   testthat (>= 2.0-0),
   lme4
-Description: Does things.
+Description: Uses Stan sampler and math library to semiparametrically fit linear and multilevel models with additive Bayesian Additive Regression Tree (BART) components.
 License: GPL (>= 2)
 NeedsCompilation: yes
 Biarch: yes

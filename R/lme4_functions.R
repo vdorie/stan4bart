@@ -1068,3 +1068,14 @@ model.frame.mstan4bartFit <- function (formula, type = c("all", "fixed", "random
 rm(`%ORifNotInLme4%`)
 if (exists("lme4ns")) rm("lme4ns")
 
+make_glmerControl <- function(..., ignore_lhs = FALSE, ignore_x_scale = FALSE) {
+  lme4::glmerControl(check.nlev.gtreq.5 = "ignore",
+               check.nlev.gtr.1 = "stop",
+               check.nobs.vs.rankZ = "ignore",
+               check.nobs.vs.nlev = "ignore",
+               check.nobs.vs.nRE = "ignore", 
+               check.formula.LHS = if (ignore_lhs) "ignore" else "stop",
+               check.scaleX = if (ignore_x_scale) "ignore" else "warning",
+               ...)  
+}
+

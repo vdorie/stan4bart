@@ -220,6 +220,53 @@ mstan4bart(formula,
 \seealso{
   \code{\link{bart}}, \code{\link[rstan]{stan}}, \code{\link[lme4]{lmer}}
 }
-\examples{\donttest{
-# Todo
-}}
+\examples{
+# simulate data (extension of Friedman MARS paper)
+# x consists of 10 variables, only first 5 matter
+# x_4 is linear
+f <- function(x)
+ 10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 10 * x[,4] + 5 * x[,5]
+
+set.seed(99)
+sigma <- 1.0
+
+n <- 100
+n.g.1 <- 5L
+n.g.2 <- 8L
+
+# sample observation level covariates and calculate marginal mean
+x <- matrix(runif(n * 10), n, 10)
+mu.bart  <- f(x) - 10 * x[,4]
+mu.fixef <- 10 * x[,4]
+
+# varying intercepts and slopes for first grouping factor
+g.1 <- sample(n.g.1, n, replace = TRUE)
+Sigma.b.1 <- matrix(c(1.5^2, .2, .2, 1^2), 2)
+b.1 <- matrix(rnorm(2 * n.g.1), n.g.1) %*% chol(Sigma.b.1)
+
+# varying intercepts for second grouping factor
+g.2 <- sample(n.g.2, n, replace = TRUE)
+Sigma.b.2 <- as.matrix(1.2)
+b.2 <- rnorm(n.g.2, 0, sqrt(Sigma.b.2))
+
+mu.ranef <- b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2]
+
+y <- mu.bart + mu.fixef + mu.ranef + rnorm(n, 0, sigma)
+
+df <- data.frame(y, x, g.1, g.2)
+
+fit <- mstan4bart(
+  formula = y ~
+    X4 +                         # linear component ("fixef")
+    (1 + X4 | g.1) + (1 | g.2) + # multilevel ("ranef")
+    bart(. - g.1 - g.2 - X4),    # use bart for other variables
+ # low numbers for illustration
+ data = df,
+ chains = 1, iter = 10, bart_args = list(n.trees = 5))
+
+# posterior means of individual expected values
+y.hat <- fitted(fit)
+
+# posterior means of the random effects
+ranef.hat <- fitted(fit, type = "ranef")
+}

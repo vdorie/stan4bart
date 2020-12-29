@@ -97,6 +97,4 @@
 \author{
   Vincent Dorie: \email{vdorie@gmail.com}.
 }
-\examples{\donttest{
-# Todo
-}}
+
