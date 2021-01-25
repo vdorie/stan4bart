@@ -123,5 +123,5 @@ fitted.mu.test  <- fitted(fit, sample = "test")
 # Observed and conterfactual MSE
 mse.train <- with(testData, mean((fitted.mu.train - mu.1 * z - mu.0 * (1 - z))^2))
 mse.test  <- with(testData, mean((fitted.mu.test  - mu.1 * (1 - z) - mu.0 * z)^2))
-
 ```
+

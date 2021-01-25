@@ -25,6 +25,7 @@
   sample = c("train", "test"),
   sample_new_levels = TRUE,
   \dots)
+
 \method{predict}{mstan4bartFit}(
   object, newdata, offset,
   type = c("ev", "ppd", "indiv.fixef", "indiv.ranef", "indiv.bart"),

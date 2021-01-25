@@ -472,7 +472,8 @@ mstan4bart_fit <-
   
   cgm <- normal <- fixed <- NULL # R CMD check
   bartPriors <- dbarts:::parsePriors(control.bart, data.bart, cgm, normal, fixed(1), evalEnv)
-  model.bart <- new("dbartsModel", bartPriors$tree.prior, bartPriors$node.prior, bartPriors$resid.prior,
+  model.bart <- new("dbartsModel", bartPriors$tree.prior, bartPriors$node.prior,
+                    bartPriors$node.hyperprior, bartPriors$resid.prior,
                     node.scale = if (!is_continuous) 3.0 else 0.5)
   
   control.stan <- list(
