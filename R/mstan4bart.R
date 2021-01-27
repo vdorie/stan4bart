@@ -109,10 +109,17 @@ mstan4bart <-
   sigma_init <- NULL
   
   if (nzchar(system.file(package = "lme4"))) {
-    init_call[[1L]] <- quote(lme4::lmer)
-    for (name in setdiff(names(formals(mstan4bart)), names(formals(lme4::lmer)))) {
-      if (name %in% names(init_call)) init_call[[name]] <- NULL
+    if (family$family == "gaussian") {
+      init_call[[1L]] <- quote(lme4::lmer)
+    } else {
+      init_call[[1L]] <- quote(lme4::glmer)
+      init_call[["family"]] <- stats::binomial("probit")
     }
+    
+    formals_diff <-
+      setdiff(names(formals(mstan4bart)), names(formals(eval(init_call[[1L]]))))
+    for (name in formals_diff)
+      if (name %in% names(init_call)) init_call[[name]] <- NULL
     
     init_call$control <- lme4::lmerControl(check.conv.grad     = "ignore",
                                            check.conv.singular = "ignore",
@@ -126,10 +133,18 @@ mstan4bart <-
     }
   }
   if (is.null(bart_offset_init)) {
-    init_call[[1L]] <- quote(stats::lm)
-    for (name in setdiff(names(formals(mstan4bart)), names(formals(stats::lm)))) {
-      if (name %in% names(init_call)) init_call[[name]] <- NULL
+    if (family$family == "gaussian") {
+      init_call[[1L]] <- quote(stats::lm)
+    } else {
+      init_call[[1L]] <- quote(stats::glm)
+      init_call[["family"]] <- stats::binomial("probit")
     }
+
+    formals_diff <-
+      setdiff(names(formals(mstan4bart)), names(formals(eval(init_call[[1L]]))))
+    for (name in formals_diff)
+      if (name %in% names(init_call)) init_call[[name]] <- NULL
+    
     init_call$control <- NULL
     init_call$formula <- subbars(nobart(mc$formula))
     init_call$verbose <- NULL
@@ -186,7 +201,7 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
     n_groups_at_level <- sapply(chain_results[[1L]]$sample$stan$ranef, function(ranef_i) dim(ranef_i)[2L])
   }
   n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
-  aux_row <- which(rownames(chain_results[[1]]$sample$stan$raw) == "aux")
+  aux_row <- which(rownames(chain_results[[1]]$sample$stan$raw) == "aux.1")
   
   result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
                                chain_results[[i_chains]]$sample$bart$train),

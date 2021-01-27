@@ -84,10 +84,18 @@ mstan4bart_fit <-
   supported_families <- c("binomial", "gaussian")
   fam <- which(pmatch(supported_families, family$family, nomatch = 0L) == 1L)
   
+  # Use the rstanarm code to be consistent about ordering, but enforce
+  # explicit constraint on allowable families.
   supported_links <- supported_glm_links(supported_families[fam])
   link <- which(supported_links == family$link)
-  if (!length(link)) 
-    stop("'link' must be one of ", paste(supported_links, collapse = ", "))
+  #if (!length(link)) 
+  #  stop("'link' must be one of ", paste(supported_links, collapse = ", "))
+  
+  if (family$family == "gaussian" && family$link != "identity")
+    stop("'link' must be 'identity' if family is 'gaussian'") 
+  if (family$family == "binomial" && family$link != "probit")
+    stop("'link' must be 'probit' if family is 'binomial'") 
+  
   
   if (is.null(stan_args))
     stan_args <- list()
@@ -135,7 +143,8 @@ mstan4bart_fit <-
     stan_args[[name]] <- prior_stuff[[name]]
   
   if (isTRUE(is.list(stan_args$prior_intercept)) && 
-      isTRUE(stan_args$prior_intercept$default)) {
+      isTRUE(stan_args$prior_intercept$default)) 
+  {
     m_y <- 0
     if (family$family == "gaussian" && family$link == "identity") {
       if (!is.null(y)) m_y <- mean(y) # y can be NULL if prior_PD=TRUE
@@ -179,9 +188,9 @@ mstan4bart_fit <-
   # require intercept for certain family and link combinations
   if (!has_intercept) {
     linkname <- supported_links[link]
-    needs_intercept <- !is_gaussian && linkname == "identity" ||
+    needs_intercept <- (!is_gaussian && linkname == "identity") ||
       # is_gamma && linkname == "inverse" ||
-      is.binomial(famname) && linkname == "log"
+      (is.binomial(famname) && linkname == "log")
     if (needs_intercept)
       stop("to use this combination of family and link ", 
            "the model must have an intercept")
@@ -241,13 +250,13 @@ mstan4bart_fit <-
   # create entries in the data block of the .stan file
   data.stan <- with(stan_args, nlist(
     N = length(y),
+    K = ncol(xtemp),
     has_weights = length(weights) > 0L,
     prior_dist_for_aux = prior_dist_for_aux,
-    N = nrow(xtemp),
-    K = ncol(xtemp),
     #family = stan_family_number(famname),  # hard-coded in model
     #link,                                  # hard-coded in model
     has_intercept,
+    is_binary = is_bernoulli,
     prior_dist,
     prior_mean,
     prior_scale,
@@ -292,24 +301,13 @@ mstan4bart_fit <-
     data.stan$l <- as.array(l)
     data.stan$q <- ncol(Z)
     data.stan$len_theta_L <- sum(choose(p, 2), p)
-    if (is_bernoulli) {
-      stop("implement me!")
-      parts0 <- extract_sparse_parts(Z[y == 0, , drop = FALSE])
-      parts1 <- extract_sparse_parts(Z[y == 1, , drop = FALSE])
-      data.stan$num_non_zero <- c(length(parts0$w), length(parts1$w))
-      data.stan$w0 <- as.array(parts0$w)
-      data.stan$w1 <- as.array(parts1$w)
-      data.stan$v0 <- as.array(parts0$v - 1L)
-      data.stan$v1 <- as.array(parts1$v - 1L)
-      data.stan$u0 <- as.array(parts0$u - 1L)
-      data.stan$u1 <- as.array(parts1$u - 1L)
-    } else {
-      parts <- extract_sparse_parts(Z)
-      data.stan$num_non_zero <- length(parts$w)
-      data.stan$w <- parts$w
-      data.stan$v <- parts$v - 1L
-      data.stan$u <- parts$u - 1L
-    }
+    
+    parts <- extract_sparse_parts(Z)
+    data.stan$num_non_zero <- length(parts$w)
+    data.stan$w <- parts$w
+    data.stan$v <- parts$v - 1L
+    data.stan$u <- parts$u - 1L
+    
     data.stan$shape <- as.array(maybe_broadcast(decov$shape, t))
     data.stan$scale <- as.array(maybe_broadcast(decov$scale, t))
     data.stan$len_concentration <- sum(p[p > 1])
@@ -324,31 +322,23 @@ mstan4bart_fit <-
     data.stan$l <- integer(0)
     data.stan$q <- 0L
     data.stan$len_theta_L <- 0L
-    if (is_bernoulli) {
-      stop("implement me!")
-      data.stan$num_non_zero <- rep(0L, 2)
-      data.stan$w0 <- data.stan$w1 <- double(0)
-      data.stan$v0 <- data.stan$v1 <- integer(0)
-      data.stan$u0 <- data.stan$u1 <- integer(0)
-    } else {
-      data.stan$num_non_zero <- 0L
-      data.stan$w <- double(0)
-      data.stan$v <- integer(0)
-      data.stan$u <- integer(0)
-    }
+    
+    data.stan$num_non_zero <- 0L
+    data.stan$w <- double(0)
+    data.stan$v <- integer(0)
+    data.stan$u <- integer(0)
+    
     data.stan$shape <- data.stan$scale <- data.stan$concentration <-
       data.stan$regularization <- rep(0, 0)
     data.stan$len_concentration <- 0L
     data.stan$len_regularization <- 0L
   }
   
-  if (!is_bernoulli) {
-    data.stan$X <- xtemp
-    
-    data.stan$y <- y
-    data.stan$weights <- weights
-    data.stan$offset_ <- numeric(length(y))
-  }
+  data.stan$X <- xtemp
+  data.stan$y <- y
+  data.stan$weights <- weights
+  data.stan$offset_ <- numeric(length(y))
+  
 
   if (is_continuous) {
     data.stan$ub_y <- Inf
@@ -358,40 +348,12 @@ mstan4bart_fit <-
     data.stan$prior_mean_for_aux <- c(stan_args$prior_mean_for_aux)
     data.stan$len_y <- length(y)
   } else if (is_bernoulli) {
-    data.stan$prior_scale_for_aux <- 
-      if (!length(group) || stan_args$prior_scale_for_aux == Inf) 
-        0 else stan_args$prior_scale_for_aux
+    data.stan$ub_y <- Inf
+    data.stan$lb_y <- -Inf
+    data.stan$prior_scale_for_aux <- 0
     data.stan$prior_mean_for_aux <- 0
     data.stan$prior_df_for_aux <- 0
-    if (is_bernoulli) {
-      stop("implement me!")
-      y0 <- y == 0
-      y1 <- y == 1
-      data.stan$N <- c(sum(y0), sum(y1))
-      data.stan$X0 <- array(xtemp[y0, , drop = FALSE], dim = c(1, sum(y0), ncol(xtemp)))
-      data.stan$X1 <- array(xtemp[y1, , drop = FALSE], dim = c(1, sum(y1), ncol(xtemp)))
-      if (length(weights) > 0L) {
-        # nocov start
-        # this code is unused because weights are interpreted as number of 
-        # trials for binomial glms
-        data.stan$weights0 <- weights[y0]
-        data.stan$weights1 <- weights[y1]
-        # nocov end
-      } else {
-        data.stan$weights0 <- double(0)
-        data.stan$weights1 <- double(0)
-      }
-      if (length(offset) > 0L) {
-        # TODO: fix this!
-        # nocov start
-        data.stan$offset0 <- offset[y0]
-        data.stan$offset1 <- offset[y1]
-        # nocov end
-      } else {
-        data.stan$offset0 <- double(0)
-        data.stan$offset1 <- double(0)
-      }
-    }
+    data.stan$len_y <- length(y)
   }
     
   prior_info <- with(stan_args, summarize_glm_prior(
@@ -485,10 +447,9 @@ mstan4bart_fit <-
     adapt_kappa = stan_args[["adapt_kappa"]]
   )
   
-  control.common <- nlist(iter, warmup, verbose, refresh,
+  control.common <- nlist(iter, warmup, verbose, refresh, is_binary = is_bernoulli,
                           offset = offset, offset_type = offset_type,
                           bart_offset_init = bart_offset_init, sigma_init = sigma_init)
-  
   
   chainResults <- vector("list", chains)
   runSingleThreaded <- cores <= 1L || chains <= 1L

@@ -179,6 +179,7 @@ data {
   
   // intercept
   int<lower=0,upper=1> has_intercept;  // 1 = yes
+  int<lower=0,upper=1> is_binary; // 1 = yes
   
   // prior family: 0 = none, 1 = normal, 2 = student_t, 3 = hs, 4 = hs_plus, 
   //   5 = laplace, 6 = lasso, 7 = product_normal
@@ -236,10 +237,6 @@ data {
   int<lower=0, upper=rows(w) + 1> u[N + 1];  // where the non-zeros start in each row
 }
 transformed data {
-  int<lower=1> link = 1; // fixed to identity
-  int<lower=1, upper=4> family = 1; // fixed to Gaussian for now
-  int<lower=0, upper=1> is_continuous = 1;
-  
   int<lower=0> len_z_T = 0;
   int<lower=0> len_var_group = sum(p);
   int<lower=0> len_rho = sum(p) - t;
@@ -277,17 +274,22 @@ parameters {
   vector<lower=0>[len_concentration] zeta;
   vector<lower=0>[t] tau;
   
-  real<lower=0> aux_unscaled;
+  real<lower=0> aux_unscaled[!is_binary];
 }
 transformed parameters {
-  real aux = prior_dist_for_aux == 0 ? aux_unscaled : (prior_dist_for_aux <= 2 ? 
-             prior_scale_for_aux * aux_unscaled + prior_mean_for_aux :
-             prior_scale_for_aux * aux_unscaled);
-  
-  // tparameters_glm.stan
+  real aux[!is_binary];
+ // tparameters_glm.stan
   vector[K] beta;
-  vector[q] b;
+  vector[q] b; 
   vector[len_theta_L] theta_L;    
+  
+  if (!is_binary) {
+    aux[1] = prior_dist_for_aux == 0 ? aux_unscaled[1] : (prior_dist_for_aux <= 2 ? 
+             prior_scale_for_aux * aux_unscaled[1] + prior_mean_for_aux :
+             prior_scale_for_aux * aux_unscaled[1]);
+  }
+  
+  
   if      (prior_dist == 0) beta = z_beta;
   else if (prior_dist == 1) beta = z_beta .* prior_scale + prior_mean;
   else if (prior_dist == 2) for (k in 1:K) {
@@ -295,15 +297,11 @@ transformed parameters {
   }
   else if (prior_dist == 3) {
     real c2 = square(slab_scale) * caux[1];
-    if (is_continuous == 1 && family == 1)
-      beta = hs_prior(z_beta, global, local, global_prior_scale, aux, c2);
-    else beta = hs_prior(z_beta, global, local, global_prior_scale, 1, c2);
+    beta = hs_prior(z_beta, global, local, global_prior_scale, aux[1], c2);
   }
   else if (prior_dist == 4) {
     real c2 = square(slab_scale) * caux[1];
-    if (is_continuous == 1 && family == 1)
-      beta = hsplus_prior(z_beta, global, local, global_prior_scale, aux, c2);
-    else beta = hsplus_prior(z_beta, global, local, global_prior_scale, 1, c2);
+    beta = hsplus_prior(z_beta, global, local, global_prior_scale, aux[1], c2);
   }
   else if (prior_dist == 5) // laplace
     beta = prior_mean + prior_scale .* sqrt(2 * mix[1]) .* z_beta;
@@ -324,49 +322,50 @@ transformed parameters {
   }
 
 
-  if (prior_dist_for_aux == 0) // none
-    aux = aux_unscaled;
-  else {
-    aux = prior_scale_for_aux * aux_unscaled;
-    if (prior_dist_for_aux <= 2) // normal or student_t
-      aux += prior_mean_for_aux;
+  if (!is_binary) {
+    if (prior_dist_for_aux == 0) // none
+      aux[1] = aux_unscaled[1];
+    else {
+      aux[1] = prior_scale_for_aux * aux_unscaled[1];
+      if (prior_dist_for_aux <= 2) // normal or student_t
+        aux[1] += prior_mean_for_aux;
+    }
   }
 
   theta_L = make_theta_L(len_theta_L, p, 
-                         aux, tau, scale, zeta, rho, z_T);
+                         aux[1], tau, scale, zeta, rho, z_T);
   b = make_b(z_b, theta_L, p, l);
 }
 model {
   vector[N] eta;
   real dummy;
   
+  real actual_aux = is_binary ? 1.0 : aux[1];
+  
   eta = offset_;
   if (K > 0)
     eta += X * beta;
   eta += csr_matrix_times_vector2(N, q, w, v, u, b);
   
-  if (has_intercept == 1) {
-    if ((family == 1 || link == 2) || (family == 4 && link != 5)) eta += gamma[1];
-    else if (family == 4 && link == 5) eta += gamma[1] - max(eta);
-    else eta += gamma[1] - min(eta);
-  }
+  if (has_intercept == 1)
+    eta += gamma[1];
 
   if (has_weights == 0) {
-    target += normal_lpdf(y | eta, aux);
+    target += normal_lpdf(y | eta, actual_aux);
   } else {
     vector[N] summands;
-    summands = pw_gauss(y, eta, aux);
+    summands = pw_gauss(y, eta, actual_aux);
     target += dot_product(weights, summands);
   }
 
-  if (prior_dist_for_aux > 0 && prior_scale_for_aux > 0) {
+  if (!is_binary && prior_dist_for_aux > 0 && prior_scale_for_aux > 0) {
     real log_half = -0.693147180559945286;
     if (prior_dist_for_aux == 1)
-      target += normal_lpdf(aux_unscaled | 0, 1) - log_half;
+      target += normal_lpdf(aux_unscaled[1] | 0, 1) - log_half;
     else if (prior_dist_for_aux == 2)
-      target += student_t_lpdf(aux_unscaled | prior_df_for_aux, 0, 1) - log_half;
+      target += student_t_lpdf(aux_unscaled[1] | prior_df_for_aux, 0, 1) - log_half;
     else 
-     target += exponential_lpdf(aux_unscaled | 1);
+     target += exponential_lpdf(aux_unscaled[1] | 1);
   }
   
   // priors_glm.stan

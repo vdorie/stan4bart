@@ -52,6 +52,8 @@ namespace {
     void (*setSigma)(dbarts::BARTFit* fit, const double* sigma);
     void (*sampleTreesFromPrior)(dbarts::BARTFit* fit);
     void (*printInitialSummary)(const dbarts::BARTFit* fit);
+    
+    void (*getLatentVariables)(const dbarts::BARTFit*, double*);
   };
   BARTFunctionTable bartFunctions;
   
@@ -101,6 +103,7 @@ namespace {
     int defaultIter;
     int verbose;
     int refresh;
+    bool is_binary;
     const double* userOffset;
     UserOffsetType offsetType;
     
@@ -116,12 +119,14 @@ namespace {
     
     double* bartOffset;
     double* stanOffset;
+    double* bartLatents;
         
     Sampler() :
-      stanModel(NULL), stanSampler(NULL), bartModel(false), bartSampler(NULL), bartOffset(NULL), stanOffset(NULL)
+      stanModel(NULL), stanSampler(NULL), bartModel(false), bartSampler(NULL), bartOffset(NULL), stanOffset(NULL), bartLatents(NULL)
     {
     }
     ~Sampler() {
+      delete [] bartLatents;
       delete [] stanOffset;
       delete [] bartOffset;
       
@@ -178,6 +183,8 @@ extern "C" {
       sampler.bartControl.defaultNumSamples = sampler.defaultIter - sampler.defaultWarmup;
       sampler.bartControl.defaultNumBurnIn  = sampler.defaultWarmup;
     }
+    sampler.bartControl.responseIsBinary = sampler.is_binary;
+    
     bartFunctions.initializeData(&sampler.bartData, bartDataExpr);
     bartFunctions.initializeModel(&sampler.bartModel, bartModelExpr, &sampler.bartControl);
     
@@ -187,6 +194,8 @@ extern "C" {
     size_t n = sampler.bartData.numObservations;
     sampler.bartOffset = new double[n];
     sampler.stanOffset = new double[n];
+    if (sampler.is_binary)
+      sampler.bartLatents = new double[n];
     
     if (bart_offset_init != NULL) {
       std::memcpy(sampler.bartOffset, bart_offset_init, n * sizeof(double));
@@ -224,6 +233,10 @@ extern "C" {
         std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
     }
     stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
+    if (sampler.is_binary) {
+      bartFunctions.getLatentVariables(sampler.bartSampler, sampler.bartLatents);
+      stan4bart::setResponse(*sampler.stanModel, sampler.bartLatents);
+    }
     
     delete first_draw;
     bartControl.verbose = oldVerbose;
@@ -442,11 +455,14 @@ extern "C" {
             break;
           }
         }
-        double sigma = getSigma(*sampler.stanSampler, *sampler.stanModel);
+        if (sampler.is_binary) {
+          double sigma = getSigma(*sampler.stanSampler, *sampler.stanModel);
+          bartFunctions.setSigma(sampler.bartSampler, &sigma);
+        }
+        
         sampler.stanSampler->sample_writer.increment();
         
         bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
-        bartFunctions.setSigma(sampler.bartSampler, &sigma);
       }
       
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {
@@ -468,6 +484,10 @@ extern "C" {
             std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
         }
         stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
+        if (sampler.is_binary) {
+          bartFunctions.getLatentVariables(sampler.bartSampler, sampler.bartLatents);
+          stan4bart::setResponse(*sampler.stanModel, sampler.bartLatents);
+        }
         
         bartSamples->incrementPointers();
       }
@@ -549,6 +569,8 @@ void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
   sampler.refresh = rc_getInt(rc_getListElement(commonControlExpr, "refresh"), "refresh",
     RC_VALUE | RC_GEQ, 0,
     RC_NA | RC_YES, RC_END);
+  sampler.is_binary = rc_getBool(rc_getListElement(commonControlExpr, "is_binary"), "is_binary",
+    RC_NA | RC_NO, RC_END);
   
   SEXP offsetExpr = rc_getListElement(commonControlExpr, "offset");
   sampler.userOffset = offsetExpr == R_NilValue || rc_getLength(offsetExpr) == 0 || !Rf_isReal(offsetExpr) ? NULL : REAL(offsetExpr);
@@ -592,6 +614,8 @@ namespace {
     bartFunctions.runSamplerWithResults = reinterpret_cast<void (*)(dbarts::BARTFit*, std::size_t, dbarts::Results*)>(R_GetCCallable("dbarts", "runSamplerWithResults"));
     bartFunctions.sampleTreesFromPrior  = reinterpret_cast<void (*)(dbarts::BARTFit*)>(R_GetCCallable("dbarts", "sampleTreesFromPrior"));
     bartFunctions.printInitialSummary   = reinterpret_cast<void (*)(const dbarts::BARTFit*)>(R_GetCCallable("dbarts", "printInitialSummary"));
+    
+    bartFunctions.getLatentVariables    = reinterpret_cast<void (*)(const dbarts::BARTFit*, double*)>(R_GetCCallable("dbarts", "storeLatents"));
   }
 }
 
