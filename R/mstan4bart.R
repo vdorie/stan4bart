@@ -56,15 +56,9 @@ mstan4bart <-
   weights <- validate_weights(as.vector(model.weights(glmod$fr)))
   offset_type <- match.arg(offset_type)
   
-  result <- list(y         = y,
-                 weights   = weights,
-                 offset    = offset,
-                 offset_type = offset_type,
-                 frame     = glmod$fr,
-                 formula   = formula,
-                 na.action = na.action,
-                 call      = mc,
-                 bartData  = bartData)
+  result <- nlist(y, weights, offset, offset_type = offset_type,
+                  frame = glmod$fr, formula, na.action,
+                  call = mc, family, bartData)
   if (!is.null(glmod$X)) {
     result$X <- glmod$X
     result$X_means <- apply(glmod$X, 2L, mean)

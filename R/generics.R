@@ -17,7 +17,7 @@ combine_chains_f <- function(x) {
 
 extract.mstan4bartFit <-
   function(object,
-           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma"),
+           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma", "Sigma"),
            sample = c("train", "test"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
@@ -27,6 +27,9 @@ extract.mstan4bartFit <-
   
   type   <- match.arg(type)
   sample <- match.arg(sample)
+  
+  if (type == "sigma" && object$family$family == "binomial")
+    stop("cannot extract 'sigma': binary outcome model does not have a residual standard error parameter")
   
   n_samples <- dim(object$bart_train)[2L]
   n_obs     <- dim(object$bart_train)[1L]
@@ -42,7 +45,6 @@ extract.mstan4bartFit <-
     n_ranef_levels <- 0L
   }
   
-    
   if (sample == "train") {
     if (n_fixef > 0L)        X <- object$X
     if (n_ranef_levels > 0L) reTrms <- object$reTrms
@@ -55,7 +57,7 @@ extract.mstan4bartFit <-
   
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef") && n_fixef > 0L) {
-            
+    
     indiv.fixef <- fitted_fixed(object, X)
     
   }
@@ -65,11 +67,7 @@ extract.mstan4bartFit <-
   }
   indiv.bart <- if (sample == "train") object$bart_train else object$bart_test
   
-  if (type %in% "ppd") {
-    eps <- array(rnorm(n_obs_inf * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs_inf)),
-                 c(n_obs_inf, n_samples, n_chains))
-  }
-  
+ 
   offset <- 0
   if (type %in% c("ev", "ppd")) {
     if (sample == "train" && !is.null(object$offset) && length(object$offset) > 0L) {
@@ -81,7 +79,7 @@ extract.mstan4bartFit <-
   
   result <- switch(type,
                    ev          = indiv.bart + indiv.fixef + indiv.ranef + offset,
-                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + offset + eps,
+                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + offset,
                    indiv.fixef = indiv.fixef,
                    indiv.ranef = indiv.ranef,
                    indiv.bart  = indiv.bart,
@@ -90,6 +88,18 @@ extract.mstan4bartFit <-
                    fixef       = object$fixef,
                    Sigma       = object$Sigma,
                    sigma       = object$sigma)
+  
+  if (type %in% c("ev", "ppd") && object$family$family == "binomial")
+    result <- pnorm(result)
+  if (type %in% "ppd") {
+    if (object$family$family == "binomial") {
+      result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
+    } else {
+      result <- result + 
+        array(rnorm(n_obs_inf * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs_inf)),
+             c(n_obs_inf, n_samples, n_chains))
+    }
+  }
     
   if (combine_chains) {
     if (is.list(result)) {
@@ -106,7 +116,7 @@ extract.mstan4bartFit <-
 
 fitted.mstan4bartFit <-
   function(object,
-           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma"),
+           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma", "Sigma"),
            sample = c("train", "test"),
            sample_new_levels = TRUE,
            ...)
@@ -288,10 +298,6 @@ predict.mstan4bartFit <-
     }
   }
   
-  if (type %in% "ppd") {
-    eps <- array(rnorm(n_obs * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs)),
-                 c(n_obs, n_samples, n_chains))
-  }
   
   if (type %in% c("ev", "ppd") && is.null(mc$offset)) {
     offset <- 0
@@ -299,10 +305,22 @@ predict.mstan4bartFit <-
   
   result <- switch(type,
                    ev          = indiv.bart + indiv.fixef + indiv.ranef + offset,
-                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + offset + eps,
+                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + offset,
                    indiv.fixef = indiv.fixef,
                    indiv.ranef = indiv.ranef,
                    indiv.bart  = indiv.bart)
+  
+  if (type %in% c("ev", "ppd") && object$family$family == "binomial")
+    result <- pnorm(result)
+  if (type %in% "ppd") {
+    if (object$family$family == "binomial") {
+      result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
+    } else {
+      result <- result + 
+        array(rnorm(n_obs * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs)),
+             c(n_obs, n_samples, n_chains))
+    }
+  }
   
   if (combine_chains) {
     if (is.list(result)) {

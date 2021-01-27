@@ -1,4 +1,4 @@
-generateFriedmanData <- function(n, ranef, causal) {
+generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALSE) {
   f <- function(x)
     10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 10 * x[,4] + 5 * x[,5]
   
@@ -55,15 +55,48 @@ generateFriedmanData <- function(n, ranef, causal) {
       })
     }
     
-    result <- within(result, {
-      y.0 <- mu.0 + rnorm(n, 0, sigma)
-      y.1 <- mu.1 + rnorm(n, 0, sigma)
-      y <- y.1 * z + y.0 * (1 - z)
-    })
+    if (binary) {
+      result <- within(result, {
+        loc   <- mean(c(mu.0, mu.1))
+        scale <- sd(c(mu.0, mu.1)) / qnorm(0.005)
+        mu.0 <- (mu.0 - loc) / scale
+        mu.1 <- (mu.1 - loc) / scale
+        
+        mu.fixef.0 <- (mu.fixef.0 - loc) / scale
+        mu.fixef.1 <- (mu.fixef.1 - loc) / scale
+        mu.ranef.0 <- mu.ranef.0 / scale
+        mu.ranef.1 <- mu.ranef.1 / scale
+        
+        rm(loc, scale)
+        
+        y.0 <- rbinom(n, 1L, pnorm(mu.0))
+        y.1 <- rbinom(n, 1L, pnorm(mu.1))
+        y <- y.1 * z + y.0 * (1 - z)
+      })
+    } else {
+      result <- within(result, {
+        y.0 <- mu.0 + rnorm(n, 0, sigma)
+        y.1 <- mu.1 + rnorm(n, 0, sigma)
+        y <- y.1 * z + y.0 * (1 - z)
+      })
+    }
+    
     
     result$mu <- NULL
     result$mu.fixef <- NULL
     result$mu.ranef <- NULL
+  } else {
+    if (binary) {
+      result <- within(result, {
+        mu <- qnorm(0.005) * (mu - mean(mu)) / sd(mu)
+        
+        y <- rbinom(n, 1L, pnorm(mu))
+      })
+    } else {
+      result <- within(result, {
+        y <- mu + rnorm(n, 0, sigma)
+      })
+    }
   }
   
   result

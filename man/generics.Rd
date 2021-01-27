@@ -13,7 +13,8 @@
 \usage{
 \method{extract}{mstan4bartFit}(
   object,
-  type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma"),
+  type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
+           "indiv.bart", "sigma", "Sigma"),
   sample = c("train", "test"),
   combine_chains = TRUE,
   sample_new_levels = TRUE,
@@ -21,7 +22,8 @@
   
 \method{fitted}{mstan4bartFit}(
   object,
-  type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma"),
+  type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
+           "indiv.bart", "sigma", "Sigma"),
   sample = c("train", "test"),
   sample_new_levels = TRUE,
   \dots)
@@ -82,6 +84,8 @@
       from the BART model, \eqn{f(X^b)}
       \item \code{"sigma"} - for continuous responses, the residual standard
       error
+      \item \code{"Sigma"} - when applicable, the covariance matrices of the
+      random effects
     }
   }
 }

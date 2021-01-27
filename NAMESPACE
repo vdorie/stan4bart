@@ -9,7 +9,7 @@ importFrom(dbarts, extract)
 importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao, bdiag)
 importFrom(parallel, makeCluster, clusterExport, clusterEvalQ, clusterMap, stopCluster)
 
-importFrom(stats, rnorm, dnorm, dlogis, qexp, runif, qbeta)
+importFrom(stats, rnorm, dnorm, pnorm, dlogis, qexp, runif, qbeta, rbinom)
 importFrom(stats, binomial, gaussian)
 importFrom(stats, formula, as.formula, terms.formula, reformulate, terms)
 

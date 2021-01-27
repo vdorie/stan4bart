@@ -28,6 +28,7 @@
 #  pragma GCC diagnostic ignored "-Wlanguage-extension-token"
 #  pragma GCC diagnostic ignored "-Winfinite-recursion"
 #  pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#  pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #endif
 #include <stan/callbacks/interrupt.hpp>
 #include <stan/callbacks/stream_logger.hpp>

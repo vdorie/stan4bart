@@ -2,7 +2,7 @@ context("mstan4bart continuous response")
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 
-testData <- generateFriedmanData(100, TRUE, TRUE)
+testData <- generateFriedmanData(100, TRUE, TRUE, FALSE)
 rm(generateFriedmanData)
 
 df <- with(testData, data.frame(x, g.1, g.2, y, z))

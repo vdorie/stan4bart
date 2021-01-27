@@ -2071,7 +2071,7 @@ public:
     }
 
 
-    template <bool propto__, bool jacobian__, typename T__>
+template <bool propto__, bool jacobian__, typename T__>
     T__ log_prob(std::vector<T__>& params_r__,
                  std::vector<int>& params_i__,
                  std::ostream* pstream__ = 0) const {
@@ -2365,10 +2365,14 @@ public:
                                     "assigning variable aux");
                     }
                 }
+                current_statement_begin__ = 334;
+                stan::math::assign(theta_L, make_theta_L(len_theta_L, p, get_base1(aux, 1, "aux", 1), tau, scale, zeta, rho, z_T, pstream__));
+            } else {
+
+                current_statement_begin__ = 337;
+                stan::math::assign(theta_L, make_theta_L(len_theta_L, p, 1.0, tau, scale, zeta, rho, z_T, pstream__));
             }
-            current_statement_begin__ = 335;
-            stan::math::assign(theta_L, make_theta_L(len_theta_L, p, get_base1(aux, 1, "aux", 1), tau, scale, zeta, rho, z_T, pstream__));
-            current_statement_begin__ = 337;
+            current_statement_begin__ = 342;
             stan::math::assign(b, make_b(z_b, theta_L, p, l, pstream__));
 
             // validate transformed parameters
@@ -2414,19 +2418,19 @@ public:
 
             // model body
             {
-            current_statement_begin__ = 340;
+            current_statement_begin__ = 345;
             validate_non_negative_index("eta", "N", N);
             Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> eta(N);
             stan::math::initialize(eta, DUMMY_VAR__);
             stan::math::fill(eta, DUMMY_VAR__);
 
-            current_statement_begin__ = 341;
+            current_statement_begin__ = 346;
             local_scalar_t__ dummy(DUMMY_VAR__);
             (void) dummy;  // dummy to suppress unused var warning
             stan::math::initialize(dummy, DUMMY_VAR__);
             stan::math::fill(dummy, DUMMY_VAR__);
 
-            current_statement_begin__ = 343;
+            current_statement_begin__ = 348;
             local_scalar_t__ actual_aux(DUMMY_VAR__);
             (void) actual_aux;  // dummy to suppress unused var warning
             stan::math::initialize(actual_aux, DUMMY_VAR__);
@@ -2434,44 +2438,44 @@ public:
             stan::math::assign(actual_aux,(is_binary ? stan::math::promote_scalar<local_scalar_t__>(1.0) : stan::math::promote_scalar<local_scalar_t__>(get_base1(aux, 1, "aux", 1)) ));
 
 
-            current_statement_begin__ = 345;
+            current_statement_begin__ = 350;
             stan::math::assign(eta, offset_);
-            current_statement_begin__ = 346;
+            current_statement_begin__ = 351;
             if (as_bool(logical_gt(K, 0))) {
-                current_statement_begin__ = 347;
+                current_statement_begin__ = 352;
                 stan::math::assign(eta, add(eta, multiply(X, beta)));
             }
-            current_statement_begin__ = 348;
+            current_statement_begin__ = 353;
             stan::math::assign(eta, add(eta, csr_matrix_times_vector2(N, q, w, v, u, b, pstream__)));
-            current_statement_begin__ = 350;
+            current_statement_begin__ = 355;
             if (as_bool(logical_eq(has_intercept, 1))) {
-                current_statement_begin__ = 351;
+                current_statement_begin__ = 356;
                 stan::math::assign(eta, add(eta, get_base1(gamma, 1, "gamma", 1)));
             }
-            current_statement_begin__ = 353;
+            current_statement_begin__ = 358;
             if (as_bool(logical_eq(has_weights, 0))) {
 
-                current_statement_begin__ = 354;
+                current_statement_begin__ = 359;
                 lp_accum__.add(normal_log(y, eta, actual_aux));
             } else {
                 {
-                current_statement_begin__ = 356;
+                current_statement_begin__ = 361;
                 validate_non_negative_index("summands", "N", N);
                 Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> summands(N);
                 stan::math::initialize(summands, DUMMY_VAR__);
                 stan::math::fill(summands, DUMMY_VAR__);
 
 
-                current_statement_begin__ = 357;
+                current_statement_begin__ = 362;
                 stan::math::assign(summands, pw_gauss(y, eta, actual_aux, pstream__));
-                current_statement_begin__ = 358;
+                current_statement_begin__ = 363;
                 lp_accum__.add(dot_product(weights, summands));
                 }
             }
-            current_statement_begin__ = 361;
+            current_statement_begin__ = 366;
             if (as_bool((primitive_value((primitive_value(logical_negation(is_binary)) && primitive_value(logical_gt(prior_dist_for_aux, 0)))) && primitive_value(logical_gt(prior_scale_for_aux, 0))))) {
                 {
-                current_statement_begin__ = 362;
+                current_statement_begin__ = 367;
                 local_scalar_t__ log_half(DUMMY_VAR__);
                 (void) log_half;  // dummy to suppress unused var warning
                 stan::math::initialize(log_half, DUMMY_VAR__);
@@ -2479,29 +2483,29 @@ public:
                 stan::math::assign(log_half,-(0.693147180559945286));
 
 
-                current_statement_begin__ = 363;
+                current_statement_begin__ = 368;
                 if (as_bool(logical_eq(prior_dist_for_aux, 1))) {
-                    current_statement_begin__ = 364;
+                    current_statement_begin__ = 369;
                     lp_accum__.add((normal_log(get_base1(aux_unscaled, 1, "aux_unscaled", 1), 0, 1) - log_half));
                 } else if (as_bool(logical_eq(prior_dist_for_aux, 2))) {
-                    current_statement_begin__ = 366;
+                    current_statement_begin__ = 371;
                     lp_accum__.add((student_t_log(get_base1(aux_unscaled, 1, "aux_unscaled", 1), prior_df_for_aux, 0, 1) - log_half));
                 } else {
-                    current_statement_begin__ = 368;
+                    current_statement_begin__ = 373;
                     lp_accum__.add(exponential_log(get_base1(aux_unscaled, 1, "aux_unscaled", 1), 1));
                 }
                 }
             }
-            current_statement_begin__ = 373;
+            current_statement_begin__ = 378;
             if (as_bool(logical_eq(prior_dist, 1))) {
-                current_statement_begin__ = 373;
+                current_statement_begin__ = 378;
                 lp_accum__.add(normal_log(z_beta, 0, 1));
             } else if (as_bool(logical_eq(prior_dist, 2))) {
-                current_statement_begin__ = 374;
+                current_statement_begin__ = 379;
                 lp_accum__.add(normal_log(z_beta, 0, 1));
             } else if (as_bool(logical_eq(prior_dist, 3))) {
                 {
-                current_statement_begin__ = 376;
+                current_statement_begin__ = 381;
                 local_scalar_t__ log_half(DUMMY_VAR__);
                 (void) log_half;  // dummy to suppress unused var warning
                 stan::math::initialize(log_half, DUMMY_VAR__);
@@ -2509,22 +2513,22 @@ public:
                 stan::math::assign(log_half,-(0.693147180559945286));
 
 
-                current_statement_begin__ = 377;
-                lp_accum__.add(normal_log(z_beta, 0, 1));
-                current_statement_begin__ = 378;
-                lp_accum__.add((normal_log(get_base1(local, 1, "local", 1), 0, 1) - log_half));
-                current_statement_begin__ = 379;
-                lp_accum__.add(inv_gamma_log(get_base1(local, 2, "local", 1), multiply(0.5, prior_df), multiply(0.5, prior_df)));
-                current_statement_begin__ = 380;
-                lp_accum__.add((normal_log(get_base1(global, 1, "global", 1), 0, 1) - log_half));
-                current_statement_begin__ = 381;
-                lp_accum__.add(inv_gamma_log(get_base1(global, 2, "global", 1), (0.5 * global_prior_df), (0.5 * global_prior_df)));
                 current_statement_begin__ = 382;
+                lp_accum__.add(normal_log(z_beta, 0, 1));
+                current_statement_begin__ = 383;
+                lp_accum__.add((normal_log(get_base1(local, 1, "local", 1), 0, 1) - log_half));
+                current_statement_begin__ = 384;
+                lp_accum__.add(inv_gamma_log(get_base1(local, 2, "local", 1), multiply(0.5, prior_df), multiply(0.5, prior_df)));
+                current_statement_begin__ = 385;
+                lp_accum__.add((normal_log(get_base1(global, 1, "global", 1), 0, 1) - log_half));
+                current_statement_begin__ = 386;
+                lp_accum__.add(inv_gamma_log(get_base1(global, 2, "global", 1), (0.5 * global_prior_df), (0.5 * global_prior_df)));
+                current_statement_begin__ = 387;
                 lp_accum__.add(inv_gamma_log(caux, (0.5 * slab_df), (0.5 * slab_df)));
                 }
             } else if (as_bool(logical_eq(prior_dist, 4))) {
                 {
-                current_statement_begin__ = 385;
+                current_statement_begin__ = 390;
                 local_scalar_t__ log_half(DUMMY_VAR__);
                 (void) log_half;  // dummy to suppress unused var warning
                 stan::math::initialize(log_half, DUMMY_VAR__);
@@ -2532,55 +2536,55 @@ public:
                 stan::math::assign(log_half,-(0.693147180559945286));
 
 
-                current_statement_begin__ = 386;
-                lp_accum__.add(normal_log(z_beta, 0, 1));
-                current_statement_begin__ = 387;
-                lp_accum__.add((normal_log(get_base1(local, 1, "local", 1), 0, 1) - log_half));
-                current_statement_begin__ = 388;
-                lp_accum__.add(inv_gamma_log(get_base1(local, 2, "local", 1), multiply(0.5, prior_df), multiply(0.5, prior_df)));
-                current_statement_begin__ = 389;
-                lp_accum__.add((normal_log(get_base1(local, 3, "local", 1), 0, 1) - log_half));
                 current_statement_begin__ = 391;
-                lp_accum__.add(inv_gamma_log(get_base1(local, 4, "local", 1), multiply(0.5, prior_scale), multiply(0.5, prior_scale)));
+                lp_accum__.add(normal_log(z_beta, 0, 1));
                 current_statement_begin__ = 392;
-                lp_accum__.add((normal_log(get_base1(global, 1, "global", 1), 0, 1) - log_half));
+                lp_accum__.add((normal_log(get_base1(local, 1, "local", 1), 0, 1) - log_half));
                 current_statement_begin__ = 393;
-                lp_accum__.add(inv_gamma_log(get_base1(global, 2, "global", 1), (0.5 * global_prior_df), (0.5 * global_prior_df)));
+                lp_accum__.add(inv_gamma_log(get_base1(local, 2, "local", 1), multiply(0.5, prior_df), multiply(0.5, prior_df)));
                 current_statement_begin__ = 394;
+                lp_accum__.add((normal_log(get_base1(local, 3, "local", 1), 0, 1) - log_half));
+                current_statement_begin__ = 396;
+                lp_accum__.add(inv_gamma_log(get_base1(local, 4, "local", 1), multiply(0.5, prior_scale), multiply(0.5, prior_scale)));
+                current_statement_begin__ = 397;
+                lp_accum__.add((normal_log(get_base1(global, 1, "global", 1), 0, 1) - log_half));
+                current_statement_begin__ = 398;
+                lp_accum__.add(inv_gamma_log(get_base1(global, 2, "global", 1), (0.5 * global_prior_df), (0.5 * global_prior_df)));
+                current_statement_begin__ = 399;
                 lp_accum__.add(inv_gamma_log(caux, (0.5 * slab_df), (0.5 * slab_df)));
                 }
             } else if (as_bool(logical_eq(prior_dist, 5))) {
 
-                current_statement_begin__ = 397;
+                current_statement_begin__ = 402;
                 lp_accum__.add(normal_log(z_beta, 0, 1));
-                current_statement_begin__ = 398;
+                current_statement_begin__ = 403;
                 lp_accum__.add(exponential_log(get_base1(mix, 1, "mix", 1), 1));
             } else if (as_bool(logical_eq(prior_dist, 6))) {
 
-                current_statement_begin__ = 401;
+                current_statement_begin__ = 406;
                 lp_accum__.add(normal_log(z_beta, 0, 1));
-                current_statement_begin__ = 402;
+                current_statement_begin__ = 407;
                 lp_accum__.add(exponential_log(get_base1(mix, 1, "mix", 1), 1));
-                current_statement_begin__ = 403;
+                current_statement_begin__ = 408;
                 lp_accum__.add(chi_square_log(get_base1(one_over_lambda, 1, "one_over_lambda", 1), get_base1(prior_df, 1, "prior_df", 1)));
             } else if (as_bool(logical_eq(prior_dist, 7))) {
 
-                current_statement_begin__ = 406;
+                current_statement_begin__ = 411;
                 lp_accum__.add(normal_log(z_beta, 0, 1));
             }
-            current_statement_begin__ = 411;
+            current_statement_begin__ = 416;
             if (as_bool(logical_eq(has_intercept, 1))) {
 
-                current_statement_begin__ = 412;
+                current_statement_begin__ = 417;
                 if (as_bool(logical_eq(prior_dist_for_intercept, 1))) {
-                    current_statement_begin__ = 413;
+                    current_statement_begin__ = 418;
                     lp_accum__.add(normal_log(gamma, prior_mean_for_intercept, prior_scale_for_intercept));
                 } else if (as_bool(logical_eq(prior_dist_for_intercept, 2))) {
-                    current_statement_begin__ = 415;
+                    current_statement_begin__ = 420;
                     lp_accum__.add(student_t_log(gamma, prior_df_for_intercept, prior_mean_for_intercept, prior_scale_for_intercept));
                 }
             }
-            current_statement_begin__ = 420;
+            current_statement_begin__ = 425;
             stan::math::assign(dummy, decov_lp(z_b, z_T, rho, zeta, tau, regularization, delta, shape, t, p, lp__, lp_accum__, pstream__));
             }
 
@@ -2695,10 +2699,10 @@ public:
       // Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > tau(sample + offset, t);
       offset += t;
       
-      offset += (!is_binary ? 1 : 0);
+      offset += (!is_binary ? 1 : 0); // aux_unscaled
       
       /* extract transformed parameters from sample */
-      offset += (!is_binary ? 1 : 0);
+      offset += (!is_binary ? 1 : 0); // aux
       
       Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > beta(sample + offset, K);
       offset += K; 
@@ -2814,10 +2818,10 @@ public:
       
       offset += t;
       
-      offset += (!is_binary ? 1 : 0);
+      offset += (!is_binary ? 1 : 0); // aux_unscaled
       
       /* extract transformed parameters from sample */
-      offset += (!is_binary ? 1 : 0);
+      offset += (!is_binary ? 1 : 0); // aux
       
       Eigen::Map<const Eigen::Matrix<local_scalar_t__, Eigen::Dynamic, 1> > beta(sample + offset, K);
       offset += K; 
@@ -3220,10 +3224,14 @@ public:
                                     "assigning variable aux");
                     }
                 }
+                current_statement_begin__ = 334;
+                stan::math::assign(theta_L, make_theta_L(len_theta_L, p, get_base1(aux, 1, "aux", 1), tau, scale, zeta, rho, z_T, pstream__));
+            } else {
+
+                current_statement_begin__ = 337;
+                stan::math::assign(theta_L, make_theta_L(len_theta_L, p, 1.0, tau, scale, zeta, rho, z_T, pstream__));
             }
-            current_statement_begin__ = 335;
-            stan::math::assign(theta_L, make_theta_L(len_theta_L, p, get_base1(aux, 1, "aux", 1), tau, scale, zeta, rho, z_T, pstream__));
-            current_statement_begin__ = 337;
+            current_statement_begin__ = 342;
             stan::math::assign(b, make_b(z_b, theta_L, p, l, pstream__));
 
             if (!include_gqs__ && !include_tparams__) return;
@@ -3544,3 +3552,4 @@ stan::model::model_base& new_model(
 
 
 #endif
+

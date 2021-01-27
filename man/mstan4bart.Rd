@@ -13,7 +13,10 @@
   \deqn{Y \mid b \sim \mathrm{N}\left(f(X^b) + X^f\beta + Zb, \sigma^2\right) \\
   b \sim \mathrm{N}(0, \Sigma_b)}{Y | b ~ N(f(X^b) + X^f beta + Zb, sigma^2)
   b ~ N(0, Sigma_b) }
-  \item Binary response coming soon.
+  \item For binary response variables:
+  \deqn{P(Y = 1 \mid b) = \Phi\left(f(X^b) + X^f\beta + Zb\right) \\
+  b \sim \mathrm{N}(0, \Sigma_b)}{P(Y = 1 | b) = \Phi(f(X^b) + X^f\beta + Zb)
+  b ~ N(0, Sigma_b) }
 }}
 \usage{
 mstan4bart(formula,
@@ -95,8 +98,8 @@ mstan4bart(formula,
   Additive Regression Trees (BART) component. For continuous responses:
 
   \itemize{
-    \item \eqn{Y_i \mid b \sim \mathrm{N}\left(f(X^b_i) + X^f\beta +
-    Z_ib_{g[i]}, \sigma^2\right)}{Y_i | b ~ N(f(X^b_i) + X^f\beta + Z_ib_{g[i]},
+    \item \eqn{Y_i \mid b \sim \mathrm{N}\left(f(X^b_i) + X^f_i\beta +
+    Z_ib_{g[i]}, \sigma^2\right)}{Y_i | b ~ N(f(X^b_i) + X^f_i\beta + Z_ib_{g[i]},
     \sigma^2)}
     \item \eqn{b_j \sim \mathrm{N}(0, \Sigma_b)}{b_j ~ N(0, \Sigma_b)}
   }
@@ -108,6 +111,21 @@ mstan4bart(formula,
   in a parametric, linear \dQuote{fixed effect} component, \eqn{Z} is the 
   design matrix for the random intercept and slopes, and \eqn{sigma} and
   \eqn{Sigma_b} are variance components.
+  
+  Binary outcome models are obtained by assuming a latent variable that has
+  the above distribution, and that the observed response is 1 when that
+  variable is positive and 0 otherwise. The response variable marginally has
+  the distribution:
+  
+  \itemize{
+    \item \deqn{P(Y_i = 1 \mid b) = \Phi\left(f(X^b_i) + X^f_i\beta +
+    Z_ib_{g[i]}\right)}{P(Y_i = 1 | b) = \Phi(f(X_i^b) + X^f_i\beta +
+    Z_ib_{g[i]})}
+  }
+  
+  where \eqn{\Phi} is the cumulative distribution function of the standard
+  normal distribution.
+
   
   \subsection{Terminology}{
     As \code{mstan4bart} fits a Bayesian model, essentially all components are
@@ -199,7 +217,8 @@ mstan4bart(formula,
   \item{\code{bart_test}}{predicted test values for BART component, when
   applicable}
   \item{\code{bart_varcount}}{BART variable counts}
-  \item{\code{sigma}}{samples of residual standard error}
+  \item{\code{sigma}}{samples of residual standard error; not present for
+  binary outcomes}
   \item{\code{ranef}}{samples of random effects, or modeled coefficients; will
   be a named list, with effects for each grouping factor}
   \item{\code{Sigma}}{samples of covariance of random effects; also a named list

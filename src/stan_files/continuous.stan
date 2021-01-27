@@ -330,10 +330,15 @@ transformed parameters {
       if (prior_dist_for_aux <= 2) // normal or student_t
         aux[1] += prior_mean_for_aux;
     }
+    
+    theta_L = make_theta_L(len_theta_L, p, 
+                           aux[1], tau, scale, zeta, rho, z_T);
+  } else {
+    theta_L = make_theta_L(len_theta_L, p, 
+                           1.0, tau, scale, zeta, rho, z_T);
   }
 
-  theta_L = make_theta_L(len_theta_L, p, 
-                         aux[1], tau, scale, zeta, rho, z_T);
+  
   b = make_b(z_b, theta_L, p, l);
 }
 model {

@@ -220,7 +220,7 @@ extern "C" {
                                                       sampler.bartSampler->data.numPredictors,
                                                       sampler.bartSampler->data.numTestObservations,
                                                       1, bartControl.numChains,
-                                                      sampler.bartSampler->model.kPrior != NULL);
+                                                      !sampler.bartSampler->model.kPrior->isFixed);
     bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, first_draw);
     
     for (size_t j = 0; j < n; ++j) first_draw->trainingSamples[j] -= sampler.bartOffset[j];
@@ -395,7 +395,9 @@ extern "C" {
     // allocate storage for results
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART)
       bartSamples = new stan4bart::IterableBartResults(
-        sampler.bartData.numObservations, sampler.bartData.numPredictors, sampler.bartData.numTestObservations, numIter, 1 /* num chains */, false /* TODO: binary */);
+        sampler.bartData.numObservations, sampler.bartData.numPredictors,
+        sampler.bartData.numTestObservations, numIter,
+        1 /* num chains */, !sampler.bartModel.kPrior->isFixed);
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
       sampler.stanSampler->sample_writer.resize(sampler.stanSampler->num_pars, numIter);
     
@@ -423,9 +425,11 @@ extern "C" {
       // order of update matters - need to store a parametric components that go with a bart prediction
       // or else when they're added together they won't be consistent with `predict`
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN) {
+        // Rprintf("running stan\n");
         sampler.stanSampler->run(isWarmup);
         
         if (sampler.userOffset == NULL) {
+          // Rprintf("getting stan para mean\n");
           stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
         } else {
           switch (sampler.offsetType) {
@@ -455,18 +459,22 @@ extern "C" {
             break;
           }
         }
-        if (sampler.is_binary) {
+        if (!sampler.is_binary) {
+          // Rprintf("getting sigma\n");
           double sigma = getSigma(*sampler.stanSampler, *sampler.stanModel);
           bartFunctions.setSigma(sampler.bartSampler, &sigma);
         }
         
+        // Rprintf("incrementing sampling\n");
         sampler.stanSampler->sample_writer.increment();
         
+        // Rprintf("setting bart offset\n");
         bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
       }
       
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {
         
+        // Rprintf("sampling bart\n");
         bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, bartSamples);
         
         // bart with an offset will produce predictions that have the offset added;
@@ -483,17 +491,21 @@ extern "C" {
           else if (sampler.offsetType == OFFSET_BART)
             std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
         }
+        // Rprintf("setting stan offset\n");
         stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
         if (sampler.is_binary) {
+          // Rprintf("getting latents\n");
           bartFunctions.getLatentVariables(sampler.bartSampler, sampler.bartLatents);
           stan4bart::setResponse(*sampler.stanModel, sampler.bartLatents);
         }
         
+        // Rprintf("increment bart pointers\n");
         bartSamples->incrementPointers();
       }
     }
     if (bartSamples != NULL) bartSamples->resetPointers();
     
+    // Rprintf("writing results\n");
     SEXP resultExpr = PROTECT(rc_newList(resultsType == RESULTS_BOTH ? 2 : 1));
     int pos = 0;
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
