@@ -28,7 +28,8 @@ extract.mstan4bartFit <-
   type   <- match.arg(type)
   sample <- match.arg(sample)
   
-  if (type == "sigma" && object$family$family == "binomial")
+  is_bernoulli <- object$family$family == "binomial"
+  if (type == "sigma" && is_bernoulli)
     stop("cannot extract 'sigma': binary outcome model does not have a residual standard error parameter")
   
   n_samples <- dim(object$bart_train)[2L]
@@ -89,10 +90,10 @@ extract.mstan4bartFit <-
                    Sigma       = object$Sigma,
                    sigma       = object$sigma)
   
-  if (type %in% c("ev", "ppd") && object$family$family == "binomial")
+  if (type %in% c("ev", "ppd") && is_bernoulli)
     result <- pnorm(result)
   if (type %in% "ppd") {
-    if (object$family$family == "binomial") {
+    if (is_bernoulli) {
       result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
     } else {
       result <- result + 
@@ -258,6 +259,7 @@ predict.mstan4bartFit <-
   n_fixef   <- if (!is.null(object$fixef)) dim(object$fixef)[1L] else 0L
   n_warmup  <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
   n_bart_vars <- dim(object$bart_varcount)[1L]
+  is_bernoulli <- object$family$family == "binomial"
   
   if (!is.null(object$ranef)) {
     n_ranef_levels <- length(object$ranef)
@@ -282,7 +284,7 @@ predict.mstan4bartFit <-
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
     indiv.bart <- .Call(C_stan4bart_predictBART, object$sampler.bart, testData$X.bart, NULL)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
-    for (i_chain in seq_len(n_chains)) {
+    if (!is_bernoulli) for (i_chain in seq_len(n_chains)) {
       indiv.bart[,,i_chain] <- object$range.bart["min",i_chain] +
         (0.5 + indiv.bart[,,i_chain]) * (object$range.bart["max",i_chain] - object$range.bart["min",i_chain])
     }
@@ -310,10 +312,10 @@ predict.mstan4bartFit <-
                    indiv.ranef = indiv.ranef,
                    indiv.bart  = indiv.bart)
   
-  if (type %in% c("ev", "ppd") && object$family$family == "binomial")
+  if (type %in% c("ev", "ppd") && is_bernoulli)
     result <- pnorm(result)
   if (type %in% "ppd") {
-    if (object$family$family == "binomial") {
+    if (is_bernoulli) {
       result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
     } else {
       result <- result + 
