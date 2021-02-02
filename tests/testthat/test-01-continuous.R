@@ -42,6 +42,34 @@ test_that("extract matches fitted in causal setting model", {
   
 })
 
+test_that("nonlinearities are estimated well", {
+  skip_on_cran()
+  skip_if_not_installed("lme4")
+  
+  df.train <- df[seq_len(floor(0.8 * nrow(df))),]
+  df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
+  
+  bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                         df.train,
+                         test = df.test)
+  
+  bart_fitted <- fitted(bart_fit, sample = "test")
+  bart_rmse <- sqrt(mean((df.test$y - bart_fitted)^2)) / sd(df.train$y)
+  
+  lmer_control <- lme4::lmerControl(check.conv.grad     = "ignore",
+                                    check.conv.singular = "ignore",
+                                    check.conv.hess     = "ignore")
+  lmer_fit <- lme4::lmer(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10 + z + (1 + X4 | g.1) + (1 | g.2),
+                         df.train,
+                         control = lmer_control)
+  
+  lmer_fitted <- predict(lmer_fit, newdata = df.test, type = "response")
+  # predict doesn't like the .
+  lmer_rmse <- sqrt(mean((df.test$y - lmer_fitted)^2)) / sd(df.train$y)
+  
+  expect_true(bart_rmse <= lmer_rmse)
+})
+
 test_that("predict matches supplied data", {
   df.train <- df[seq_len(floor(0.8 * nrow(df))),]
   df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
@@ -103,4 +131,5 @@ test_that("ppd has approximately right amount of noise", {
   r <- max(r, 1 / r)
   expect_true(r <= 1.1)
 })
+
 

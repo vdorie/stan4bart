@@ -113,11 +113,6 @@ glFormula <- function (formula, data = NULL, subset, weights,
     result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, formula = formula, 
                    terms = terms,
                    wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
-    y <- model.response(fr)
-    if (length(y) > 0L) {
-      u.y <- unique(y)
-      result$family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
-    }
     
     result
 }
@@ -1036,7 +1031,17 @@ terms.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
     attr(tt, "predvars") <- attr(terms, "predvars.random")
   } else if (type == "bart") {
     tt <- terms.formula(formula(x, type = "bart"), data = x$frame)
-    attr(tt, "predvars") <- attr(terms, "predvars.bart")
+    pred_vars <- attr(terms, "predvars.bart")
+    attr(tt, "predvars") <- pred_vars
+    
+    # bart, when used with a . variable expansion, can end up
+    # trying to build a frame with the offset variable. This
+    # doesn't work with the dbarts model frame functions, so we
+    # strip out anything that isn't in predvars
+    term_labels <- attr(tt, "term.labels")
+    extra_terms <- term_labels[term_labels %not_in% as.character(pred_vars)[-1L]]
+    if (length(extra_terms) > 0L)
+      tt <- strip_extra_terms(tt, extra_terms)
   }
   # Possibly re-order terms in case they apepared in a different order in
   # the original, which happens if, for example, a variable appears in the

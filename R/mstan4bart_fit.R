@@ -70,7 +70,8 @@ mstan4bart_fit_worker <- function(chain.num, control.bart, data.bart, model.bart
 mstan4bart_fit <- 
   function(object,
            family,
-           bart_offset_init, sigma_init,
+           bart_offset_init,
+           sigma_init,
            verbose,
            iter,
            warmup,
@@ -81,6 +82,8 @@ mstan4bart_fit <-
            stan_args,
            bart_args)
 {  
+  matched_call <- match.call()
+  
   supported_families <- c("binomial", "gaussian")
   fam <- which(pmatch(supported_families, family$family, nomatch = 0L) == 1L)
   
@@ -134,7 +137,10 @@ mstan4bart_fit <-
     stan_args$prior,
     nvars = nvars.fixef,
     default_scale = 2.5,
-    link = family$link, 
+    # link = family$link,
+    # mstan4bart: since we use latent variables, this is essentially a
+    # gaussian/identity problem
+    link = "identity", 
     ok_dists = ok_dists
   )
   # prior_{dist, mean, scale, df, dist_name, autoscale}, 
@@ -155,7 +161,10 @@ mstan4bart_fit <-
     stan_args$prior_intercept,
     nvars = 1,
     default_scale = 2.5,
-    link = family$link,
+    # link = family$link,
+    # mstan4bart: since we use latent variables, this is essentially a
+    # gaussian/identity problem
+    link = "identity",
     ok_dists = ok_intercept_dists
   )
    # prior_{dist, mean, scale, df, dist_name, autoscale}_for_intercept
@@ -378,7 +387,7 @@ mstan4bart_fit <-
    
   if (!is.numeric(iter) || length(iter) != 1L || iter <= 0)
     stop("'iter' must be a positive integer")
-  iter <- as.integer(iter) # could include a warning about info lost if coercing from double
+  iter <- as.integer(iter)
   if (!is.numeric(warmup) || length(warmup) != 1L || warmup < 0)
     stop("'warmup' must be a non-negative integer")
   warmup <- as.integer(warmup)
@@ -412,8 +421,10 @@ mstan4bart_fit <-
     stop("'refresh' must be a non-negative integer")
   refresh <- as.integer(refresh)
   
-  offset_type <- which(offset_type == c("default", "fixef", "ranef", "bart")) - 1L
+  offset_type <- which(offset_type == c("default", "fixef", "ranef", "bart", "parametric")) - 1L
   
+  # have to make sure that end node priors that are constructed as in chi(df, scale)
+  # work correctly
   if (is.null(bart_args)) bart_args <- list()
   data.bart@sigma <- sigma_init
   control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
@@ -433,9 +444,19 @@ mstan4bart_fit <-
   evalEnv <- sys.frame(sys.nframe())
   
   cgm <- normal <- fixed <- NULL # R CMD check
-  bartPriors <- dbarts:::parsePriors(control.bart, data.bart, cgm, normal, fixed(1), evalEnv)
-  model.bart <- new("dbartsModel", bartPriors$tree.prior, bartPriors$node.prior,
-                    bartPriors$node.hyperprior, bartPriors$resid.prior,
+  prior_call <- quote(parsePriors(control.bart, data.bart, cgm, normal, fixed(1), evalEnv))
+  prior_call[[1L]] <- quoteInNamespace(parsePriors)
+  prior_call[[1L]][[2L]] <- quote(dbarts)
+  
+  if (!is.null(bart_args$k)) {
+    end_node_pos <- which(as.character(prior_call) == "normal")
+    end_node_prior <- quote(normal(k = k))
+    end_node_prior[[2L]] <- bart_args$k
+    prior_call[[end_node_pos]] <- end_node_prior
+  }
+  bart_priors <- eval(prior_call)
+  model.bart <- new("dbartsModel", bart_priors$tree.prior, bart_priors$node.prior,
+                    bart_priors$node.hyperprior, bart_priors$resid.prior,
                     node.scale = if (!is_continuous) 3.0 else 0.5)
   
   control.stan <- list(

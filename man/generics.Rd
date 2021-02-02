@@ -14,7 +14,7 @@
 \method{extract}{mstan4bartFit}(
   object,
   type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-           "indiv.bart", "sigma", "Sigma"),
+           "indiv.bart", "sigma", "Sigma", "k"),
   sample = c("train", "test"),
   combine_chains = TRUE,
   sample_new_levels = TRUE,
@@ -23,7 +23,7 @@
 \method{fitted}{mstan4bartFit}(
   object,
   type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-           "indiv.bart", "sigma", "Sigma"),
+           "indiv.bart", "sigma", "Sigma", "k"),
   sample = c("train", "test"),
   sample_new_levels = TRUE,
   \dots)

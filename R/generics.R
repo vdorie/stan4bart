@@ -17,7 +17,8 @@ combine_chains_f <- function(x) {
 
 extract.mstan4bartFit <-
   function(object,
-           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma", "Sigma"),
+           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
+                    "indiv.bart", "sigma", "Sigma", "k"),
            sample = c("train", "test"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
@@ -31,6 +32,8 @@ extract.mstan4bartFit <-
   is_bernoulli <- object$family$family == "binomial"
   if (type == "sigma" && is_bernoulli)
     stop("cannot extract 'sigma': binary outcome model does not have a residual standard error parameter")
+  if (type == "k" && is.null(object$k))
+    stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
   
   n_samples <- dim(object$bart_train)[2L]
   n_obs     <- dim(object$bart_train)[1L]
@@ -46,41 +49,51 @@ extract.mstan4bartFit <-
     n_ranef_levels <- 0L
   }
   
+  offset <- NULL
   if (sample == "train") {
     if (n_fixef > 0L)        X <- object$X
     if (n_ranef_levels > 0L) reTrms <- object$reTrms
     n_obs_inf <- n_obs
+    if (!is.null(object$offset) && length(object$offset) > 0L)
+      offset <- object$offset
   } else {
     if (n_fixef > 0L)        X <- object$test$X
     if (n_ranef_levels > 0L) reTrms <- object$test$reTrms
     n_obs_inf <- n_obs_test
+    if (!is.null(object$test$offset) && length(object$test$offset) > 0L)
+      offset <- object$test$offset
   }
+  offset_type <- object$offset_type
   
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef") && n_fixef > 0L) {
-    
-    indiv.fixef <- fitted_fixed(object, X)
+    if (!is.null(offset) && offset_type %in% c("fixed", "parametric") && type != "indiv.fixef")
+      indiv.fixef <- offset
+    else
+      indiv.fixef <- fitted_fixed(object, X)
     
   }
   if (type %in% c("ev", "ppd", "indiv.ranef") %% n_ranef_levels > 0L) {
-    
-    indiv.ranef <- fitted_random(object, reTrms, sample_new_levels)
-  }
-  indiv.bart <- if (sample == "train") object$bart_train else object$bart_test
-  
- 
-  offset <- 0
-  if (type %in% c("ev", "ppd")) {
-    if (sample == "train" && !is.null(object$offset) && length(object$offset) > 0L) {
-      offset <- object$offset
-    } else if (sample == "test" && !is.null(object$test$offset) && length(object$offset) > 0L) {
-      offset <- object$test$offset
+    if (!is.null(offset) && offset_type %in% c("random", "parametric") && type != "indiv.ranef") {
+      if (offset_type == "parametric")
+        indiv.ranef <- 0
+      else
+        indiv.ranef <- offset
     }
+    else
+      indiv.ranef <- fitted_random(object, reTrms, sample_new_levels)
   }
   
+  if (type %in% c("ev", "ppd", "indiv.bart")) {
+    if (!is.null(offset) && offset_type %in% "bart" && type != "indiv.bart")
+      indiv.bart <- offset
+    else
+      indiv.bart <- if (sample == "train") object$bart_train else object$bart_test
+  }
+    
   result <- switch(type,
-                   ev          = indiv.bart + indiv.fixef + indiv.ranef + offset,
-                   ppd         = indiv.bart + indiv.fixef + indiv.ranef + offset,
+                   ev          = indiv.bart + indiv.fixef + indiv.ranef,
+                   ppd         = indiv.bart + indiv.fixef + indiv.ranef,
                    indiv.fixef = indiv.fixef,
                    indiv.ranef = indiv.ranef,
                    indiv.bart  = indiv.bart,
@@ -88,7 +101,11 @@ extract.mstan4bartFit <-
                    ranef       = object$ranef,
                    fixef       = object$fixef,
                    Sigma       = object$Sigma,
-                   sigma       = object$sigma)
+                   sigma       = object$sigma,
+                   k           = object$k)
+  
+  if (type %in% c("ev", "ppd") && !is.null(offset) && offset_type == "default")
+    result <- result + offset
   
   if (type %in% c("ev", "ppd") && is_bernoulli)
     result <- pnorm(result)
@@ -117,7 +134,8 @@ extract.mstan4bartFit <-
 
 fitted.mstan4bartFit <-
   function(object,
-           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart", "sigma", "Sigma"),
+           type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
+                    "indiv.bart", "sigma", "Sigma", "k"),
            sample = c("train", "test"),
            sample_new_levels = TRUE,
            ...)

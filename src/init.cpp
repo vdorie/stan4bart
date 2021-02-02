@@ -103,7 +103,7 @@ namespace {
     int defaultIter;
     int verbose;
     int refresh;
-    bool is_binary;
+    bool responseIsBinary;
     const double* userOffset;
     UserOffsetType offsetType;
     
@@ -183,7 +183,7 @@ extern "C" {
       sampler.bartControl.defaultNumSamples = sampler.defaultIter - sampler.defaultWarmup;
       sampler.bartControl.defaultNumBurnIn  = sampler.defaultWarmup;
     }
-    sampler.bartControl.responseIsBinary = sampler.is_binary;
+    sampler.bartControl.responseIsBinary = sampler.responseIsBinary;
     
     bartFunctions.initializeData(&sampler.bartData, bartDataExpr);
     bartFunctions.initializeModel(&sampler.bartModel, bartModelExpr, &sampler.bartControl);
@@ -194,20 +194,31 @@ extern "C" {
     size_t n = sampler.bartData.numObservations;
     sampler.bartOffset = new double[n];
     sampler.stanOffset = new double[n];
-    if (sampler.is_binary)
+    if (sampler.responseIsBinary)
       sampler.bartLatents = new double[n];
     
-    if (bart_offset_init != NULL) {
-      std::memcpy(sampler.bartOffset, bart_offset_init, n * sizeof(double));
+    if (sampler.userOffset != NULL) {
+      if (sampler.offsetType != OFFSET_BART) {
+        std::memcpy(sampler.bartOffset, sampler.userOffset, n * sizeof(double));
+        
+        if (bart_offset_init != NULL && sampler.offsetType == OFFSET_DEFAULT)
+          for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] += bart_offset_init[i];
+      } else if (bart_offset_init != NULL) {
+        std::memcpy(sampler.bartOffset, bart_offset_init, n * sizeof(double));
+      } else {
+        for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] = 0.0;
+      }
     } else {
-      for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] = 0.0;
-    }
-    if (sampler.userOffset != NULL && sampler.offsetType != OFFSET_BART) {
-      for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] += sampler.userOffset[i];
+      if (bart_offset_init != NULL) {
+        std::memcpy(sampler.bartOffset, bart_offset_init, n * sizeof(double));
+      } else {
+        for (size_t i = 0; i < n; ++i) sampler.bartOffset[i] = 0.0;
+      }
     }
     
     bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, true);
-    bartFunctions.setSigma(sampler.bartSampler, &sigma_init);
+    if (!sampler.responseIsBinary)
+      bartFunctions.setSigma(sampler.bartSampler, &sigma_init);
 
     bartFunctions.sampleTreesFromPrior(sampler.bartSampler);
     
@@ -216,29 +227,33 @@ extern "C" {
     bool oldVerbose = bartControl.verbose;
     bartControl.verbose = false;
     bartFunctions.setControl(sampler.bartSampler, &bartControl);
-    dbarts::Results* first_draw = new dbarts::Results(n,
-                                                      sampler.bartSampler->data.numPredictors,
-                                                      sampler.bartSampler->data.numTestObservations,
-                                                      1, bartControl.numChains,
-                                                      !sampler.bartSampler->model.kPrior->isFixed);
-    bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, first_draw);
+    dbarts::Results* firstDraw = new dbarts::Results(n,
+                                                     sampler.bartSampler->data.numPredictors,
+                                                     sampler.bartSampler->data.numTestObservations,
+                                                     1, bartControl.numChains,
+                                                     !sampler.bartSampler->model.kPrior->isFixed);
+    bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, firstDraw);
     
-    for (size_t j = 0; j < n; ++j) first_draw->trainingSamples[j] -= sampler.bartOffset[j];
-    std::memcpy(sampler.stanOffset, const_cast<const double*>(first_draw->trainingSamples), n * sizeof(double));
-    if (sampler.userOffset != NULL) {
-      if (sampler.offsetType != OFFSET_BART)
+    for (size_t j = 0; j < n; ++j) firstDraw->trainingSamples[j] -= sampler.bartOffset[j];
+    
+    if (sampler.userOffset != NULL && sampler.offsetType == OFFSET_BART) {
+      // Override with user supplied bart offset
+      std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
+    } else {
+      std::memcpy(sampler.stanOffset, const_cast<const double*>(firstDraw->trainingSamples), n * sizeof(double));
+      if (sampler.userOffset != NULL && sampler.offsetType == OFFSET_DEFAULT)
         for (size_t j = 0; j < n; ++j)
           sampler.stanOffset[j] += sampler.userOffset[j];
-      else if (sampler.offsetType == OFFSET_BART)
-        std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
     }
+    
     stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
-    if (sampler.is_binary) {
+    if (sampler.responseIsBinary) {
       bartFunctions.getLatentVariables(sampler.bartSampler, sampler.bartLatents);
       stan4bart::setResponse(*sampler.stanModel, sampler.bartLatents);
     }
     
-    delete first_draw;
+    delete firstDraw;
+    
     bartControl.verbose = oldVerbose;
     bartFunctions.setControl(sampler.bartSampler, &bartControl);
     
@@ -413,11 +428,10 @@ extern "C" {
     }
     
     if (sampler.verbose > 0)
-      Rprintf("starting %s, %d draws, %s:\n", isWarmup ? "warmup" : "sampling", numIter,
+      Rprintf("starting %s, %d draws, %s\n", isWarmup ? "warmup" : "sampling", numIter,
               resultsType == RESULTS_BOTH ? "both BART and Stan" : (resultsType == RESULTS_BART ? "BART only" : "Stan only"));
     
     
-    // TODO: add in capacity for fitting against true ranef and true fixef
     for (int iter = 0; iter < numIter; ++iter) {
       if (sampler.refresh > 0 && sampler.verbose > 1 && (iter + 1) % sampler.refresh == 0)
           Rprintf("  iter %.3d / %.3d\n", iter + 1, numIter);
@@ -432,6 +446,8 @@ extern "C" {
           // Rprintf("getting stan para mean\n");
           stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
         } else {
+          // The user offset can be used to replace parts of the model for debugging purposes.
+          // We only add in the remaining parts.
           switch (sampler.offsetType) {
             case OFFSET_DEFAULT:
             stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
@@ -455,11 +471,12 @@ extern "C" {
             break;
             
             case OFFSET_PARAMETRIC:
+            // Replaces the whole Stan part.
             std::memcpy(sampler.bartOffset, sampler.userOffset, n * sizeof(double));
             break;
           }
         }
-        if (!sampler.is_binary) {
+        if (!sampler.responseIsBinary) {
           // Rprintf("getting sigma\n");
           double sigma = getSigma(*sampler.stanSampler, *sampler.stanModel);
           bartFunctions.setSigma(sampler.bartSampler, &sigma);
@@ -482,18 +499,18 @@ extern "C" {
         for (size_t j = 0; j < n; ++j)
           bartSamples->trainingSamples[j] -= sampler.bartOffset[j];
         
-        std::memcpy(sampler.stanOffset, const_cast<const double*>(bartSamples->trainingSamples), n * sizeof(double));
-        
-        if (sampler.userOffset != NULL) {
-          if (sampler.offsetType == OFFSET_DEFAULT)
+        if (sampler.userOffset != NULL && sampler.offsetType == OFFSET_BART) {
+          // Override with user supplied bart offset
+          std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
+        } else {
+          std::memcpy(sampler.stanOffset, const_cast<const double*>(bartSamples->trainingSamples), n * sizeof(double));
+          if (sampler.userOffset != NULL && sampler.offsetType == OFFSET_DEFAULT)
             for (size_t j = 0; j < n; ++j)
               sampler.stanOffset[j] += sampler.userOffset[j];
-          else if (sampler.offsetType == OFFSET_BART)
-            std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
         }
         // Rprintf("setting stan offset\n");
         stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
-        if (sampler.is_binary) {
+        if (sampler.responseIsBinary) {
           // Rprintf("getting latents\n");
           bartFunctions.getLatentVariables(sampler.bartSampler, sampler.bartLatents);
           stan4bart::setResponse(*sampler.stanModel, sampler.bartLatents);
@@ -581,7 +598,7 @@ void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
   sampler.refresh = rc_getInt(rc_getListElement(commonControlExpr, "refresh"), "refresh",
     RC_VALUE | RC_GEQ, 0,
     RC_NA | RC_YES, RC_END);
-  sampler.is_binary = rc_getBool(rc_getListElement(commonControlExpr, "is_binary"), "is_binary",
+  sampler.responseIsBinary = rc_getBool(rc_getListElement(commonControlExpr, "is_binary"), "responseIsBinary",
     RC_NA | RC_NO, RC_END);
   
   SEXP offsetExpr = rc_getListElement(commonControlExpr, "offset");

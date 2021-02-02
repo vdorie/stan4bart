@@ -27,10 +27,14 @@ generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALS
       Sigma.b.2 <- as.matrix(1.2)
       b.2 <- rnorm(n.g.2, 0, sqrt(Sigma.b.2))
       
-      mu.fixef <- mu
+      mu.fixef <- x[,4] * 10
+      mu.bart <- mu - mu.fixef
       mu.ranef <- b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2]
-      mu <- mu.fixef + mu.ranef
+      mu <- mu + mu.ranef
     })
+  } else {
+    mu.fixef <- x[,4] * 10
+    mu.bart <- mu - mu.fixef 
   }
   
   if (causal) {
@@ -43,29 +47,38 @@ generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALS
       result <- within(result, {
         mu.fixef.0 <- mu.fixef
         mu.fixef.1 <- mu.fixef.0 + tau
+        mu.bart.0  <- mu.bart.1  <- mu.bart
         mu.ranef.0 <- mu.ranef.1 <- mu.ranef
         
-        mu.0 <- mu.fixef.0 + mu.ranef.0
-        mu.1 <- mu.fixef.1 + mu.ranef.1
+        mu.0 <- mu.bart.0 + mu.fixef.0 + mu.ranef.0
+        mu.1 <- mu.bart.1 + mu.fixef.1 + mu.ranef.1
       })
     } else {
       result <- within(result, {
-        mu.0 <- mu
-        mu.1 <- mu.0 + tau
+        mu.fixef.0 <- mu.fixef
+        mu.fixef.1 <- mu.fixef.0 + tau
+        mu.bart.0  <- mu.bart.1  <- mu.bart
+        
+        mu.0 <- mu.bart.0 + mu.fixef.0
+        mu.1 <- mu.bart.1 + mu.fixef.1
       })
     }
     
     if (binary) {
       result <- within(result, {
         loc   <- mean(c(mu.0, mu.1))
-        scale <- sd(c(mu.0, mu.1)) / qnorm(0.005)
+        scale <- sd(c(mu.0, mu.1)) / qnorm(0.15)
         mu.0 <- (mu.0 - loc) / scale
         mu.1 <- (mu.1 - loc) / scale
         
         mu.fixef.0 <- (mu.fixef.0 - loc) / scale
         mu.fixef.1 <- (mu.fixef.1 - loc) / scale
-        mu.ranef.0 <- mu.ranef.0 / scale
-        mu.ranef.1 <- mu.ranef.1 / scale
+        mu.bart.0 <- mu.bart.0 / scale
+        mu.bart.1 <- mu.bart.1 / scale
+        if (ranef) {
+          mu.ranef.0 <- mu.ranef.0 / scale
+          mu.ranef.1 <- mu.ranef.1 / scale
+        }
         
         rm(loc, scale)
         
@@ -88,7 +101,16 @@ generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALS
   } else {
     if (binary) {
       result <- within(result, {
-        mu <- qnorm(0.005) * (mu - mean(mu)) / sd(mu)
+        loc <- mean(mu)
+        scale <- sd(mu) / qnorm(0.15)
+        mu <- (mu - loc) / scale
+        
+        mu.fixef <- (mu.fixef - loc) / scale
+        mu.bart <- mu.bart / scale
+        if (ranef)
+          mu.ranef <- mu.ranef / scale
+        
+        rm(loc, scale)
         
         y <- rbinom(n, 1L, pnorm(mu))
       })

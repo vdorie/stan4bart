@@ -219,6 +219,8 @@ mstan4bart(formula,
   \item{\code{bart_varcount}}{BART variable counts}
   \item{\code{sigma}}{samples of residual standard error; not present for
   binary outcomes}
+  \item{\code{k}}{samples of the end-node sensitivity parameter; only present when
+  it is modeled}
   \item{\code{ranef}}{samples of random effects, or modeled coefficients; will
   be a named list, with effects for each grouping factor}
   \item{\code{Sigma}}{samples of covariance of random effects; also a named list

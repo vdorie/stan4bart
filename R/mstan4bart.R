@@ -36,7 +36,6 @@ mstan4bart <-
   }
   
   glmod <- eval(gl_call, parent.frame())
-  family <- glmod$family
   
   bartData <- glmod$bartData
   if ("b" %in% colnames(bartData@x)) {
@@ -46,11 +45,21 @@ mstan4bart <-
   
   if (!has_outcome_variable(formula))
     stop("bart model requires a response variable")
-  y <- glmod$fr[, as.character(glmod$formula[2L])]  
+  y <- model.response(glmod$fr)
   if (is.matrix(y)) {
     if (ncol(y) != 1L) stop("response variable must be a vector")
     y <- as.vector(y)
   }
+  y <- as.double(y)
+  if (length(y) > 0L) {
+    u.y <- unique(y)
+    family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
+  } else {
+    stop("response required to fit bart model")
+  }
+  
+  is_bernoulli <- family$family == "binomial"
+  
 
   offset <- model.offset(glmod$fr) %ORifNULL% double(0)
   weights <- validate_weights(as.vector(model.weights(glmod$fr)))
@@ -100,7 +109,7 @@ mstan4bart <-
   init_call <- mc
   
   bart_offset_init <- NULL
-  sigma_init <- NULL
+  sigma_init <- 1.0
   
   if (nzchar(system.file(package = "lme4"))) {
     if (family$family == "gaussian") {
@@ -123,7 +132,8 @@ mstan4bart <-
     try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
     if (!is(try_result, "error")) {
       bart_offset_init <- fitted(init_fit)
-      sigma_init <- sigma(init_fit)
+      if (!is_bernoulli)
+        sigma_init <- sigma(init_fit)
     }
   }
   if (is.null(bart_offset_init)) {
@@ -144,16 +154,27 @@ mstan4bart <-
     init_call$verbose <- NULL
     try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
     if (!is(try_result, "error")) {
-      bart_offset_init <- fitted(init_fit)
-      sigma_init <- sigma(init_fit)
+      bart_offset_init <- fitted(init_fit, type = "link")
+      if (!is_bernoulli)
+        sigma_init <- sigma(init_fit)
     }
   }
   if (is.null(bart_offset_init)) {
     init_call$formula <- nobars(nobart(mc$formula))
     init_fit <- eval(init_call, parent.frame())
-    bart_offset_init <- fitted(init_fit)
-    sigma_init <- sigma(init_fit)
+    bart_offset_init <- fitted(init_fit, type = "link")
+    if (!is_bernoulli)
+      sigma_init <- sigma(init_fit)
   }
+  
+  # Some trickery to allow calls like bart_args = list(k = chi(2, Inf))
+  # to work. Since 'chi' is never defined, use a function that returns
+  # a quoted version of the call.
+  defn_env <- new.env(parent = parent.frame())
+  defn_env$chi <- function(degreesOfFreedom = 1.25, scale = Inf)
+    match.call()
+  
+  bart_args <- eval(mc[["bart_args"]], envir = defn_env)
   
   chain_results <- mstan4bart_fit(result,
                                   family,
@@ -166,7 +187,8 @@ mstan4bart <-
                                   chains,
                                   cores,
                                   refresh,
-                                  stan_args, bart_args)
+                                  stan_args,
+                                  bart_args)
   
   samples <- package_samples(chain_results, colnames(glmod$X), colnames(bartData@x))
   for (name in names(samples)) 
@@ -259,6 +281,13 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
                           dimnames = names)
     
   }
+  
+  if (!is.null(chain_results[[1L]]$sample$bart$k)) {
+    result$k <- matrix(sapply(seq_len(n_chains), function(i_chains)
+                              chain_results[[i_chains]]$sample$bart$k),
+                       n_samples, n_chains,
+                       dimnames = list(sample = NULL, chain = NULL))
+  }
   if (n_warmup > 0L) {
     result$warmup <- list()
     result$warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
@@ -272,7 +301,7 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
                                        dimnames = list(observation = NULL, sample = NULL, chain = NULL))
     }
     result$warmup$bart_varcount <- array(sapply(seq_len(n_chains), function(i_chains)
-                                           chain_results[[i_chains]]$sample$bart$varcount),
+                                           chain_results[[i_chains]]$warmup$bart$varcount),
                                          dim = c(n_bart_vars, n_warmup, n_chains),
                                          dimnames = list(predictor = bart_var_names, sample = NULL, chain = NULL))
     if (length(aux_row) > 0L) {
@@ -314,6 +343,12 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
                                      chain_results[[i_chain]]$warmup$stan$fixef),
                                    c(n_fixef, n_warmup, n_chains),
                                    dimnames = names)
+    }
+    if (!is.null(chain_results[[1L]]$warmup$bart$k)) {
+      result$warmup$k <- matrix(sapply(seq_len(n_chains), function(i_chains)
+                                chain_results[[i_chains]]$warmup$bart$k),
+                                n_samples, n_chains,
+                                dimnames = list(sample = NULL, chain = NULL))
     }
   }
   

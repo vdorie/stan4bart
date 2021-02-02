@@ -29,6 +29,54 @@ test_that("extract matches fitted in causal setting model", {
   
 })
 
+test_that("nonlinearities are estimated well", {
+  skip_on_cran()
+  skip_if_not_installed("lme4")
+  
+  rows.train <- seq_len(floor(0.8 * nrow(df)))
+  rows.test  <- seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df))
+
+  df.train <- df[rows.train,]
+  df.test  <- df[rows.test,]
+  
+  mstan4bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                               df.train,
+                               test = df.test)
+  
+  mstan4bart_fitted <- fitted(mstan4bart_fit, sample = "test")
+  mstan4bart_dev <- -2 * mean(log(ifelse(df.test$y == 1, mstan4bart_fitted, 1 - mstan4bart_fitted)))
+  
+  glmer_control <- lme4::glmerControl(check.conv.grad     = "ignore",
+                                      check.conv.singular = "ignore",
+                                      check.conv.hess     = "ignore")
+  glmer_fit <- lme4::glmer(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10 + z + (1 + X4 | g.1) + (1 | g.2),
+                           df.train, family = binomial(link = "probit"),
+                           control = glmer_control)
+  
+  glmer_fitted <- predict(glmer_fit, newdata = df.test, type = "response")
+  glmer_dev <- -2 * mean(log(ifelse(df.test$y == 1, glmer_fitted, 1 - glmer_fitted)))
+  
+  
+  base_bart_fit <- bart2(y ~ ., df.train, test = df.test, verbose = FALSE,
+                         n.samples = 1000, n.burn = 1000, rngSeed = 0)
+  
+  base_bart_fitted <- fitted(base_bart_fit, sample = "test")
+  base_bart_dev <- -2 * mean(log(ifelse(df.test$y == 1, base_bart_fitted, 1 - base_bart_fitted)))
+  
+  
+  rbart_fit <- rbart_vi(y ~ . - g.2, df.train, test = df.test, group.by = g.2,
+                        group.by.test = df.test$g.2, verbose = FALSE,
+                        n.samples = 1000, n.burn = 1000)
+  
+  rbart_fitted <- fitted(rbart_fit, sample = "test")
+  rbart_dev <- -2 * mean(log(ifelse(df.test$y == 1, rbart_fitted, 1 - rbart_fitted)))
+ 
+  expect_true(mstan4bart_dev <= glmer_dev)
+  # low sample size, so we cut ourselves some slack
+  expect_true(mstan4bart_dev <= 1.35 * base_bart_dev)
+  expect_true(mstan4bart_dev <= 1.35 * rbart_dev)
+})
+
 test_that("predict matches supplied data", {
   df.train <- df[seq_len(floor(0.8 * nrow(df))),]
   df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
