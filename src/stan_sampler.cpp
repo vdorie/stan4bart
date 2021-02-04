@@ -201,7 +201,7 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
     rc_getDoubleAt(dataExpr, matchPos[16], "prior_scale_for_intercept", RC_VALUE | RC_GEQ, 0.0, RC_END),
     rc_getDoubleAt(dataExpr, matchPos[17], "prior_scale_for_aux",       RC_VALUE | RC_GEQ, 0.0, RC_END),
     getEigenVector(VECTOR_ELT(dataExpr, matchPos[18])), // prior_mean
-    rc_getDoubleAt(dataExpr, matchPos[19], "prior_mean_for_intercept", RC_VALUE | RC_GEQ, 0.0, RC_END),
+    rc_getDoubleAt(dataExpr, matchPos[19], "prior_mean_for_intercept", RC_NA | RC_NO, RC_END),
     rc_getDoubleAt(dataExpr, matchPos[20], "prior_mean_for_aux",  RC_VALUE | RC_GEQ, 0.0, RC_END),
     getEigenVector(VECTOR_ELT(dataExpr, matchPos[21])), // prior_df
     rc_getDoubleAt(dataExpr, matchPos[22], "prior_df_for_intercept", RC_VALUE | RC_GEQ, 0.0, RC_END),

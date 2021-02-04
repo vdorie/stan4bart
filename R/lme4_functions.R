@@ -65,6 +65,10 @@ glFormula <- function (formula, data = NULL, subset, weights,
     bartterms <- attr(bartfr, "terms")
     attr(attr(fr, "terms"), "predvars.bart") <- attr(bartterms, "predvars")
     attr(attr(fr, "terms"), "varnames.bart") <- names(bartfr)
+    bartlevels <-
+      lapply(colnames(attr(bartterms, "factors")), function(n) levels(bartfr[[n]]))
+    names(bartlevels) <- colnames(attr(bartterms, "factors"))
+    attr(attr(fr, "terms"), "levels.bart") <- bartlevels
     
     ranform <- formula
     RHSForm(ranform) <- subbars(RHSForm(reOnly(formula)))
