@@ -263,7 +263,7 @@ mu.fixef <- 10 * x[,4]
 # varying intercepts and slopes for first grouping factor
 g.1 <- sample(n.g.1, n, replace = TRUE)
 Sigma.b.1 <- matrix(c(1.5^2, .2, .2, 1^2), 2)
-b.1 <- matrix(rnorm(2 * n.g.1), n.g.1) %*% chol(Sigma.b.1)
+b.1 <- matrix(rnorm(2 * n.g.1), n.g.1) \%*\% chol(Sigma.b.1)
 
 # varying intercepts for second grouping factor
 g.2 <- sample(n.g.2, n, replace = TRUE)
