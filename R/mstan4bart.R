@@ -346,8 +346,8 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
     }
     if (!is.null(chain_results[[1L]]$warmup$bart$k)) {
       result$warmup$k <- matrix(sapply(seq_len(n_chains), function(i_chains)
-                                chain_results[[i_chains]]$warmup$bart$k),
-                                n_samples, n_chains,
+                                  chain_results[[i_chains]]$warmup$bart$k),
+                                n_warmup, n_chains,
                                 dimnames = list(sample = NULL, chain = NULL))
     }
   }

@@ -1,5 +1,6 @@
 \name{mstan4bart-generics}
 
+\alias{extract}
 \alias{mstan4bart-generics}
 \alias{extract.mstan4bartFit}
 \alias{fitted.mstan4bartFit}
