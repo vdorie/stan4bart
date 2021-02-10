@@ -448,10 +448,10 @@ mstan4bart_fit <-
   prior_call[[1L]] <- quoteInNamespace(parsePriors)
   prior_call[[1L]][[2L]] <- quote(dbarts)
   
-  if (!is.null(bart_args$k)) {
+  if (!is.null(bart_args[["k"]])) {
     end_node_pos <- which(as.character(prior_call) == "normal")
     end_node_prior <- quote(normal(k = k))
-    end_node_prior[[2L]] <- bart_args$k
+    end_node_prior[[2L]] <- bart_args[["k"]]
     prior_call[[end_node_pos]] <- end_node_prior
   }
   bart_priors <- eval(prior_call)
