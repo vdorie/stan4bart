@@ -90,7 +90,7 @@ extract.mstan4bartFit <-
     else
       indiv.bart <- if (sample == "train") object$bart_train else object$bart_test
   }
-    
+  
   result <- switch(type,
                    ev          = indiv.bart + indiv.fixef + indiv.ranef,
                    ppd         = indiv.bart + indiv.fixef + indiv.ranef,

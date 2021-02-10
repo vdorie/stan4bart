@@ -947,6 +947,7 @@ levelfun <- function (x, nl.n, sample_new_levels, Sigma)
     d <- dim(x)
     dn <- dimnames(x)
     dnn <- names(dn)
+    # newx: num_predictors x num_levels x num_samples x num_chains
     newx <- array(0, c(d[1L], length(nl.n.comb), d[3L:4L]),
                   dimnames = list(dn[[1L]], nl.n.comb, dn[[3L]], dn[[4L]]))
     newx[,old_levels,,] <- x
@@ -959,11 +960,17 @@ levelfun <- function (x, nl.n, sample_new_levels, Sigma)
       n_samples <- d[3L]
       n_chains  <- d[4L]
       L <- array(Sigma, c(n_predictors, n_predictors, n_samples * n_chains))
-      L <- bdiag(lapply(seq_len(n_samples * n_chains), function(i) t(base::chol(L[,,i]))))
+      L <- bdiag(lapply(seq_len(n_samples * n_chains), function(i) t(base::chol(L[,,i,drop = FALSE]))))
       
-      u <- rnorm(n_predictors * n_groups * n_samples * n_chains)
+      # L: block diagonal where each block is a sample of the covariance
+      #    matrix for the random effects at that level
+      #    (p x p) x (n_samp x n_chain)
+      u <- matrix(rnorm(n_predictors * n_predictors * n_groups * n_samples * n_chains),
+                  n_predictors * n_predictors * n_samples * n_chains,
+                  n_groups)
       
-      newx[,new_levels,,] <- as.vector(L %*% u)
+      # L %*% u: (n_predictors x n_samp x n_chain) x n_groups
+      newx[,new_levels,,] <- aperm(array(as.vector(Matrix::crossprod(L, u)), c(n_predictors, n_samples, n_chains, n_groups)), c(1L, 4L, 2L, 3L))
     }
     x <- newx
     names(dimnames(x)) <- dnn
