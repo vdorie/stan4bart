@@ -136,6 +136,7 @@ mstan4bart <-
                                            check.conv.hess     = "ignore")
     init_call$formula <- nobart(mc$formula)
     init_call$verbose <- FALSE
+    init_call$na.action <- quote(stats::na.omit)
     try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
     if (!is(try_result, "error")) {
       bart_offset_init <- fitted(init_fit)
@@ -159,6 +160,7 @@ mstan4bart <-
     init_call$control <- NULL
     init_call$formula <- subbars(nobart(mc$formula))
     init_call$verbose <- NULL
+    init_call$na.action <- quote(stats::na.omit)
     try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
     if (!is(try_result, "error")) {
       bart_offset_init <- fitted(init_fit, type = "link")
@@ -174,6 +176,20 @@ mstan4bart <-
       sigma_init <- sigma(init_fit)
   }
   
+  # This can happen if parts of the formula got dropped during the init because we
+  # drop down to lm/glm. In that case, the na patterns may no longer be the same
+  # and the init vector will be too long.
+  if (!is.null(bart_offset_init) && length(bart_offset_init) != length(y)) {
+    if (inherits(init_fit, "merMod")) {
+      na.action.init <- attr(init_fit@frame, "na.action")
+    } else {
+      na.action.init <- init_fit$na.action
+    }
+    init_rows <- seq_len(nrow(result$frame)) %not_in% na.action.init
+    fit_rows <- seq_len(nrow(result$frame)) %not_in% attr(result$frame, "na.action.all")
+    bart_offset_init <- bart_offset_init[fit_rows[init_rows]]
+  }
+   
   # Some trickery to allow calls like bart_args = list(k = chi(2, Inf))
   # to work. Since 'chi' is never defined, use a function that returns
   # a quoted version of the call.

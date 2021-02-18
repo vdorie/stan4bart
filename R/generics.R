@@ -109,6 +109,9 @@ extract.mstan4bartFit <-
       frame <- model.frame(object, type = "bart")[-na.action.bart,,drop = FALSE]
       if (dim(object$bart_train)[1L] != nrow(frame) && type == "indiv.bart")
         warning("cannot obtain training predictions for rows where BART component has no NAs but other components do; add to test data instead")
+      # The bart training result will always be of size N - na.action.all, even if
+      # the bart training frame can have more rows.
+      na.action.bart <- na.action.all
     }
   } else {
     na.action.fixed  <- object$test$na.action.fixed
