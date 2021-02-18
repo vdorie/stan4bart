@@ -18,7 +18,7 @@ combine_chains_f <- function(x) {
 extract.mstan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-                    "indiv.bart", "sigma", "Sigma", "k"),
+                    "indiv.bart", "sigma", "Sigma", "k", "varcount"),
            sample = c("train", "test"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
@@ -29,6 +29,27 @@ extract.mstan4bartFit <-
   type   <- match.arg(type)
   sample <- match.arg(sample)
   
+  # return parametric components early, as they don't require building model matrices
+  if (type %in% c("fixef", "ranef", "sigma", "Sigma", "k", "varcount")) {
+    result <- switch(type,
+                     varcount    = object$bart_varcount,
+                     ranef       = object$ranef,
+                     fixef       = object$fixef,
+                     Sigma       = object$Sigma,
+                     sigma       = object$sigma,
+                     k           = object$k)
+    
+    if (combine_chains) {
+      if (is.list(result)) {
+        result <- lapply(result, combine_chains_f)
+      } else {
+        result <- combine_chains_f(result)
+      }
+    }
+    
+    return(result)
+  }
+  
   is_bernoulli <- object$family$family == "binomial"
   if (type == "sigma" && is_bernoulli)
     stop("cannot extract 'sigma': binary outcome model does not have a residual standard error parameter")
@@ -36,9 +57,8 @@ extract.mstan4bartFit <-
     stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
   
   n_samples <- dim(object$bart_train)[2L]
-  n_obs     <- dim(object$bart_train)[1L]
+  n_obs     <- 0L
   n_chains  <- dim(object$bart_train)[3L]
-  n_obs_test <- if (!is.null(object$bart_test)) dim(object$bart_test)[1L] else 0L
   n_fixef <- if (!is.null(object$fixef)) dim(object$fixef)[1L] else 0L
   n_warmup <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
   n_bart_vars <- dim(object$bart_varcount)[1L]
@@ -50,20 +70,61 @@ extract.mstan4bartFit <-
   }
   
   offset <- NULL
+  # The data for the fitted model will always be subsetted to only the
+  # complet cases, across all three possible data frames/matrices.
+  #
+  # However, with na.action == na.exclude, it is reasonable to
+  # return predictions for sub-components of the model when they
+  # have additional data.
+  
   if (sample == "train") {
-    if (n_fixef > 0L)        X <- object$X
-    if (n_ranef_levels > 0L) reTrms <- object$reTrms
-    n_obs_inf <- n_obs
+    na.action.fixed  <- attr(object$frame, "na.action.fixed")
+    na.action.bart   <- attr(object$frame, "na.action.bart")
+    na.action.random <- attr(object$frame, "na.action.random")
+    na.action.all    <- attr(object$frame, "na.action.all")
+    n_all <- nrow(object$frame)
+        
     if (!is.null(object$offset) && length(object$offset) > 0L)
       offset <- object$offset
+    
+    if (n_fixef > 0L) {
+      if (!inherits(na.action.fixed, "exclude")) {
+        X <- object$X
+      } else {
+        frame <- model.frame(object, type = "fixed")[-na.action.fixed,,drop = FALSE]
+        attr(frame, "na.action") <- na.pass
+        X <- model.matrix(formula(object, type = "fixed"), frame)
+      }
+    }
+    if (n_ranef_levels > 0L) {
+      if (!inherits(na.action.random, "exclude")) {
+        reTrms <- object$reTrms
+      } else {
+        frame <- model.frame(object, type = "random")[-na.action.random,,drop = FALSE]
+        attr(frame, "na.action") <- na.pass
+        reTrms <- mkReTrms(findbars(RHSForm(formula(object))), frame)
+      }
+    }
+    if (inherits(na.action.bart, "exclude")) {
+      frame <- model.frame(object, type = "bart")[-na.action.bart,,drop = FALSE]
+      if (dim(object$bart_train)[1L] != nrow(frame) && type == "indiv.bart")
+        warning("cannot obtain training predictions for rows where BART component has no NAs but other components do; add to test data instead")
+    }
   } else {
+    na.action.fixed  <- object$test$na.action.fixed
+    na.action.bart   <- object$test$na.action.bart
+    na.action.random <- object$test$na.action.random
+    na.action.all <- object$test.na.action.all
+    n_all <- nrow(object$test$frame)
+    
     if (n_fixef > 0L)        X <- object$test$X
     if (n_ranef_levels > 0L) reTrms <- object$test$reTrms
-    n_obs_inf <- n_obs_test
     if (!is.null(object$test$offset) && length(object$test$offset) > 0L)
       offset <- object$test$offset
   }
+  
   offset_type <- object$offset_type
+  
   
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef") && n_fixef > 0L) {
@@ -72,6 +133,11 @@ extract.mstan4bartFit <-
     else
       indiv.fixef <- fitted_fixed(object, X)
     
+    if (inherits(na.action.fixed, "exclude")) {
+      indiv.fixef.all <- array(NA_real_, c(n_all, dim(indiv.fixef)[-1L]), dimnames(indiv.fixef))
+      indiv.fixef.all[-na.action.fixed,,] <- indiv.fixef
+      indiv.fixef <- indiv.fixef.all
+    }
   }
   if (type %in% c("ev", "ppd", "indiv.ranef") %% n_ranef_levels > 0L) {
     if (!is.null(offset) && offset_type %in% c("random", "parametric") && type != "indiv.ranef") {
@@ -82,6 +148,12 @@ extract.mstan4bartFit <-
     }
     else
       indiv.ranef <- fitted_random(object, reTrms, sample_new_levels)
+    
+    if (inherits(na.action.random, "exclude")) {
+      indiv.ranef.all <- array(NA_real_, c(n_all, dim(indiv.ranef)[-1L]), dimnames(indiv.ranef))
+      indiv.ranef.all[-na.action.random,,] <- indiv.ranef
+      indiv.ranef <- indiv.ranef.all
+    }
   }
   
   if (type %in% c("ev", "ppd", "indiv.bart")) {
@@ -89,6 +161,12 @@ extract.mstan4bartFit <-
       indiv.bart <- offset
     else
       indiv.bart <- if (sample == "train") object$bart_train else object$bart_test
+    
+    if (inherits(na.action.bart, "exclude")) {
+      indiv.bart.all <- array(NA_real_, c(n_all, dim(indiv.bart)[-1L]), dimnames(indiv.bart))
+      indiv.bart.all[-na.action.bart,,] <- indiv.bart
+      indiv.bart <- indiv.bart.all
+    }
   }
   
   result <- switch(type,
@@ -114,8 +192,9 @@ extract.mstan4bartFit <-
       result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
     } else {
       result <- result + 
-        array(rnorm(n_obs_inf * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs_inf)),
-             c(n_obs_inf, n_samples, n_chains))
+        array(rnorm(dim(result)[1L] * n_samples * n_chains, 0, rep(as.vector(object$sigma),
+                                                                   each = dim(result)[1L])),
+             c(dim(result)[1L], n_samples, n_chains))
     }
   }
     
@@ -135,7 +214,7 @@ extract.mstan4bartFit <-
 fitted.mstan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-                    "indiv.bart", "sigma", "Sigma", "k"),
+                    "indiv.bart", "sigma", "Sigma", "k", "varcount"),
            sample = c("train", "test"),
            sample_new_levels = TRUE,
            ...)

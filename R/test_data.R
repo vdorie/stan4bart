@@ -3,32 +3,28 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
 {
   type <- match.arg(type)
   
-  result <- list()
+  # Create a single frame that has data for the whole formula
+  formula <- subbart(subbars(formula(object)))
+  formula[[2L]] <- NULL
+  environment(formula) <- environment()
   
-  fixed.na.action <- NULL
-  terms.fixed <- terms(object, type = "fixed")
-  if (!identical(na.action, na.pass)) {
-    mfnew <- model.frame(delete.response(terms.fixed), newdata, na.action = na.action)
-    fixed.na.action <- attr(mfnew, "na.action")
-  }
-  nobs <- nrow(newdata)
+  mf_call <- quote(stats::model.frame(formula = formula, data = newdata, na.action = "na.pass"))
   
+  result <- list(frame = eval(mf_call))
+  
+  # define the sub-model frames as applicable
   if (type %in% c("all", "fixed") && !is.null(object$X)) {
-    X <- object$X
-    X.col.dropped <- attr(X, "col.dropped")
-    RHS <- formula(substitute(~R, list(R = RHSForm(formula(object, type = "fixed")))))
-    
     orig.fixed.levs <- get.orig.levs(object, type = "fixed")
     
-    mfnew <- suppressWarnings(
-      model.frame(delete.response(terms.fixed), newdata,
+    mf.fixed <- suppressWarnings(
+      model.frame(delete.response(terms(object, type = "fixed")), newdata,
                   na.action = na.action, xlev = orig.fixed.levs)
     )
-    X <- model.matrix(RHS, data = mfnew, contrasts.arg = attr(X, "contrasts"))
-    if (is.numeric(X.col.dropped) && length(X.col.dropped) > 0)
-      X <- X[, -X.col.dropped, drop = FALSE]
-    result$X <- X
+        
+    if (!identical(na.action, na.pass))
+      result$na.action.fixed <- attr(mf.fixed, "na.action")
   }
+  
   if (type %in% c("all", "bart")) {
     orig.bart.levs <- attr(terms(object), "levels.bart")
     
@@ -36,54 +32,105 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
       model.frame(delete.response(terms(object, type = "bart")), newdata,
                   na.action = na.action, xlev = orig.bart.levs)
     )
-
-    result$X.bart <- dbarts::makeTestModelMatrix(object$bartData, mf.bart)
+    
+    if (!identical(na.action, na.pass))
+      result$na.action.bart <- attr(mf.bart, "na.action")
   }
+  
   if (type %in% c("all", "random") && !is.null(object$reTrms)) {
     terms.random <- terms(object, type = "random")
     form.random <- formula(object, type = "random")
     
-    newdata.NA <- newdata
-    if (!is.null(fixed.na.action)) {
-      newdata.NA <- newdata.NA[-fixed.na.action,]
-    }
-    
     tt <- delete.response(terms.random)
     frame.random <- model.frame(object, type = "random")
-    orig.random.levs <- get.orig.levs(object, newdata = newdata.NA, type = "random")
+    orig.random.levs <- get.orig.levs(object, newdata = newdata, type = "random")
     sparse <- !is.null(orig.random.levs) && max(lengths(orig.random.levs)) > 100
     orig.random.cntr <- get.orig.levs(object, FUN = contrasts, sparse = sparse, type = "random")
     
     re.form <- reOnly(object$formula)
     
+    newdata.random <- newdata
+    
     pv <- attr(tt, "predvars")
-    for (i in 2:(length(pv))) {
+    if (length(pv) > 1L) for (i in seq.int(2L, length(pv))) {
       missvars <- setdiff(all.vars(pv[[i]]), all.vars(re.form))
       for (mv in missvars)
-        newdata.NA[[mv]] <- NA
+        newdata.random[[mv]] <- NA
     }
     
-    rfd <- suppressWarnings(model.frame(tt, newdata.NA, na.action = na.pass, 
-                                        xlev = orig.random.levs))
+    mf.random <- suppressWarnings(model.frame(tt, newdata.random, na.action = na.action, 
+                                              xlev = orig.random.levs))
     termvars <- unique(unlist(lapply(findbars(form.random), function(x) all.vars(x[[2]]))))
-    for (fn in Reduce(intersect, list(names(orig.random.cntr), termvars, names(rfd)))) {
-      if (!is.factor(rfd[[fn]])) 
-        rfd[[fn]] <- factor(rfd[[fn]])
-      contrasts(rfd[[fn]]) <- orig.random.cntr[[fn]]
+    for (fn in Reduce(intersect, list(names(orig.random.cntr), termvars, names(mf.random)))) {
+      if (!is.factor(mf.random[[fn]])) 
+        mf.random[[fn]] <- factor(mf.random[[fn]])
+      contrasts(mf.random[[fn]]) <- orig.random.cntr[[fn]]
     }
-    if (!is.null(fixed.na.action)) 
-      attr(rfd, "na.action") <- fixed.na.action
+    if (!identical(na.action, na.pass))
+      result$na.action.random <- attr(mf.random, "na.action") 
+  }
+  
+  na.action.all <- c(result$na.action.fixed, result$na.action.random, result$na.action.bart)
+  if (length(na.action.all) > 0L) {
+    na.action.all <- sort(na.action.all[!duplicated(na.action.all)])
+    if (!is.null(class(result$na.action.fixed)))
+      class(na.action.all) <- class(result$na.action.fixed)
+    else if (!is.null(class(result$na.action.bart)))
+      class(na.action.all) <- class(result$na.action.bart)
+    else
+      class(na.action.all) <- class(result$na.action.random)
     
-        
-    ReTrms.test <- mkReTrms(findbars(re.form[[2]]), rfd)
+    result$na.action.all <- na.action.all
     
-    attr(ReTrms.test$Zt, "na.action") <- fixed.na.action
+    all_rows <- seq_len(nrow(result$frame)) %not_in% result$na.action.all
+  }
+  
+  # If na is omit, subset the model frames down to just their shared 
+  # complete cases.
+  if (exists("mf.fixed")) {
+    if (inherits(na.action.all, "omit")) {
+      fixed_rows <- seq_len(nrow(result$frame)) %not_in% (result$na.action.fixed %ORifNULL% integer(0L))
+      mf.fixed <- mf.fixed[all_rows[fixed_rows],,drop = FALSE]
+    }
+    
+    rhs.fixed <- formula(substitute(~R, list(R = RHSForm(formula(object, type = "fixed")))))
+    X.col.dropped <- attr(object$X, "col.dropped")
+    X <- model.matrix(rhs.fixed, data = mf.fixed, contrasts.arg = attr(object$X, "contrasts"))
+    if (is.numeric(X.col.dropped) && length(X.col.dropped) > 0)
+      X <- X[, -X.col.dropped, drop = FALSE]
+    result$X <- X
+
+  }
+  if (exists("mf.bart")) {
+    if (inherits(na.action.all, "omit")) {
+      bart_rows <- seq_len(nrow(result$frame)) %not_in% (result$na.action.bart %ORifNULL% integer(0L))
+      mf.bart <- mf.bart[all_rows[bart_rows],,drop = FALSE]
+    }
+    
+    result$X.bart <- dbarts::makeTestModelMatrix(object$bartData, mf.bart)
+  }
+  
+  
+  if (exists("mf.random")) {
+    if (inherits(na.action.all, "omit")) {
+      random_rows <- seq_len(nrow(result$frame)) %not_in% (result$na.action.random %ORifNULL% integer(0L))
+      mf.random <- mf.random[all_rows[random_rows],,drop = FALSE]
+    }
+    
+    ReTrms.test <- mkReTrms(findbars(re.form[[2]]), mf.random)
+    
+    if (inherits(result$na.action.random, "omit")) {
+      attr(ReTrms.test$Zt, "na.action") <- result$na.action.all
+    } else {
+      attr(ReTrms.test$Zt, "na.action") <- attr(mf.random, "na.action")
+    }
     
     result$reTrms <- list(Zt      = ReTrms.test$Zt,
                           Lambdat = ReTrms.test$Lambdat,
                           flist   = ReTrms.test$flist,
                           cnms    = ReTrms.test$cnms)
   }
+  
   result
 }
 

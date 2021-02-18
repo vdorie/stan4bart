@@ -51,7 +51,8 @@ mstan4bart(formula,
   Its use is strongly encouraged.}
   \item{subset, weights, na.action, offset, contrasts}{optional components
   adjusting the constructed model matrices and otherwise changing the linear
-  predictor. See \code{\link{lm}} and \code{\link{model.matrix.default}}.}
+  predictor. \code{na.action} cannot be \code{"na.pass"}. See
+  \code{\link{lm}} and \code{\link{model.matrix.default}}.}
   \item{test}{an optional data frame to be used as test data. If present, the
   test predictions will be stored as the sampler runs and can be extracted
   later.}

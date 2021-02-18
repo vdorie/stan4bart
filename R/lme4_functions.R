@@ -22,6 +22,8 @@ glFormula <- function (formula, data = NULL, subset, weights,
     mf <- mf[c(1L, m)]
     mf$drop.unused.levels <- TRUE
     mf[[1L]] <- quote(stats::model.frame)
+    mf$na.action <- quote(stats::na.pass)
+    
     # fr and fr.form contains everything, build specialized
     # frames below
     fr.form <- subbart(subbars(formula))
@@ -38,16 +40,8 @@ glFormula <- function (formula, data = NULL, subset, weights,
     if (!missing(start) && is.list(start)) {
       attr(fr, "start") <- start$fixef
     }
-    n <- nrow(fr)
     
-    reTrms <- mkReTrms(findbars(RHSForm(formula)), fr)
-    
-    # handle creating test frames
-        
-    wmsgNlev <- checkNlevels(reTrms$flist, n = n, control, allow.n = TRUE)
-    wmsgZdims <- checkZdims(reTrms$Ztlist, n = n, control, allow.n = TRUE)
-    wmsgZrank <- checkZrank(reTrms$Zt, n = n, control, nonSmall = 1e+06, 
-        allow.n = TRUE)
+    mf$na.action <- na.action
     
     fixedform <- formula
     RHSForm(fixedform) <- nobart(nobars(RHSForm(fixedform)))
@@ -56,6 +50,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     fixedterms <- attr(fixedfr, "terms")
     attr(attr(fr, "terms"), "predvars.fixed") <- attr(fixedterms, "predvars")
     attr(attr(fr, "terms"), "varnames.fixed") <- names(fixedfr)
+    attr(fr, "na.action.fixed") <- attr(fixedfr, "na.action")
     
     bartform <- formula
     RHSForm(bartform) <- allbart(nobars(RHSForm(bartform)))
@@ -69,6 +64,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
       lapply(colnames(attr(bartterms, "factors")), function(n) levels(bartfr[[n]]))
     names(bartlevels) <- colnames(attr(bartterms, "factors"))
     attr(attr(fr, "terms"), "levels.bart") <- bartlevels
+    attr(fr, "na.action.bart") <- attr(bartfr, "na.action")
     
     ranform <- formula
     RHSForm(ranform) <- subbars(RHSForm(reOnly(formula)))
@@ -78,6 +74,45 @@ glFormula <- function (formula, data = NULL, subset, weights,
     ranterms <- attr(ranfr, "terms")
     attr(attr(fr, "terms"), "predvars.random") <- attr(ranterms, "predvars")
     attr(attr(fr, "terms"), "varnames.random") <- names(ranfr)
+    attr(fr, "na.action.random") <- attr(ranfr, "na.action")
+    
+    # We create a total frame with all of the data, and then subset the individual frames
+    # based on the total na situation
+    na.action.all <- c(attr(fixedfr, "na.action"), attr(bartfr, "na.action"), attr(ranfr, "na.action"))
+    if (length(na.action.all) > 0L) {
+      na.action.all <- sort(na.action.all[!duplicated(na.action.all)])
+      if (!is.null(class(attr(fr, "na.action.fixed"))))
+        class(na.action.all) <- class(attr(fr, "na.action.fixed"))
+      else if (!is.null(class(attr(fr, "na.action.bart"))))
+        class(na.action.all) <- class(attr(fr, "na.action.bart"))
+      else
+        class(na.action.all) <- class(attr(fr, "na.action.random"))
+      
+      attr(fr, "na.action.all") <- na.action.all
+      
+      all_rows <- seq_len(nrow(fr)) %not_in% na.action.all
+      
+      if (!is.null(attr(fixedfr, "na.action"))) {
+        fixed_rows <- seq_len(nrow(fr)) %not_in% attr(fixedfr, "na.action")
+        fixedfr <- fixedfr[all_rows[fixed_rows],,drop = FALSE]
+      }
+      
+      if (!is.null(attr(bartfr, "na.action"))) {
+        bart_rows <- seq_len(nrow(fr)) %not_in% attr(bartfr, "na.action")
+        bartfr <- bartfr[all_rows[bart_rows],,drop = FALSE]
+      }
+      if (!is.null(attr(ranfr, "na.action"))) {
+        random_rows <- seq_len(nrow(fr)) %not_in% attr(ranfr, "na.action")
+        ranfr <- ranfr[all_rows[random_rows],,drop = FALSE]
+      }
+    }
+    
+    reTrms <- mkReTrms(findbars(RHSForm(formula)), ranfr)
+    
+    wmsgNlev <- checkNlevels(reTrms$flist, n = nrow(ranfr), control, allow.n = TRUE)
+    wmsgZdims <- checkZdims(reTrms$Ztlist, n = nrow(ranfr), control, allow.n = TRUE)
+    wmsgZrank <- checkZrank(reTrms$Zt, n = nrow(ranfr), control, nonSmall = 1e+06, 
+        allow.n = TRUE)
     
     # dbartsData can't handle columns in the model frame not in the formula terms, so we
     # pull out  "(offset)" if it exists
@@ -90,11 +125,12 @@ glFormula <- function (formula, data = NULL, subset, weights,
       bartterms <- attr(bartfr, "terms")
       attr(attr(fr, "terms"), "varnames.bart") <- names(bartfr)
     }
+    
     bartData <- dbarts::dbartsData(bartform, bartfr)
     if (ncol(bartData@x) == 0L)
       stop("no bart component detected; consider using rstanarm instead")
     
-    X <- model.matrix(fixedform, fr, contrasts)
+    X <- model.matrix(fixedform, fixedfr, contrasts)
     if (is.null(rankX.chk <- control[["check.rankX"]])) 
       rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
     X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)

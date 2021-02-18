@@ -30,6 +30,10 @@ mstan4bart <-
   gl_call[[1L]] <- quoteInNamespace(glFormula)
   gl_call$control <- make_glmerControl()
   gl_call$data <- data
+  gl_call$na.action <- na.action
+  
+  if (identical(na.action, stats::na.pass) || identical(na.action, "na.pass"))
+    stop("na.action of 'na.pass' not allowed")
   
   for (name in setdiff(names(formals(mstan4bart)), names(formals(glFormula)))) {
     if (name %in% names(gl_call)) gl_call[[name]] <- NULL
@@ -45,12 +49,15 @@ mstan4bart <-
   
   if (!has_outcome_variable(formula))
     stop("bart model requires a response variable")
+  
   y <- model.response(glmod$fr)
   if (is.matrix(y)) {
     if (ncol(y) != 1L) stop("response variable must be a vector")
     y <- as.vector(y)
   }
   y <- as.double(y)
+  if (!is.null(attr(glmod$fr, "na.action.all")))
+    y <- y[setdiff(seq_len(nrow(glmod$fr)), attr(glmod$fr, "na.action.all"))]
   if (length(y) > 0L) {
     u.y <- unique(y)
     family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
