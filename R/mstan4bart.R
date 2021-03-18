@@ -217,7 +217,66 @@ mstan4bart <-
   for (name in names(samples)) 
     result[[name]] <- samples[[name]]
   
+  parameter_names <- rownames(chain_results[[1L]]$sample$stan$raw)
+  # count the number of unconstrained parameters
+  first_upar <- which.max(!endsWith(parameter_names, "__"))
+  if ((aux_pos <- match("aux.1", parameter_names, 0L)) != 0L) {
+    last_upar <- aux_pos - 1L
+  } else if ((beta_pos <- match("beta.1", parameter_names, 0L)) != 0L) {
+    last_upar <- beta_pos - 1L
+  } else {
+    last_upar <- match("b.1", parameter_names) - 1L
+  }
+  n_upars <- last_upar - first_upar + 1L
+
+  if (as.integer(verbose) >= 0L)
+    check_sampler_diagnostics(result, stan_args, n_upars)
+  
   result
+}
+
+check_sampler_diagnostics <- function(object, stan_args, n_upars)
+{
+  n_d <- if ("divergent__" %in% dimnames(object$diagnostics)$diagnostic)
+    sum(object$diagnostics["divergent__",,])
+  else
+    0L
+  if (n_d > 0) {
+    ad <- stan_args$adapt_delta %ORifNULL% 0.8
+    
+    warning("There were ", n_d, " divergent transitions after warmup. See\n",
+            "http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup\n", 
+            "to find out why this is a problem and how to eliminate them.", call. = FALSE)
+  }
+  
+  max_td <- stan_args$max_treedepth %ORifNULL% 10
+  n_m <- if ("treedepth__" %in% dimnames(object$diagnostics)$diagnostic)
+    sum(object$diagnostics["treedepth__",,] >= max_td)
+  else
+    0
+  
+  if (n_m > 0)
+    warning("There were ", n_m,
+            " transitions after warmup that exceeded the maximum treedepth.",
+            " Increase max_treedepth above ", max_td, ". See\n",
+            "http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded", call. = FALSE)
+  
+  
+  n_e <- 0L
+  if ("energy__" %in% dimnames(object$diagnostics)$diagnostic) {
+    E <- as.matrix(object$diagnostics["energy__",,,drop = TRUE])
+    threshold <- 0.2
+    if (nrow(E) > 1) {
+      EBFMI <- n_upars / apply(E, 2, var)
+      n_e <- sum(EBFMI < threshold, na.rm = TRUE)
+    }
+    else n_e <- 0L
+    if (n_e > 0)
+      warning("There were ", n_e, 
+              " chains where the estimated Bayesian Fraction of Missing Information",
+              " was low. See\n", 
+              "http://mc-stan.org/misc/warnings.html#bfmi-low", call. = FALSE)
+  }
 }
 
 package_samples <- function(chain_results, fixef_names, bart_var_names) {
@@ -311,6 +370,13 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
                        n_samples, n_chains,
                        dimnames = list(sample = NULL, chain = NULL))
   }
+  
+  diagnostic_names <- rownames(chain_results[[1]]$sample$stan$raw)
+  diagnostic_names <- diagnostic_names[endsWith(diagnostic_names, "__")]
+  result$diagnostics <- array(sapply(seq_len(n_chains), function(i_chain)
+                                chain_results[[i_chain]]$sample$stan$raw[diagnostic_names,,drop = FALSE]),
+                              c(length(diagnostic_names), n_samples, n_chains),
+                              dimnames = list(diagnostic = diagnostic_names, sample = NULL, chain = NULL))  
   if (n_warmup > 0L) {
     result$warmup <- list()
     result$warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
@@ -382,12 +448,6 @@ package_samples <- function(chain_results, fixef_names, bart_var_names) {
                                 nrow = 2L, ncol = n_chains,
                                 dimnames = list(c("min", "max"), chain = NULL))
   }
-  
-  # TODO: turn into test
-  # all(as.vector(result$ranef[[1]][,,,1]) == as.vector(chain_results[[1L]]$sample$stan$ranef[[1]]))
-  # all(as.vector(result$ranef[[1]][,,,2]) == as.vector(chain_results[[2L]]$sample$stan$ranef[[1]]))
-  # all(as.vector(result$Sigma[[2]][,,,1]) == as.vector(chain_results[[1]]$sample$stan$Sigma[[2]]))
-  # all(as.vector(result$Sigma[[2]][,,,2]) == as.vector(chain_results[[2]]$sample$stan$Sigma[[2]]))
   
   result
 }

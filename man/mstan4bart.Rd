@@ -65,7 +65,7 @@ mstan4bart(formula,
   \item{verbose}{a logical or integer. If \code{FALSE} or non-positive, runs
   quietly. Additional levels of information may be displayed for increasingly
   positive numbers, however a large number of diagnostics are suppressed when
-  running multi-threaded.}
+  running multi-threaded. If negative, all diagnostic information is ignored.}
   \item{iter}{positive integer indicating the number of posterior samples to
   draw and return. Includes warmup samples.}
   \item{warmup}{non-negative integer indicating number of posterior samples to
@@ -231,6 +231,8 @@ mstan4bart(formula,
   Other items:
   \item{\code{warmup}}{a list of warmup samples, containing the same objects in
   the results subsection}
+  \item{\code{diagnostics}}{Stan sampler produced diagnostic information,
+  include tree depth and divergent transitions}
   \item{\code{sampler.bart}}{external points to BART samplers; used only for
   \code{\link[=mstan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
   \item{\code{range.bart}}{internal scale used by BART samplers, used by 

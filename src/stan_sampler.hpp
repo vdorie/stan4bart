@@ -3,7 +3,7 @@
 
 #include <ext/Rinternals.h> // SEXP
 
-#include <fstream> // fstream
+#include <fstream> // fstream, ostream
 #include <memory>  // unique_ptr
 #include <string>  // string, c_str
 #include <sstream> // stringstream
@@ -77,6 +77,8 @@ namespace stan4bart {
   typedef model_continuous_namespace::model_continuous StanModel;
   
   struct StanSampler {
+    std::ostream& c_out;
+    std::ostream& c_err;
     stan::callbacks::stream_logger logger;
     R_CheckUserInterrupt_Functor interrupt;
     
@@ -106,8 +108,16 @@ namespace stan4bart {
     
     stan4bart::interruptable_sampler<StanModel>* sampler;
     
-    StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup);
+    StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup, int verbose);
     void run(bool isWarmup);
+    
+    void getParametricMean(const StanModel& model, double* result) const;
+    void getParametricMean(const StanModel& model, double* result,
+                           bool includeFixed, bool includeRandom) const;
+    double getSigma(const StanModel& model) const;
+    
+    // bool isDivergentTransition() const;
+    // int getTreeDepth() const;
   };
   
   struct double_writer;
@@ -119,10 +129,9 @@ namespace stan4bart {
   
   void setStanOffset(StanModel& model, const double* offset);
   void setResponse(StanModel& model, const double* y);
-  void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result);
-  void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result,
-                         bool includeFixed, bool includeRandom);
-  double getSigma(const StanSampler& sampler, const StanModel& model);
+  
+  
+  bool isDivergentTransition(const StanSampler& sampler);
   
   SEXP createStanResultsExpr(const double_writer& sample_writer);
   void printStanControl(const StanControl& control);

@@ -174,7 +174,7 @@ extern "C" {
     }
     
     int chain_id = 1;
-    sampler.stanSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanControl, chain_id, sampler.defaultWarmup);
+    sampler.stanSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanControl, chain_id, sampler.defaultWarmup, sampler.verbose);
     
     bartFunctions.initializeControl(&sampler.bartControl, bartControlExpr);
     sampler.keepTrees = sampler.bartControl.keepTrees;
@@ -295,7 +295,7 @@ extern "C" {
     sampler.stanSampler->sample_writer.decrement();
     SEXP result = PROTECT(rc_newReal(sampler.bartData.numObservations));
     
-    stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, REAL(result));
+    sampler.stanSampler->getParametricMean(*sampler.stanModel, REAL(result));
     sampler.stanSampler->sample_writer.increment();
     
     UNPROTECT(1);
@@ -444,29 +444,29 @@ extern "C" {
         
         if (sampler.userOffset == NULL) {
           // Rprintf("getting stan para mean\n");
-          stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
+          sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset);
         } else {
           // The user offset can be used to replace parts of the model for debugging purposes.
           // We only add in the remaining parts.
           switch (sampler.offsetType) {
             case OFFSET_DEFAULT:
-            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
+            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset);
             for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
             break;
             
             case OFFSET_BART:
-            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset);
+            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset);
             break;
             
             case OFFSET_RANEF:
-            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset,
-                                         true, false);
+            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset,
+                                                   true, false);
             for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
             break;
             
             case OFFSET_FIXEF:
-            stan4bart::getParametricMean(*sampler.stanSampler, *sampler.stanModel, sampler.bartOffset,
-                                         false, true);
+            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset,
+                                                   false, true);
             for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
             break;
             
@@ -478,9 +478,15 @@ extern "C" {
         }
         if (!sampler.responseIsBinary) {
           // Rprintf("getting sigma\n");
-          double sigma = getSigma(*sampler.stanSampler, *sampler.stanModel);
+          double sigma = sampler.stanSampler->getSigma(*sampler.stanModel);
           bartFunctions.setSigma(sampler.bartSampler, &sigma);
         }
+        
+        /* if (!isWarmup) {
+          if (stanSampler->isDivergentTransition()) {
+            R_ShowMessage("bad things happened!\n")
+          }
+        } */
         
         // Rprintf("incrementing sampling\n");
         sampler.stanSampler->sample_writer.increment();

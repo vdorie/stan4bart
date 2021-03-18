@@ -12,7 +12,7 @@ test_that("extract matches fitted in causal setting model", {
   df.train <- df
   
   fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
-                    cores = 2, verbose = 0, chains = 3, warmup = 7, iter = 13,
+                    cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11),
                     treatment = z)
   
@@ -51,6 +51,7 @@ test_that("nonlinearities are estimated well", {
   
   bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
                          df.train,
+                         verbose = -1L,
                          test = df.test)
   
   bart_fitted <- fitted(bart_fit, sample = "test")
@@ -77,7 +78,7 @@ test_that("predict matches supplied data", {
   fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
                     df.train,
                     test = df.test,
-                    cores = 1, verbose = 0, chains = 3, warmup = 7, iter = 13,
+                    cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11, keepTrees = TRUE))
 
   samples.pred <- predict(fit, df.train, type = "indiv.bart")
@@ -119,7 +120,7 @@ test_that("ppd has approximately right amount of noise", {
   
   set.seed(0)
   fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
-                    cores = 1, verbose = 0, chains = 3, warmup = 7, iter = 13,
+                    cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11))
   
   

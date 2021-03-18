@@ -31,20 +31,21 @@ getRanef <- function(group, samples) {
 # putting this out here so we can export it when parallelizing
 mstan4bart_fit_worker <- function(chain.num, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
 {
-  chain.num <- "ignored"
   # TODO: figure out why the C refs aren't reachable when dispatched to cluster
   ns <- asNamespace("stan4bart")
   
   sampler <- .Call(ns$C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
-  if (control.common$verbose > 0L)
+  if (control.common$verbose > 0L) {
+    cat("fitting chain ", chain.num, "\n", sep = "")
     .Call(ns$C_stan4bart_printInitialSummary, sampler)
+  }
   results <- list()
   if (control.common$warmup > 0L)
     results$warmup  <- .Call(ns$C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
   .Call(ns$C_stan4bart_disengageAdaptation, sampler)
   results$sample <- .Call(ns$C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
                           FALSE, "both")
-  
+  # divergent transitions and maximum tree depth
   
   if (control.common$warmup > 0L) {
     stan_warmup <- list(raw = results$warmup$stan)
@@ -485,7 +486,7 @@ mstan4bart_fit <-
     } else {
       if (control.common$verbose > 0L)
         cat("starting multithreaded fit, futher output silenced\n")
-      control.common$verbose <- 0L
+      control.common$verbose <- -1L
       
       clusterExport(cluster, "mstan4bart_fit_worker", asNamespace("stan4bart"))
       clusterEvalQ(cluster, require(stan4bart))

@@ -9,6 +9,8 @@
 #include <rc/util.h>
 #include <rc/bounds.h>
 
+#include <rstan/io/r_ostream.hpp>
+
 #include <stan/services/util/create_unit_e_diag_inv_metric.hpp>
 
 #if defined(__GNUC__) && (\
@@ -28,6 +30,9 @@
 #endif
 
 #include "double_writer.hpp"
+
+#define TREE_DEPTH_OFFSET 1
+#define DIVERGENT_TRANSITION_OFFSET 3
 
 namespace {
 
@@ -432,8 +437,10 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
   misc_stackFree(matchPos);
 }
 
-StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup) :
-  logger(nullout, nullout, nullout, nullout, nullout),
+StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup, int verbose) :
+  c_out(verbose >  0 ? rstan::io::rcout : nullout),
+  c_err(verbose >= 0 ? rstan::io::rcerr : nullout),
+  logger(c_out, c_out, c_out, c_err, c_err),
   diagnostic_writer(diagnostic_stream, "# "),
   init_context_ptr(new stan::io::empty_var_context()),
   init_writer("init"),
@@ -447,9 +454,9 @@ StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, i
   // start NUTS block
   sampler_names.resize(5);
   sampler_names[0] = "stepsize__";
-  sampler_names[1] = "treedepth__";
+  sampler_names[TREE_DEPTH_OFFSET] = "treedepth__";
   sampler_names[2] = "n_leapfrog__";
-  sampler_names[3] = "divergent__";
+  sampler_names[DIVERGENT_TRANSITION_OFFSET] = "divergent__";
   sampler_names[4] = "energy__";
   sample_writer_offset = sample_names.size() + sampler_names.size();
   
@@ -499,27 +506,37 @@ void setResponse(StanModel& model, const double* response)
   model.set_response(response);
 }
 
-void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result)
+void StanSampler::getParametricMean(const StanModel& model, double* result) const
 {
-  model.get_parametric_mean(sampler.sample_writer.x_curr + sampler.sample_writer_offset, result);
+  model.get_parametric_mean(sample_writer.x_curr + sample_writer_offset, result);
 }
 
-void getParametricMean(const StanSampler& sampler, const StanModel& model, double* result,
-                       bool includeFixed, bool includeRandom)
+void StanSampler::getParametricMean(const StanModel& model, double* result,
+                                    bool includeFixed, bool includeRandom) const
 {
-  model.get_parametric_mean(sampler.sample_writer.x_curr + sampler.sample_writer_offset, result,
+  model.get_parametric_mean(sample_writer.x_curr + sample_writer_offset, result,
                             includeFixed, includeRandom);
 }
 
-double getSigma(const StanSampler& sampler, const StanModel& model)
+double StanSampler::getSigma(const StanModel& model) const
 {
-  return model.get_aux(sampler.sample_writer.x_curr + sampler.sample_writer_offset);
+  return model.get_aux(sample_writer.x_curr + sample_writer_offset);
 }
 
 void StanSampler::run(bool isWarmup)
 {
   sampler->run(isWarmup);
 }
+
+/* 
+bool StanSampler::isDivergentTransition() const {
+  return sample_writer.x_curr[DIVERGENT_TRANSITION_OFFSET] == 1.0;
+}
+
+int StanSampler::getTreeDepth() const {
+  return static_cast<int>(sample_writer.x_curr[TREE_DEPTH_OFFSET] + 0.5);
+}
+*/
 
 SEXP createStanResultsExpr(const double_writer& sample_writer)
 {
