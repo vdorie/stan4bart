@@ -7,7 +7,7 @@ combine_chains_f <- function(x) {
     if (!is.null(dn)) {
       dn <- dn[seq.int(1L, l_d - 2L)]
       dn[l_d - 1L] <- list(NULL)
-      names(dn)[l_d - 1L] <- "sample"
+      names(dn)[l_d - 1L] <- "iterations:chains"
     }
     array(x, c(d[-t_d], prod(d[t_d])), dimnames = dn)
   } else if (is.matrix(x) || (!is.null(dim(x)) && length(dim(x)) == 2L)) {
@@ -15,10 +15,93 @@ combine_chains_f <- function(x) {
   }
 }
 
+as.array.mstan4bartFit <- function (x, ...) 
+{
+  result <- x$stan
+  result <- result[grep("^(?:gamma|beta|b|aux)\\.", dimnames(result)[[1L]], perl = TRUE),,,drop = FALSE]
+  par_names <- dimnames(result)[[1L]]
+  if ("gamma.1" %in% par_names) {
+    par_names[match("gamma.1", par_names)] <- "(Intercept)"
+  }
+  if (any(startsWith(par_names, "beta."))) {
+    beta_names <- par_names[startsWith(par_names, "beta")]
+    beta_col <- as.integer(sub("beta\\.", "", beta_names))
+    has_intercept <- "(Intercept)" %in% colnames(x$X)
+    
+    par_names[startsWith(par_names, "beta")] <- colnames(x$X)[beta_col + as.integer(has_intercept)]
+  }
+  if (any(startsWith(par_names, "b."))) {
+    numGroupingFactors <- length(x$reTrms$cnms)
+    numRanefPerGroupingFactor <- unname(lengths(x$reTrms$cnms))
+    group_names <- lapply(x$reTrms$flist, levels)
+    
+    ranef_names <- paste0(
+      "b[",
+      unlist(sapply(seq_along(x$reTrms$cnms), function(j) rep(x$reTrms$cnms[[j]], times = length(group_names[[j]])))),
+      " ",
+      rep(names(group_names), times = numRanefPerGroupingFactor * lengths(group_names)),
+      ":",
+      unlist(sapply(seq_along(group_names), function(j) rep(group_names[[j]], each = numRanefPerGroupingFactor[j]))),
+      "]"
+    )
+    
+    par_names[startsWith(par_names, "b.")] <- ranef_names
+  }
+  if ("aux.1" %in% par_names) {
+    par_names[match("aux.1", par_names)] <- "sigma"
+  }
+  
+  dimnames(result)[[1L]] <- par_names
+  
+  # TODO: modify this to avoid using extract and pull directly from theta_L
+   # very low priority
+  Sigmas <- extract(x, "Sigma", combine_chains = FALSE)
+  if (length(Sigmas) > 0L) {
+    Sigmas.list <- lapply(Sigmas, function(Sigma) {
+      r <- apply(Sigma, c(3L, 4L), function(x) x[upper.tri(x, diag = TRUE)])
+      if (length(dim(r)) == 2L) r <- array(r, c(1L, dim(r)))
+      
+      dn <- outer(dimnames(Sigma)[[1]], dimnames(Sigma)[[2]], FUN = paste, sep = ",")
+      dimnames(r)[[1L]] <- dn[upper.tri(dn, diag = TRUE)]
+      aperm(r, c(2L, 3L, 1L))
+    })
+    n_samples <- dim(Sigmas.list[[1L]])[1L]
+    n_chains  <- dim(Sigmas.list[[1L]])[2L]
+    n_pars    <- sapply(Sigmas.list, function(x) dim(x)[3L])
+    
+    Sigma_names <- paste0("Sigma[",
+                          rep(names(Sigmas), times = n_pars),
+                          ":",
+                          unlist(lapply(Sigmas.list, function(x) dimnames(x)[[3L]])),
+                          "]")
+    Sigmas.arr <- array(unlist(Sigmas.list),
+                        dim = c(n_samples, n_chains, sum(n_pars)),
+                        dimnames = list(iterations = NULL, chains = dimnames(Sigmas[[1L]])[[3L]],
+                                        Sigma_names))
+    result <- aperm(result, c(2L, 3L, 1L))
+    result <- array(c(result, Sigmas.arr),
+                    dim = c(n_samples, n_chains, dim(result)[3L] + dim(Sigmas.arr)[3L]),
+                    dimnames = list(iterations = dimnames(result)[[1]],
+                                    chains = dimnames(result)[[2]],
+                                    parameters = c(dimnames(result)[[3L]], dimnames(Sigmas.arr)[[3L]])))
+    
+    result <- aperm(result, c(3L, 1L, 2L))
+  }
+  
+  aperm(result, c(2L, 3L, 1L))
+}
+
+as.matrix.mstan4bartFit <- function (x, ...) 
+{
+  result <- as.array(x, ...)
+  
+  as.matrix(result, ncol = dim(result)[3L])
+}
+
 extract.mstan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-                    "indiv.bart", "sigma", "Sigma", "k", "varcount"),
+                    "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
            sample = c("train", "test"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
@@ -29,16 +112,52 @@ extract.mstan4bartFit <-
   type   <- match.arg(type)
   sample <- match.arg(sample)
   
-  # return parametric components early, as they don't require building model matrices
-  if (type %in% c("fixef", "ranef", "sigma", "Sigma", "k", "varcount")) {
-    result <- switch(type,
-                     varcount    = object$bart_varcount,
-                     ranef       = object$ranef,
-                     fixef       = object$fixef,
-                     Sigma       = object$Sigma,
-                     sigma       = object$sigma,
-                     k           = object$k)
+  is_bernoulli <- object$family$family == "binomial"
+  if (type == "sigma" && is_bernoulli)
+    stop("cannot extract 'sigma': binary outcome model does not have a residual standard error parameter")
+  if (type == "k" && is.null(object$k))
+    stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
+  
+  if (type == "fixef") {
+    result <- object$stan[grep("^beta|gamma", dimnames(object$stan)[[1L]]),,,drop = FALSE]
+    dimnames(result)[[1L]] <- colnames(object$X)
+    names(dimnames(result))[1L] <- "predictor"
+  } else if (type == "ranef") {
+    ranef <- object$stan[grep("^b\\.", dimnames(object$stan)[[1L]]),,,drop = FALSE]
     
+    numGroupingFactors <- length(object$reTrms$cnms)
+    numRanefPerGroupingFactor <- unname(lengths(object$reTrms$cnms))
+  
+    result <- lapply(seq_len(numGroupingFactors), function(j) {
+      ranef.group <- ranef[seq.int(object$reTrms$Gp[j] + 1L, object$reTrms$Gp[j + 1L]),,,drop = FALSE]
+      result <- array(ranef.group, c(numRanefPerGroupingFactor[j], dim(ranef.group)[1L] %/% numRanefPerGroupingFactor[j], dim(ranef.group)[-1L]),
+                      dimnames = list(
+                        predictor = object$reTrms$cnms[[j]],
+                        group = levels(object$reTrms$flist[[j]]),
+                        iterations = NULL,
+                        chains = dimnames(ranef.group)[[3L]]))
+      result
+    })
+    names(result) <- names(object$reTrms$cnms)
+  } else if (type == "Sigma") {
+    thetas <- object$stan[grep("^theta_L", dimnames(object$stan)[[1L]]),,,drop = FALSE]
+    numRanefPerGroupingFactor <- unname(lengths(object$reTrms$cnms))
+    nms <- names(object$reTrms$cnms)
+    Sigma <- apply(thetas, c(2L, 3L), function(theta) mkVarCorr(sc = 1, object$reTrms$cnms, numRanefPerGroupingFactor, theta, nms))
+    result <- lapply(seq_along(Sigma[[1L]]), function(j) {
+      raw <- sapply(Sigma, function(Sigma.i) Sigma.i[[j]])
+      array(raw, c(NROW(Sigma[[1L]][[j]]), NCOL(Sigma[[1L]][[j]]), NROW(Sigma), NCOL(Sigma)),
+            dimnames = list(rownames(Sigma[[1L]][[j]]), colnames(Sigma[[1L]][[j]]),
+                            iterations = NULL, chains = dimnames(thetas)[[3L]]))
+    })
+    names(result) <- names(Sigma[[1L]])
+  } else if (type == "sigma") {
+    result <- object$stan[grep("^aux\\.", dimnames(object$stan)[[1L]]),,]
+  } else if (type %in% c("bart_varcount", "k", "stan")) {
+    result <- object[[type]]
+  }
+  # return parametric components early, as they don't require building model matrices
+  if (type %in% c("fixef", "ranef", "sigma", "Sigma", "k", "varcount", "stan")) {
     if (combine_chains) {
       if (is.list(result)) {
         result <- lapply(result, combine_chains_f)
@@ -50,21 +169,15 @@ extract.mstan4bartFit <-
     return(result)
   }
   
-  is_bernoulli <- object$family$family == "binomial"
-  if (type == "sigma" && is_bernoulli)
-    stop("cannot extract 'sigma': binary outcome model does not have a residual standard error parameter")
-  if (type == "k" && is.null(object$k))
-    stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
-  
   n_samples <- dim(object$bart_train)[2L]
   n_obs     <- 0L
   n_chains  <- dim(object$bart_train)[3L]
-  n_fixef <- if (!is.null(object$fixef)) dim(object$fixef)[1L] else 0L
+  n_fixef <- sum(grepl("^beta|gamma", dimnames(object$stan)[[1L]]))
   n_warmup <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
   n_bart_vars <- dim(object$bart_varcount)[1L]
   
-  if (!is.null(object$ranef)) {
-    n_ranef_levels <- length(object$ranef)
+  if (!is.null(object$reTrms)) {
+    n_ranef_levels <- length(object$reTrms$cnms)
   } else {
     n_ranef_levels <- 0L
   }
@@ -194,8 +307,9 @@ extract.mstan4bartFit <-
     if (is_bernoulli) {
       result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
     } else {
+      sigma <- extract(object, "sigma", combine_chains = TRUE)
       result <- result + 
-        array(rnorm(dim(result)[1L] * n_samples * n_chains, 0, rep(as.vector(object$sigma),
+        array(rnorm(dim(result)[1L] * n_samples * n_chains, 0, rep(as.vector(sigma),
                                                                    each = dim(result)[1L])),
              c(dim(result)[1L], n_samples, n_chains))
     }
@@ -217,7 +331,7 @@ extract.mstan4bartFit <-
 fitted.mstan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-                    "indiv.bart", "sigma", "Sigma", "k", "varcount"),
+                    "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
            sample = c("train", "test"),
            sample_new_levels = TRUE,
            ...)
@@ -270,8 +384,8 @@ fitted_fixed <- function(object, x)
   intercept_delta <- apply(fixef[keep_cols,,drop = FALSE] * x_means[keep_cols], 2L, sum)
   
   n_obs     <- nrow(x)
-  n_samples <- dim(object$fixef)[2L]
-  n_chains  <- dim(object$fixef)[3L]
+  n_samples <- dim(object$bart_train)[2L]
+  n_chains  <- dim(object$bart_train)[3L]
   
   array(t(t(x %*% fixef) - intercept_delta),
         c(n_obs, n_samples, n_chains),
@@ -281,18 +395,19 @@ fitted_fixed <- function(object, x)
 fitted_random <- function(object, reTrms, sample_new_levels)
 {
   n_obs     <- ncol(reTrms$Zt)
-  n_samples <- dim(object$fixef)[2L]
-  n_chains  <- dim(object$fixef)[3L] 
+  n_samples <- dim(object$bart_train)[2L]
+  n_chains  <- dim(object$bart_train)[3L] 
   
-  ns.re <- names(re <- object$ranef)
+  ns.re <- names(re <- extract(object, "ranef", combine_chains = FALSE))
   nRnms <- names(Rcnms <- reTrms$cnms)
   if (!all(nRnms %in% ns.re)) 
     stop("grouping factors specified in re.form that were not present in original model")
   
   new_levels <- lapply(reTrms$flist, function(x) levels(factor(x)))
   
+  Sigmas <- extract(object, "Sigma", combine_chains = FALSE)
   re_x <- Map(function(r, n, Sigma) levelfun(r, n, sample_new_levels, Sigma), 
-              re[names(new_levels)], new_levels, object$Sigma[names(new_levels)])
+              re[names(new_levels)], new_levels, Sigmas[names(new_levels)])
   get_re <- function(rname, cnms) {
     nms <- dimnames(re[[rname]])$predictor
     if (identical(cnms, "(Intercept)") && length(nms) == 1 && grepl("^s(.*)$", nms)) {
@@ -324,7 +439,7 @@ fitted_random <- function(object, reTrms, sample_new_levels)
   Zb <- Matrix::crossprod(reTrms$Zt, b_mat) # getting a memory error on this
   
   array(Zb, c(n_obs, n_samples, n_chains),
-        dimnames = list(observation = NULL, sample = NULL, chain = NULL))
+        dimnames = list(observation = NULL, iterations = NULL, chain = dimnames(re_new[[1L]])$chain))
 }
 
 predict.mstan4bartFit <-
@@ -418,8 +533,9 @@ predict.mstan4bartFit <-
     if (is_bernoulli) {
       result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
     } else {
+      sigma <- extract(object, "sigma", combine_chains = TRUE)
       result <- result + 
-        array(rnorm(n_obs * n_samples * n_chains, 0, rep(as.vector(object$sigma), each = n_obs)),
+        array(rnorm(n_obs * n_samples * n_chains, 0, rep(as.vector(sigma), each = n_obs)),
              c(n_obs, n_samples, n_chains))
     }
   }

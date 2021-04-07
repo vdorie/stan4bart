@@ -15,7 +15,7 @@
 \method{extract}{mstan4bartFit}(
   object,
   type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-           "indiv.bart", "sigma", "Sigma", "k", "varcount"),
+           "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
   sample = c("train", "test"),
   combine_chains = TRUE,
   sample_new_levels = TRUE,
@@ -24,7 +24,7 @@
 \method{fitted}{mstan4bartFit}(
   object,
   type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-           "indiv.bart", "sigma", "Sigma", "k", "varcount"),
+           "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
   sample = c("train", "test"),
   sample_new_levels = TRUE,
   \dots)
@@ -87,6 +87,8 @@
       error
       \item \code{"Sigma"} - when applicable, the covariance matrices of the
       random effects
+      \item \code{"stan"} - raw matrix or array of Stan sampled transformed
+      parameters.
     }
   }
 }

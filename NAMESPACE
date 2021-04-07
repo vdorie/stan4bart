@@ -5,6 +5,9 @@ S3method(extract, mstan4bartFit)
 S3method(fitted, mstan4bartFit)
 S3method(predict, mstan4bartFit)
 
+S3method(as.array, mstan4bartFit)
+S3method(as.matrix, mstan4bartFit)
+
 importFrom(dbarts, extract)
 importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao, bdiag)
 importFrom(parallel, makeCluster, clusterExport, clusterEvalQ, clusterMap, stopCluster)
@@ -17,6 +20,6 @@ importFrom(stats, contrasts, "contrasts<-")
 importFrom(stats, model.frame, model.frame.default, model.matrix,
            model.offset, model.response, model.weights,
            delete.response)
-importFrom(stats, fitted, uniroot, sigma, sd, na.pass)
+importFrom(stats, fitted, uniroot, sigma, sd, na.pass, var)
 
 importFrom("methods", "as", "is", "new")

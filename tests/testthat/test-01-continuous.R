@@ -8,15 +8,12 @@ rm(generateFriedmanData)
 df <- with(testData, data.frame(x, g.1, g.2, y, z))
 rm(testData)
 
-test_that("extract matches fitted in causal setting model", {
-  df.train <- df
-  
-  fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
+fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                     cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11),
                     treatment = z)
-  
-  
+
+test_that("extract matches fitted in causal setting model", {
   samples.ev.train <- extract(fit)
   samples.ev.test  <- extract(fit, sample = "test")
   
@@ -39,10 +36,30 @@ test_that("extract matches fitted in causal setting model", {
   
   expect_equal(fitted.ev.train, fitted(fit, "ev", "train"))
   expect_equal(fitted.ev.test,  fitted(fit, "ev", "test"))
+})
+
+test_that("extract matches as.array", {
+  arr <- as.array(fit)
+  ranef <- extract(fit, "ranef")
   
+  grouping_factors <- names(fit$reTrms$cnms)
+  for (grouping_factor in grouping_factors) {
+    predictors <- fit$reTrms$cnms[[grouping_factor]]
+    groups <- levels(fit$reTrms$flist[[grouping_factor]])
+    for (predictor in predictors) {
+      for (group in groups) {
+        expect_true(all(arr[,,paste0("b[", predictor, " ", grouping_factor, ":", group, "]")] ==
+                        ranef[[grouping_factor]][predictor,group,]))
+      }
+    }
+  }
 })
 
 test_that("nonlinearities are estimated well", {
+  # Because this is not documented, to enable this test execute from R
+  #   Sys.setenv(NOT_CRAN = "true")
+  # or from shell
+  #   export NOT_CRAN=true
   skip_on_cran()
   skip_if_not_installed("lme4")
   
