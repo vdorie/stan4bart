@@ -15,10 +15,22 @@ combine_chains_f <- function(x) {
   }
 }
 
-as.array.mstan4bartFit <- function (x, ...) 
+as.array.mstan4bartFit <- function (x, include_warmup = FALSE, ...) 
 {
-  result <- x$stan
-  result <- result[grep("^(?:gamma|beta|b|aux)\\.", dimnames(result)[[1L]], perl = TRUE),,,drop = FALSE]
+  include_warmup_orig <- include_warmup
+  if (is.character(include_warmup)) {
+    if (length(include_warmup) != 1L || include_warmup != "only")
+      stop("'include_warmup' must be logical or \"only\"")
+    include_warmup <- TRUE
+    only_warmup <- TRUE
+  } else if (!is.logical(include_warmup) || length(include_warmup) != 1L || is.na(include_warmup)) {
+    stop("'include_warmup' must be logical or \"only\"")
+  } else {
+    only_warmup <- FALSE
+  }
+
+  result <- get_samples(x$stan[grep("^(?:gamma|beta|b|aux)\\.", dimnames(x$stan)[[1L]], perl = TRUE),,,drop = FALSE], include_warmup, only_warmup)
+  
   par_names <- dimnames(result)[[1L]]
   if ("gamma.1" %in% par_names) {
     par_names[match("gamma.1", par_names)] <- "(Intercept)"
@@ -55,7 +67,7 @@ as.array.mstan4bartFit <- function (x, ...)
   
   # TODO: modify this to avoid using extract and pull directly from theta_L
    # very low priority
-  Sigmas <- extract(x, "Sigma", combine_chains = FALSE)
+  Sigmas <- extract(x, "Sigma", include_warmup = include_warmup_orig, combine_chains = FALSE)
   if (length(Sigmas) > 0L) {
     Sigmas.list <- lapply(Sigmas, function(Sigma) {
       r <- apply(Sigma, c(3L, 4L), function(x) x[upper.tri(x, diag = TRUE)])
@@ -98,6 +110,61 @@ as.matrix.mstan4bartFit <- function (x, ...)
   as.matrix(result, ncol = dim(result)[3L])
 }
 
+array_bind_samples <- function(x, y) {
+  if (is.null(dim(x)) || length(dim(x)) == 1L) {
+    c(x, y)
+  } else if (length(dim(x)) == 3L) {
+    aperm(array(c(aperm(x, c(1L, 3L, 2L)),
+                  aperm(y, c(1L, 3L, 2L))),
+                dim = c(dim(x)[1L], dim(x)[3L], dim(x)[2L] + dim(y)[2L]),
+                dimnames = list(parameters = dimnames(x)[[1L]],
+                chain = dimnames(x)[[3L]],              
+                iterations = NULL)),
+          c(1L, 3L, 2L))
+  } else if (length(dim(x)) == 2L) {
+    t(matrix(c(t(x), t(y)),
+             nrow = ncol(x), ncol = nrow(x) + nrow(y),
+             dimnames = list(chain = colnames(x), iterations = NULL)))
+  } else {
+    stop("unrecognized dimensions of input x: ", paste0(dim(x), collapse = " x "))
+  }
+}
+
+get_samples <- function(expr, include_warmup, only_warmup)
+{
+  get_warmup_expression <- function(expr) {
+    if (length(expr) == 3L) {
+      if ((expr[[1L]] == "$" || expr[[1L]] == "[[") && expr[[2L]] == "object") {
+        lhs <- expr[[2L]] # it can be x$stan or object$stan, depending on context
+        expr[[2L]] <- quote(object$warmup)
+        expr[[2L]][[2L]] <- lhs
+        expr[[3L]] <- get_warmup_expression(expr[[3L]])
+      } else {
+        expr[[2L]] <- get_warmup_expression(expr[[2L]])
+        expr[[3L]] <- get_warmup_expression(expr[[3L]])
+      }
+    } else if (length(expr) > 1L) {
+      for (i in seq.int(2L, length(expr)))
+        expr[[i]] <- get_warmup_expression(expr[[i]])
+    }
+    expr
+  }
+  mc <- match.call()
+  expr_sample <- mc$expr
+  expr_warmup <- get_warmup_expression(expr_sample)
+  
+  if (!include_warmup) {
+    result <- eval(expr_sample, envir = parent.frame())
+  } else if (only_warmup) {
+    result <- eval(expr_warmup, envir = parent.frame())
+  } else {
+    warmup <- eval(expr_warmup, envir = parent.frame())
+    sample <- eval(expr_sample, envir = parent.frame())
+    result <- array_bind_samples(warmup, sample)
+  }
+  result
+}
+
 extract.mstan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
@@ -105,12 +172,25 @@ extract.mstan4bartFit <-
            sample = c("train", "test"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
+           include_warmup = FALSE,
            ...)
 {
   if (length(list(...)) > 0) warning("unused arguments ignored")
   
   type   <- match.arg(type)
   sample <- match.arg(sample)
+  
+  include_warmup_orig <- include_warmup
+  if (is.character(include_warmup)) {
+    if (length(include_warmup) != 1L || include_warmup != "only")
+      stop("'include_warmup' must be logical or \"only\"")
+    include_warmup <- TRUE
+    only_warmup <- TRUE
+  } else if (!is.logical(include_warmup) || length(include_warmup) != 1L || is.na(include_warmup)) {
+    stop("'include_warmup' must be logical or \"only\"")
+  } else {
+    only_warmup <- FALSE
+  }
   
   is_bernoulli <- object$family$family == "binomial"
   if (type == "sigma" && is_bernoulli)
@@ -119,11 +199,13 @@ extract.mstan4bartFit <-
     stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
   
   if (type == "fixef") {
-    result <- object$stan[grep("^beta|gamma", dimnames(object$stan)[[1L]]),,,drop = FALSE]
+    result <- get_samples(object$stan[grep("^beta|gamma", dimnames(object$stan)[[1L]]),,,drop = FALSE],
+                           include_warmup, only_warmup)
     dimnames(result)[[1L]] <- colnames(object$X)
     names(dimnames(result))[1L] <- "predictor"
   } else if (type == "ranef") {
-    ranef <- object$stan[grep("^b\\.", dimnames(object$stan)[[1L]]),,,drop = FALSE]
+    ranef <- get_samples(object$stan[grep("^b\\.", dimnames(object$stan)[[1L]]),,,drop = FALSE],
+                         include_warmup, only_warmup)
     
     numGroupingFactors <- length(object$reTrms$cnms)
     numRanefPerGroupingFactor <- unname(lengths(object$reTrms$cnms))
@@ -140,7 +222,8 @@ extract.mstan4bartFit <-
     })
     names(result) <- names(object$reTrms$cnms)
   } else if (type == "Sigma") {
-    thetas <- object$stan[grep("^theta_L", dimnames(object$stan)[[1L]]),,,drop = FALSE]
+    thetas <- get_samples(object$stan[grep("^theta_L", dimnames(object$stan)[[1L]]),,,drop = FALSE],
+                          include_warmup, only_warmup)
     numRanefPerGroupingFactor <- unname(lengths(object$reTrms$cnms))
     nms <- names(object$reTrms$cnms)
     Sigma <- apply(thetas, c(2L, 3L), function(theta) mkVarCorr(sc = 1, object$reTrms$cnms, numRanefPerGroupingFactor, theta, nms))
@@ -152,9 +235,11 @@ extract.mstan4bartFit <-
     })
     names(result) <- names(Sigma[[1L]])
   } else if (type == "sigma") {
-    result <- object$stan[grep("^aux\\.", dimnames(object$stan)[[1L]]),,]
+    result <- get_samples(object$stan[grep("^aux\\.", dimnames(object$stan)[[1L]]),,],
+                          include_warmup, only_warmup)
   } else if (type %in% c("bart_varcount", "k", "stan")) {
-    result <- object[[type]]
+    result <- get_samples(object[[type]],
+                          include_warmup, only_warmup)
   }
   # return parametric components early, as they don't require building model matrices
   if (type %in% c("fixef", "ranef", "sigma", "Sigma", "k", "varcount", "stan")) {
@@ -247,7 +332,7 @@ extract.mstan4bartFit <-
     if (!is.null(offset) && offset_type %in% c("fixed", "parametric") && type != "indiv.fixef")
       indiv.fixef <- offset
     else
-      indiv.fixef <- fitted_fixed(object, X)
+      indiv.fixef <- fitted_fixed(object, X, include_warmup_orig)
     
     if (inherits(na.action.fixed, "exclude")) {
       indiv.fixef.all <- array(NA_real_, c(n_all, dim(indiv.fixef)[-1L]), dimnames(indiv.fixef))
@@ -263,7 +348,7 @@ extract.mstan4bartFit <-
         indiv.ranef <- offset
     }
     else
-      indiv.ranef <- fitted_random(object, reTrms, sample_new_levels)
+      indiv.ranef <- fitted_random(object, reTrms, include_warmup_orig, sample_new_levels)
     
     if (inherits(na.action.random, "exclude")) {
       indiv.ranef.all <- array(NA_real_, c(n_all, dim(indiv.ranef)[-1L]), dimnames(indiv.ranef))
@@ -276,7 +361,10 @@ extract.mstan4bartFit <-
     if (!is.null(offset) && offset_type %in% "bart" && type != "indiv.bart")
       indiv.bart <- offset
     else
-      indiv.bart <- if (sample == "train") object$bart_train else object$bart_test
+      indiv.bart <- if (sample == "train")
+        get_samples(object$bart_train, include_warmup, only_warmup)
+      else
+        get_samples(object$bart_test, include_warmup, only_warmup)
     
     if (inherits(na.action.bart, "exclude")) {
       indiv.bart.all <- array(NA_real_, c(n_all, dim(indiv.bart)[-1L]), dimnames(indiv.bart))
@@ -360,9 +448,9 @@ fitted.mstan4bartFit <-
   result
 }
 
-fitted_fixed <- function(object, x)
+fitted_fixed <- function(object, x, include_warmup)
 {
-  fixef <- extract(object, "fixef", combine_chains = TRUE)
+  fixef <- extract(object, "fixef", include_warmup = include_warmup, combine_chains = TRUE)
   
   a <- colnames(x)
   b <- dimnames(fixef)$predictor
@@ -384,21 +472,24 @@ fitted_fixed <- function(object, x)
   intercept_delta <- apply(fixef[keep_cols,,drop = FALSE] * x_means[keep_cols], 2L, sum)
   
   n_obs     <- nrow(x)
-  n_samples <- dim(object$bart_train)[2L]
+  # n_warmup  <- dim(object$warmup$bart_train)[2L]
+  # n_samples <- dim(object$bart_train)[2L]
   n_chains  <- dim(object$bart_train)[3L]
+  n_samples <- ncol(fixef) %/% n_chains
   
   array(t(t(x %*% fixef) - intercept_delta),
         c(n_obs, n_samples, n_chains),
           dimnames = list(observation = NULL, sample = NULL, chain = NULL))
 }
 
-fitted_random <- function(object, reTrms, sample_new_levels)
+fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
 {
-  n_obs     <- ncol(reTrms$Zt)
-  n_samples <- dim(object$bart_train)[2L]
-  n_chains  <- dim(object$bart_train)[3L] 
+  n_obs <- ncol(reTrms$Zt)
   
-  ns.re <- names(re <- extract(object, "ranef", combine_chains = FALSE))
+  ns.re <- names(re <- extract(object, "ranef", include_warmup = include_warmup, combine_chains = FALSE))
+  n_samples <- dim(re[[1L]])[3L]
+  n_chains  <- dim(re[[1L]])[4L]
+  
   nRnms <- names(Rcnms <- reTrms$cnms)
   if (!all(nRnms %in% ns.re)) 
     stop("grouping factors specified in re.form that were not present in original model")
@@ -471,23 +562,21 @@ predict.mstan4bartFit <-
   n_samples <- dim(object$bart_train)[2L]
   n_chains  <- dim(object$bart_train)[3L]
   n_obs     <- dim(testData$X.bart)[1L]
-  n_fixef   <- if (!is.null(object$fixef)) dim(object$fixef)[1L] else 0L
+  n_fixef <- sum(grepl("^beta|gamma", dimnames(object$stan)[[1L]]))
   n_warmup  <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
   n_bart_vars <- dim(object$bart_varcount)[1L]
   is_bernoulli <- object$family$family == "binomial"
   
-  if (!is.null(object$ranef)) {
-    n_ranef_levels <- length(object$ranef)
-    n_ranef_at_level  <- sapply(object$ranef, function(ranef_i) dim(ranef_i)[1L])
-    n_groups_at_level <- sapply(object$ranef, function(ranef_i) dim(ranef_i)[2L])
+  if (!is.null(object$reTrms)) {
+    n_ranef_levels <- length(object$reTrms$cnms)
   } else {
-    n_ranef_levels <- n_ranef_at_level <- n_groups_at_level <- 0L
+    n_ranef_levels <- 0L
   }
-
+  
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef")) {
     if (!is.null(testData$X)) {
-      indiv.fixef <- fitted_fixed(object, testData$X)
+      indiv.fixef <- fitted_fixed(object, testData$X, FALSE)
     } else {
       if (type == "indiv.fixef")
         stop("predict called with type 'indiv.fixef', but model does not include fixed effect terms")
@@ -507,7 +596,7 @@ predict.mstan4bartFit <-
   if (type %in% c("ev", "ppd", "indiv.ranef")) {
     
     if (!is.null(testData$reTrms)) {
-      indiv.ranef <- fitted_random(object, testData$reTrms, sample_new_levels)
+      indiv.ranef <- fitted_random(object, testData$reTrms, FALSE, sample_new_levels)
     } else {
       if (type == "indiv.ranef")
         stop("predict called with type 'indiv.ranef', but model does not include random effect terms")
@@ -550,3 +639,4 @@ predict.mstan4bartFit <-
   
   result
 }
+

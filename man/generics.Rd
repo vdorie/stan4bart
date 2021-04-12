@@ -19,6 +19,7 @@
   sample = c("train", "test"),
   combine_chains = TRUE,
   sample_new_levels = TRUE,
+  include_warmup = FALSE,
   \dots)
   
 \method{fitted}{mstan4bartFit}(
@@ -47,6 +48,9 @@
   \item{sample_new_levels}{logical; if \code{TRUE}, levels out of the training
   sample will have random effects drawn from their posterior predictive
   distribution. If \code{FALSE}, their random effects will be fixed to 0.}
+  \item{include_warmup}{logical or \code{"only"}; when \code{TRUE}/\code{FALSE},
+  warmup samples will or will not be included in the result respectively. When
+  \code{"only"}, only the warmup samples will be returned.}
   \item{newdata}{data frame for making out of sample predictions.}
   \item{offset}{optional vector which will be added to test predictors.}
   \item{\dots}{not currently in use, but provided to match signatures of

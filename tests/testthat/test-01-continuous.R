@@ -55,6 +55,24 @@ test_that("extract matches as.array", {
   }
 })
 
+test_that("extract include_samples works correctly", {
+  sample <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = FALSE)
+  warmup <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = "only")
+  both   <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = TRUE)
+  
+  expect_equal(dim(warmup)[2L] + dim(sample)[2L], dim(both)[2L])
+  for (i in seq_len(dim(warmup)[1L])) {
+    expect_equal(unname(rbind(warmup[i,,], sample[i,,])), unname(both[i,,]))
+  }
+  
+  sample <- extract(fit, "sigma", combine_chains = FALSE, include_warmup = FALSE)
+  warmup <- extract(fit, "sigma", combine_chains = FALSE, include_warmup = "only")
+  both   <- extract(fit, "sigma", combine_chains = FALSE, include_warmup = TRUE)
+  
+  expect_equal(dim(warmup)[1L] + dim(sample)[1L], dim(both)[1L])
+  expect_equal(unname(rbind(warmup, sample)), unname(both))
+})
+
 test_that("nonlinearities are estimated well", {
   # Because this is not documented, to enable this test execute from R
   #   Sys.setenv(NOT_CRAN = "true")
