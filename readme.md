@@ -38,7 +38,7 @@ The name and definition of `extract` conflict with `rstan`. The `rstan` package 
 stan4bart:::extract.mstan4bartFit(stan4bart_fit)
 ```
 
-== Example Code
+## Example Code
 
 ```R
 library(stan4bart)
