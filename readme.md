@@ -1,156 +1,65 @@
-This package is a early implementation of a C++ sampler that uses BART for non-parametric mean components and Stan for multilevel/parametric ones.
+This package is an implementation of a C++ sampler that uses [BART](https://cran.r-project.org/package=dbarts) for non-parametric mean components and [Stan](https://mc-stan.org) for multilevel/parametric ones.
 
-To install:
+## Installation
+
   1. Install the developer tools for your platform ([Mac OS](https://cran.r-project.org/bin/macosx/tools), [Windows](https://cran.r-project.org/bin/windows/Rtools/)). Mac OS users will need the (linked) gfortan for their respective platforms.
   2. Execute:
 
 ```
-install.packages("remotes")
+if (length(find.package("remotes", quiet = TRUE)) == 0L)
+  install.packages("remotes")
 remotes::install_github("vdorie/dbarts")
 remotes::install_github("vdorie/stan4bart")
 ```
 
-Windows compilation has been minimally tested and may need more attention.
+## Use
 
-Here's some test code to get started with the package. It accepts an lme4 syntax and should be pretty flexible in that regard. See the package documentation `?mstan4bart` and `?stan4bart::mstan4bart-generics` for more information.
+The package utilizes the flexible, expressive lme4 syntax for specifying group-level structures. See the package documentation `?mstan4bart` and `?stan4bart::mstan4bart-generics` for more information.
+
+### Formulas
+
+* `y ~ bart(x_nuisance_1 + x_nuisance_1) + x_inference` - wrap the formula for any variables that you want to be fit non-parametrically in a call to `bart()`; `+`s within `bart()` are interpretted figuratively as indicating the names of the variables to be included
+* `y ~ bart(x_fixef) + (1 + x_ranef | g)` - supports all [`lme4`](https://www.rdocumentation.org/packages/lme4/versions/1.1-26/topics/lmer) varying intercept and slope formula constructs
+* `y ~ x_1 + (1 + x_2 | g)` - if there's no BART component, use [`rstanarm`](https://cran.r-project.org/package=rstanarm) or [`lme4`](https://cran.r-project.org/package=lme4) instead
+
+### Main Event
+
+The main function is `mstan4bart`.
+
+### Results
+
+Results are retrieved using the `extract`, `fitted`, and `predict` generics. See `?"mstan4bart-generics"` for more information.
+
+## Known Issues
+
+The name and definition of `extract` conflict with `rstan`. The `rstan` package is not needed to use `stan4bart` and does not need to be loaded. If a name-collision occurs, the `stan4bart` extract can be referenced as in:
 
 ```R
-require(stan4bart)
+stan4bart:::extract.mstan4bartFit(stan4bart_fit)
+```
 
-generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALSE) {
-  f <- function(x)
-    10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 10 * x[,4] + 5 * x[,5]
-  
-  set.seed(99)
-  sigma <- 1.0
-  
-  x <- matrix(runif(n * 10), n, 10)
-  mu <- f(x)
-  
-  result <- list(x = x, sigma = sigma)
-  
-  if (ranef) {
-    n.g.1 <- 5L
-    n.g.2 <- 8L
-    
-    result <- within(result, {
-      g.1 <- sample(n.g.1, n, replace = TRUE)
-      
-      Sigma.b.1 <- matrix(c(1.5^2, .2, .2, 1^2), 2)
-      R.b <- chol(Sigma.b.1)
-      b.1 <- matrix(rnorm(2 * n.g.1), n.g.1) %*% R.b
-      rm(R.b)
-      
-      g.2 <- sample(n.g.2, n, replace = TRUE)
-      
-      Sigma.b.2 <- as.matrix(1.2)
-      b.2 <- rnorm(n.g.2, 0, sqrt(Sigma.b.2))
-      
-      mu.fixef <- x[,4] * 10
-      mu.bart <- mu - mu.fixef
-      mu.ranef <- b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2]
-      mu <- mu + mu.ranef
-    })
-  } else {
-    mu.fixef <- x[,4] * 10
-    mu.bart <- mu - mu.fixef 
-  }
-  
-  if (causal) {
-    result <- within(result, {
-      tau <- 5
-      z <- rbinom(n, 1, 0.2)
-    })
-    
-    if (ranef) {
-      result <- within(result, {
-        mu.fixef.0 <- mu.fixef
-        mu.fixef.1 <- mu.fixef.0 + tau
-        mu.bart.0  <- mu.bart.1  <- mu.bart
-        mu.ranef.0 <- mu.ranef.1 <- mu.ranef
-        
-        mu.0 <- mu.bart.0 + mu.fixef.0 + mu.ranef.0
-        mu.1 <- mu.bart.1 + mu.fixef.1 + mu.ranef.1
-      })
-    } else {
-      result <- within(result, {
-        mu.fixef.0 <- mu.fixef
-        mu.fixef.1 <- mu.fixef.0 + tau
-        mu.bart.0  <- mu.bart.1  <- mu.bart
-        
-        mu.0 <- mu.bart.0 + mu.fixef.0
-        mu.1 <- mu.bart.1 + mu.fixef.1
-      })
-    }
-    
-    if (binary) {
-      result <- within(result, {
-        loc   <- mean(c(mu.0, mu.1))
-        scale <- sd(c(mu.0, mu.1)) / qnorm(0.15)
-        mu.0 <- (mu.0 - loc) / scale
-        mu.1 <- (mu.1 - loc) / scale
-        
-        mu.fixef.0 <- (mu.fixef.0 - loc) / scale
-        mu.fixef.1 <- (mu.fixef.1 - loc) / scale
-        mu.bart.0 <- mu.bart.0 / scale
-        mu.bart.1 <- mu.bart.1 / scale
-        if (ranef) {
-          mu.ranef.0 <- mu.ranef.0 / scale
-          mu.ranef.1 <- mu.ranef.1 / scale
-        }
-        
-        rm(loc, scale)
-        
-        y.0 <- rbinom(n, 1L, pnorm(mu.0))
-        y.1 <- rbinom(n, 1L, pnorm(mu.1))
-        y <- y.1 * z + y.0 * (1 - z)
-      })
-    } else {
-      result <- within(result, {
-        y.0 <- mu.0 + rnorm(n, 0, sigma)
-        y.1 <- mu.1 + rnorm(n, 0, sigma)
-        y <- y.1 * z + y.0 * (1 - z)
-      })
-    }
-    
-    
-    result$mu <- NULL
-    result$mu.fixef <- NULL
-    result$mu.ranef <- NULL
-  } else {
-    if (binary) {
-      result <- within(result, {
-        loc <- mean(mu)
-        scale <- sd(mu) / qnorm(0.15)
-        mu <- (mu - loc) / scale
-        
-        mu.fixef <- (mu.fixef - loc) / scale
-        mu.bart <- mu.bart / scale
-        if (ranef)
-          mu.ranef <- mu.ranef / scale
-        
-        rm(loc, scale)
-        
-        y <- rbinom(n, 1L, pnorm(mu))
-      })
-    } else {
-      result <- within(result, {
-        y <- mu + rnorm(n, 0, sigma)
-      })
-    }
-  }
-  
-  result
-}
-testData <- generateFriedmanData(1000, TRUE, TRUE, FALSE)
-rm(generateFriedmanData)
+== Example Code
 
+```R
+library(stan4bart)
+
+# Load a test-data function
+source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
+
+# Relatively low n for illustrative purposes
+testData <- generateFriedmanData(n = 100, ranef = TRUE, causal = TRUE, binary = FALSE)
+
+# First level model is:
+#   y ~ f(x_1, x_2) + a * x_3^2 + b * x_4 + c * x_5 + z
+# Random intercepts are added for g.1 and g.2, and a random slope is placed on x4
+# x_6 through x_10 are pure noise
 df <- with(testData, data.frame(x, g.1, g.2, y, z))
 
-
 # Causal inference example
+set.seed(0)
 fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
-                  cores = 1, verbose = 1,
+                  cores = 1,
+                  verbose = 1,
                   treatment = z)
 
 samples.mu.train <- extract(fit)
@@ -161,7 +70,11 @@ samples.icate <- (samples.mu.train - samples.mu.test) * (2 * testData$z - 1)
 # Conditional average treatment effect
 samples.cate <- apply(samples.icate, 2, mean)
 cate <- mean(samples.cate)
+cate.int <- c(cate - 1.96 * sd(samples.cate), cate + 1.96 * sd(samples.cate))
 
+# Samples of the posterior predictive distribution are used in calculating
+# the counterfactuals for SATE and for calculating the response under
+# the observed treatment condition when estimating PATE.
 samples.ppd.test <- extract(fit, type = "ppd", sample = "test")
 
 # Individual sample treatment effects
@@ -169,11 +82,13 @@ samples.ite <- (testData$y - samples.ppd.test) * (2 * testData$z - 1)
 # Sample average treatment effect
 samples.sate <- apply(samples.ite, 2, mean)
 sate <- mean(samples.sate)
+sate.int <- c(sate - 1.96 * sd(samples.sate), sate + 1.96 * sd(samples.sate))
 
 # Population average treatment effect
-samples.ppd.test <- extract(fit, type = "ppd", sample = "train")
-samples.pate <- apply((samples.ppd.test - samples.ppd.test) * (2 * testData$z - 1), 2, mean)
+samples.ppd.train <- extract(fit, type = "ppd", sample = "train")
+samples.pate <- apply((samples.ppd.train - samples.ppd.test) * (2 * testData$z - 1), 2, mean)
 pate <- mean(samples.pate)
+pate.int <- c(pate - 1.96 * sd(samples.pate), pate + 1.96 * sd(samples.pate))
 
 
 fitted.mu.train <- fitted(fit)
@@ -185,4 +100,3 @@ fitted.mu.test  <- fitted(fit, sample = "test")
 mse.train <- with(testData, mean((fitted.mu.train - mu.1 * z - mu.0 * (1 - z))^2))
 mse.test  <- with(testData, mean((fitted.mu.test  - mu.1 * (1 - z) - mu.0 * z)^2))
 ```
-
