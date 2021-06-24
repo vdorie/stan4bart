@@ -292,6 +292,9 @@ extract.mstan4bartFit <-
         frame <- model.frame(object, type = "fixed")[-na.action.fixed,,drop = FALSE]
         attr(frame, "na.action") <- na.pass
         X <- model.matrix(formula(object, type = "fixed"), frame)
+        intercept_col <- match("(Intercept)", colnames(X))
+        if (!is.na(intercept_col))
+          X <- X[, -intercept_col, drop = FALSE]
       }
     }
     if (n_ranef_levels > 0L) {
@@ -325,7 +328,6 @@ extract.mstan4bartFit <-
   }
   
   offset_type <- object$offset_type
-  
   
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef") && n_fixef > 0L) {
@@ -469,7 +471,13 @@ fitted_fixed <- function(object, x, include_warmup)
   x_means <- object$X_means
   
   keep_cols <- names(x_means) != "(Intercept)"
-  intercept_delta <- apply(fixef[keep_cols,,drop = FALSE] * x_means[keep_cols], 2L, sum)
+  # If there is an intercept, center_x sweeps out the column means and bundles it into
+  # that term. If there is not, x is used un-centered.
+  intercept_delta <- 
+    if (!all(keep_cols))
+      apply(fixef[keep_cols,,drop = FALSE] * x_means[keep_cols], 2L, sum)
+    else
+      0
   
   n_obs     <- nrow(x)
   # n_warmup  <- dim(object$warmup$bart_train)[2L]

@@ -130,14 +130,14 @@ test_that("ppd has approximately right amount of noise", {
                     cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11))
   
-  
   samples.ev  <- extract(fit)
   samples.ppd <- extract(fit, type = "ppd")
   
   expect_true(mean((apply(samples.ev, 2, mean) - apply(samples.ppd, 2, mean))^2) <= 1e-1)
   
   
-  r <- mean((samples.ev - samples.ppd) / sqrt(samples.ev * (1 - samples.ev)))
+  r <- (samples.ev - samples.ppd) / sqrt(samples.ev * (1 - samples.ev))
+  r <- mean(r[!is.nan(r)])
   expect_true(abs(r) <= 0.01)
 })
 

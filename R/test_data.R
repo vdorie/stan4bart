@@ -98,6 +98,10 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
     X <- model.matrix(rhs.fixed, data = mf.fixed, contrasts.arg = attr(object$X, "contrasts"))
     if (is.numeric(X.col.dropped) && length(X.col.dropped) > 0)
       X <- X[, -X.col.dropped, drop = FALSE]
+    
+    intercept_col <- match("(Intercept)", colnames(X))
+    if (!is.na(intercept_col))
+      X <- X[, -intercept_col, drop = FALSE]
     result$X <- X
 
   }

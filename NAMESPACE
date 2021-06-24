@@ -22,4 +22,4 @@ importFrom(stats, model.frame, model.frame.default, model.matrix,
            delete.response)
 importFrom(stats, fitted, uniroot, sigma, sd, na.pass, var)
 
-importFrom("methods", "as", "is", "new")
+importFrom(methods, as, new)

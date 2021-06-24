@@ -12,11 +12,12 @@ mstan4bart <-
            verbose = FALSE,
            iter = 2000L,
            warmup = iter %/% 2L,
-           thin = 1L,
+           skip = 1L,
            chains = 4L,
            cores = getOption("mc.cores", 1L),
            refresh = max(iter %/% 10L, 1L),
            offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
+           seed = NA_integer_,
            stan_args = NULL,
            bart_args = NULL)
 {
@@ -138,7 +139,7 @@ mstan4bart <-
     init_call$verbose <- FALSE
     init_call$na.action <- quote(stats::na.omit)
     try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
-    if (!is(try_result, "error")) {
+    if (!inherits(try_result, "error")) {
       bart_offset_init <- fitted(init_fit)
       if (!is_bernoulli)
         sigma_init <- sigma(init_fit)
@@ -162,7 +163,7 @@ mstan4bart <-
     init_call$verbose <- NULL
     init_call$na.action <- quote(stats::na.omit)
     try_result <- tryCatch(init_fit <- suppressWarnings(eval(init_call, parent.frame())), error = function(e) e)
-    if (!is(try_result, "error")) {
+    if (!inherits(try_result, "error")) {
       bart_offset_init <- fitted(init_fit, type = "link")
       if (!is_bernoulli)
         sigma_init <- sigma(init_fit)
@@ -206,10 +207,11 @@ mstan4bart <-
                                   verbose,
                                   iter,
                                   warmup,
-                                  thin,
+                                  skip,
                                   chains,
                                   cores,
                                   refresh,
+                                  seed,
                                   stan_args,
                                   bart_args)
   

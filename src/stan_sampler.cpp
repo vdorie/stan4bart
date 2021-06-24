@@ -86,7 +86,7 @@ const char* const dataNames[] = {
 const char* const controlNames[] = {
   "seed",
   "init_r",
-  "thin",
+  "skip",
   "adapt_gamma",
   "adapt_delta",
   "adapt_kappa",
@@ -401,7 +401,7 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
   control.init_radius = rc_getDoubleAt(controlExpr, matchPos[1], "init_r",
     RC_VALUE | RC_GEQ, 0.0,
     RC_VALUE | RC_DEFAULT, 2.0, RC_END);
-  control.thin = rc_getIntAt(controlExpr, matchPos[2], "thin",
+  control.skip = rc_getIntAt(controlExpr, matchPos[2], "skip",
     RC_VALUE | RC_GT, 0,
     RC_NA | RC_YES, RC_END);
   control.adapt_gamma = rc_getDoubleAt(controlExpr, matchPos[3], "adapt_gamma",
@@ -474,7 +474,7 @@ StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, i
     chain_id,
     stanControl.init_radius,
     num_warmup,
-    stanControl.thin,
+    stanControl.skip,
     stanControl.stepsize,
     stanControl.stepsize_jitter,
     stanControl.max_treedepth,
@@ -563,7 +563,7 @@ void printStanControl(const StanControl& control)
 {
   Rprintf("  seed: %u\n"
           "  init_r: %f\n"
-          "  thin: %d\n"
+          "  skip: %d\n"
           "  adapt_gamma: %f\n"
           "  adapt_delta: %f\n"
           "  adapt_kappa: %f\n"
@@ -575,7 +575,7 @@ void printStanControl(const StanControl& control)
           "  stepsize_jitter: %f\n"
           "  max_treedepth: %d\n",
           control.random_seed, control.init_radius,
-          control.thin, control.adapt_gamma, control.adapt_delta,
+          control.skip, control.adapt_gamma, control.adapt_delta,
           control.adapt_kappa, control.adapt_init_buffer, control.adapt_term_buffer,
           control.adapt_window, control.adapt_t0, control.stepsize,
           control.stepsize_jitter, control.max_treedepth);

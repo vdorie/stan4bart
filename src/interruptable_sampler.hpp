@@ -54,7 +54,7 @@ namespace stan4bart {
 template <class Model>
 struct interruptable_sampler {
   Model& model;
-  int num_thin;
+  int num_skip;
   stan::callbacks::interrupt& interrupt;
   stan::callbacks::logger& logger;
   stan::callbacks::writer& sample_writer;
@@ -82,7 +82,7 @@ struct interruptable_sampler {
                         unsigned int chain,
                         double init_radius,
                         int num_warmup,
-                        int num_thin,
+                        int num_skip,
                         double stepsize,
                         double stepsize_jitter,
                         int max_depth,
@@ -99,7 +99,7 @@ struct interruptable_sampler {
                         stan::callbacks::writer& sample_writer,
                         stan::callbacks::writer& diagnostic_writer) :
     model(model),
-    num_thin(num_thin),
+    num_skip(num_skip),
     interrupt(interrupt),
     logger(logger),
     sample_writer(sample_writer),
@@ -128,7 +128,7 @@ struct interruptable_sampler {
     sampler.get_stepsize_adaptation().set_kappa(kappa);
     sampler.get_stepsize_adaptation().set_t0(t0);
 
-    sampler.set_window_params(num_warmup * num_thin, init_buffer, term_buffer, window, logger);
+    sampler.set_window_params(num_warmup * num_skip, init_buffer, term_buffer, window, logger);
    
     sampler.engage_adaptation();
     
@@ -143,11 +143,11 @@ struct interruptable_sampler {
   // the current adaptation window
   // reinterpret_cast<var_adaptation_derived&>(sampler.get_var_adaptation()).adapt_next_window_
   void run(bool warmup) {
-    // handle thin internally - generate_transitions seems to always keep
+    // handle skip internally - generate_transitions seems to always keep
     // first iteration, and instead we want to keep the last
     clock_t start = clock();
-    if (num_thin > 1) {
-      stan::services::util::generate_transitions(sampler, num_thin - 1, 0, 0,
+    if (num_skip > 1) {
+      stan::services::util::generate_transitions(sampler, num_skip - 1, 0, 0,
                                                  1, 0, false, warmup, writer, s,
                                                  model, rng, interrupt, logger);
     }

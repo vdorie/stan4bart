@@ -55,7 +55,7 @@ namespace stan4bart {
   struct StanControl {
     unsigned int random_seed;
     double init_radius;
-    int thin;
+    int skip;
     double adapt_gamma;
     double adapt_delta;
     double adapt_kappa;

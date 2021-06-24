@@ -41,6 +41,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
       attr(fr, "start") <- start$fixef
     }
     
+    
     mf$na.action <- na.action
     
     fixedform <- formula
@@ -51,6 +52,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     attr(attr(fr, "terms"), "predvars.fixed") <- attr(fixedterms, "predvars")
     attr(attr(fr, "terms"), "varnames.fixed") <- names(fixedfr)
     attr(fr, "na.action.fixed") <- attr(fixedfr, "na.action")
+    
     
     bartform <- formula
     RHSForm(bartform) <- allbart(nobars(RHSForm(bartform)))
@@ -137,6 +139,9 @@ glFormula <- function (formula, data = NULL, subset, weights,
     if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
       scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
     X <- checkScaleX(X, kind = scaleX.chk)
+    intercept_col <- match("(Intercept)", colnames(X))
+    if (!is.na(intercept_col))
+      X <- X[, -intercept_col, drop = FALSE]
     
     terms <- attr(fr, "terms")
     
@@ -158,7 +163,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
 }
 
 tryResult <- tryCatch(lme4ns <- asNamespace("lme4"), error = function(e) e)
-if (!is(tryResult, "error")) {
+if (!inherits(tryResult, "error")) {
   `%ORifNotInLme4%` <- function(a, b) {
     mc <- match.call()
     if (is.symbol(mc[["a"]])) a <- deparse(mc[["a"]])
@@ -495,7 +500,7 @@ findbars <- findbars %ORifNotInLme4% function (term)
             else x
         }))
     }
-    modterm <- expandDoubleVerts(if (is(term, "formula")) 
+    modterm <- expandDoubleVerts(if (inherits(term, "formula")) 
         term[[length(term)]]
     else term)
     expandSlash(fb(modterm))
@@ -836,11 +841,11 @@ nobars_ <- nobars_ %ORifNotInLme4% function (term)
 nobars <- nobars %ORifNotInLme4% function (term) 
 {
     nb <- nobars_(term)
-    if (is(term, "formula") && length(term) == 3 && is.symbol(nb)) {
+    if (inherits(term, "formula") && length(term) == 3 && is.symbol(nb)) {
         nb <- reformulate("1", response = deparse(nb))
     }
     if (is.null(nb)) {
-        nb <- if (is(term, "formula")) 
+        nb <- if (inherits(term, "formula")) 
             ~1
         else 1
     }
@@ -888,11 +893,11 @@ nobart_ <- function(term)
 nobart <- function(term)
 {
   nb <- nobart_(term)
-  if (is(term, "formula") && length(term) == 3 && is.symbol(nb)) {
+  if (inherits(term, "formula") && length(term) == 3 && is.symbol(nb)) {
     nb <- reformulate("1", response = deparse(nb))
   }
   if (is.null(nb)) {
-    nb <- if (is(term, "formula")) 
+    nb <- if (inherits(term, "formula")) 
       ~1
     else 1
   }
@@ -926,11 +931,11 @@ allbart_ <- function(term, inbart)
 allbart <- function(term)
 {
   ab <- allbart_(term, FALSE)
-  if (is(term, "formula") && length(term) == 3 && is.symbol(ab)) {
+  if (inherits(term, "formula") && length(term) == 3 && is.symbol(ab)) {
     ab <- reformulate("1", response = deparse(ab))
   }
   if (is.null(ab)) {
-    ab <- if (is(term, "formula")) 
+    ab <- if (inherits(term, "formula")) 
       ~1
     else 1
   }

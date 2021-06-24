@@ -71,10 +71,12 @@ mstan4bart(formula,
   \item{warmup}{non-negative integer indicating number of posterior samples to
   draw and throw away. Also controls the number of iterations for which
   adaptation is run.}
-  \item{thin}{one or two positive integer. Every \code{thin} sample will be
-  kept, while every other sample will be discarded. If is length two, will
-  attempt to use the named element \code{"bart"} for BART and \code{"stan"} for
-  Stan. If not named, BART is the first thin element and Stan is the second.}
+  \item{skip}{one or two positive integers. Every \code{skip} sample will be
+  kept, while every other sample will be discarded. If argument is length two,
+  an attempt will be made to use he named element \code{"bart"} for BART and
+  \code{"stan"} for Stan. If not named, BART is the first skip element and Stan
+  is the second. This argument does not impact the number of \code{iter}s
+  returned, unlike a conventional \dQuote{thinning} parameter.}
   \item{chains}{positive integer giving the number of Markov Chains to sample.}
   \item{cores}{positive integer giving the number of units of parallelization.
   Computation for each chain will be divide among the cores available. When 

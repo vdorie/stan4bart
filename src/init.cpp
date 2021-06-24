@@ -168,9 +168,9 @@ extern "C" {
     
     sampler.stanModel = stan4bart::createStanModelFromExpression(stanDataExpr);
     stan4bart::initializeStanControlFromExpression(sampler.stanControl, stanControlExpr);
-    if (sampler.stanControl.thin == R_NaInt) {
-      sampler.stanControl.thin = (2000 - sampler.defaultWarmup) / 1000;
-      if (sampler.stanControl.thin < 1) sampler.stanControl.thin = 1;
+    if (sampler.stanControl.skip == R_NaInt) {
+      sampler.stanControl.skip = (2000 - sampler.defaultWarmup) / 1000;
+      if (sampler.stanControl.skip < 1) sampler.stanControl.skip = 1;
     }
     
     int chain_id = 1;
@@ -220,6 +220,8 @@ extern "C" {
     if (!sampler.responseIsBinary)
       bartFunctions.setSigma(sampler.bartSampler, &sigma_init);
 
+    GetRNGstate();
+   
     bartFunctions.sampleTreesFromPrior(sampler.bartSampler);
     
     // draw once before running
@@ -257,6 +259,7 @@ extern "C" {
     bartControl.verbose = oldVerbose;
     bartFunctions.setControl(sampler.bartSampler, &bartControl);
     
+    PutRNGstate();
     
     SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, R_NilValue));
     samplerPtr.release();
@@ -431,6 +434,7 @@ extern "C" {
       Rprintf("starting %s, %d draws, %s\n", isWarmup ? "warmup" : "sampling", numIter,
               resultsType == RESULTS_BOTH ? "both BART and Stan" : (resultsType == RESULTS_BART ? "BART only" : "Stan only"));
     
+    GetRNGstate();
     
     for (int iter = 0; iter < numIter; ++iter) {
       if (sampler.refresh > 0 && sampler.verbose > 1 && (iter + 1) % sampler.refresh == 0)
@@ -492,14 +496,19 @@ extern "C" {
         sampler.stanSampler->sample_writer.increment();
         
         // Rprintf("setting bart offset\n");
-        bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
+        // this will adjusting the scale every iteration during the first 1/8 of warmup, 
+        // ever other iteration during the second 1/8, every fourth iteration during the
+        // third, and so forth
+        int update_scale_mod = 1 << (8 * iter / numIter);
+        bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup && iter % update_scale_mod == 0);
+        // bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
       }
       
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {
         
         // Rprintf("sampling bart\n");
         bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, bartSamples);
-        
+               
         // bart with an offset will produce predictions that have the offset added;
         // in order to just get the tree predictions, subtract out that offset
         for (size_t j = 0; j < n; ++j)
@@ -514,6 +523,7 @@ extern "C" {
             for (size_t j = 0; j < n; ++j)
               sampler.stanOffset[j] += sampler.userOffset[j];
         }
+        
         // Rprintf("setting stan offset\n");
         stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
         if (sampler.responseIsBinary) {
@@ -526,6 +536,9 @@ extern "C" {
         bartSamples->incrementPointers();
       }
     }
+    
+    PutRNGstate();
+    
     if (bartSamples != NULL) bartSamples->resetPointers();
     
     // Rprintf("writing results\n");

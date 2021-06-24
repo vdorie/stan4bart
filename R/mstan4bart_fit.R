@@ -29,10 +29,19 @@ getRanef <- function(group, samples) {
 }
 
 # putting this out here so we can export it when parallelizing
-mstan4bart_fit_worker <- function(chain.num, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
+mstan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
 {
   # TODO: figure out why the C refs aren't reachable when dispatched to cluster
+  
   ns <- asNamespace("stan4bart")
+  
+  if (!is.na(seed))
+    set.seed(seed)
+  
+  control.stan$seed <- sample.int(.Machine$integer.max, 1L)
+  if (is.na(seed))
+    orig_seed <- .Random.seed
+  
   sampler <- .Call(ns$C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
   if (control.common$verbose > 0L) {
     cat("fitting chain ", chain.num, "\n", sep = "")
@@ -76,10 +85,11 @@ mstan4bart_fit <-
            verbose,
            iter,
            warmup,
-           thin,
+           skip,
            chains,
            cores,
            refresh,
+           seed,
            stan_args,
            bart_args)
 {  
@@ -108,8 +118,10 @@ mstan4bart_fit <-
   decov <- stan_args[["prior_covariance"]]
   if (is.null(stan_args[["prior"]]))
     stan_args$prior <- default_prior_coef_gaussian()
-  if (is.null(stan_args[["prior_intercept"]]))
-    stan_args$prior_intercept <- default_prior_intercept_gaussian()
+  #if (is.null(stan_args[["prior_intercept"]]))
+  #  stan_args$prior_intercept <- default_prior_intercept_gaussian()
+  if (!is.null(stan_args[["prior_intercept"]]))
+    warning("intercepts for BART models are redundantly parameterized and not included")
   if (is.null(stan_args[["prior_aux"]]))
     stan_args$prior_aux <- exponential(autoscale = TRUE)
   
@@ -392,17 +404,17 @@ mstan4bart_fit <-
   if (!is.numeric(warmup) || length(warmup) != 1L || warmup < 0)
     stop("'warmup' must be a non-negative integer")
   warmup <- as.integer(warmup)
-  if (!is.numeric(thin)   || length(thin) < 1L || length(thin) > 2L || any(thin <= 0))
-    stop("'thin' must be one or two positive integers")
-  if (!is.null(names(thin)) && c("bart", "stan") %in% names(thin)) {
-    thin.bart <- thin[["bart"]]
-    thin.stan <- thin[["stan"]]
+  if (!is.numeric(skip) || length(skip) < 1L || length(skip) > 2L || any(skip <= 0))
+    stop("'skip' must be one or two positive integers")
+  if (!is.null(names(skip)) && any(c("bart", "stan") %in% names(skip))) {
+    skip.bart <- if ("bart" %in% names(skip)) skip[["bart"]] else 1L
+    skip.stan <- if ("stan" %in% names(skip)) skip[["stan"]] else 1L
   } else {
-    thin.bart <- thin[1L]
-    thin.stan <- if (length(thin) > 1L) thin[2L] else thin[1L]
+    skip.bart <- skip[1L]
+    skip.stan <- if (length(skip) > 1L) skip[2L] else skip[1L]
   }
-  thin.bart <- as.integer(thin.bart)
-  thin.stan <- as.integer(thin.stan)
+  skip.bart <- as.integer(skip.bart)
+  skip.stan <- as.integer(skip.stan)
   
   if (!is.numeric(chains) || length(chains) != 1L || chains <= 0)
     stop("'chains' must be a positive integer")
@@ -429,7 +441,7 @@ mstan4bart_fit <-
   if (is.null(bart_args)) bart_args <- list()
   data.bart@sigma <- sigma_init
   control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
-                                              n.thin = thin.bart, n.threads = 1L,
+                                              n.thin = skip.bart, n.threads = 1L,
                                               updateState = FALSE))
   for (name in intersect(names(bart_args), setdiff(names(formals(dbarts::dbartsControl)),
                                                    names(control_call))))
@@ -460,10 +472,10 @@ mstan4bart_fit <-
                     bart_priors$node.hyperprior, bart_priors$resid.prior,
                     node.scale = if (!is_continuous) 3.0 else 0.5)
   
+  
   control.stan <- list(
-    seed = sample.int(.Machine$integer.max, 1L),
     init_r = stan_args[["init_r"]] %ORifNULL% 2.0,
-    thin = thin.stan,
+    skip = skip.stan,
     adapt_gamma = stan_args[["adapt_gamma"]],
     adapt_delta = stan_args[["adapt_delta"]],
     adapt_kappa = stan_args[["adapt_kappa"]]
@@ -477,10 +489,10 @@ mstan4bart_fit <-
   runSingleThreaded <- cores <= 1L || chains <= 1L
   if (!runSingleThreaded) {
     tryResult <- tryCatch(cluster <- makeCluster(min(cores, chains), "PSOCK"), error = function(e) e)
-    if (is(tryResult, "error"))
+    if (inherits(tryResult, "error"))
       tryResult <- tryCatch(cluster <- makeCluster(min(cores, chains), "FORK"), error = function(e) e)
     
-    if (is(tryResult, "error")) {
+    if (inherits(tryResult, "error")) {
       warning("unable to multithread, defaulting to single: ", tryResult$message)
       runSingleThreaded <- TRUE
     } else {
@@ -488,16 +500,32 @@ mstan4bart_fit <-
         cat("starting multithreaded fit, futher output silenced\n")
       control.common$verbose <- -1L
       
+      if (!is.na(seed)) {
+        # We draw sequentially from the given seed, one for each thread. To be polite
+        # (more to match bart), we set the seed back when we're are done.
+        oldSeed <- .GlobalEnv[[".Random.seed"]]
+        
+        set.seed(seed)
+        randomSeeds <- sample.int(.Machine$integer.max, chains)
+        
+        if (!is.null(oldSeed))
+          .Random.seed <- oldSeed
+      } else {
+        randomSeeds <- rep.int(NA_integer_, chains)
+      }
+      
       clusterExport(cluster, "mstan4bart_fit_worker", asNamespace("stan4bart"))
       clusterEvalQ(cluster, require(stan4bart))
       
       tryResult <- tryCatch(
-        chainResults <- clusterMap(cluster, "mstan4bart_fit_worker", seq_len(chains), MoreArgs = nlist(control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)),
+        chainResults <- clusterMap(cluster, "mstan4bart_fit_worker",
+                                   seq_len(chains), randomSeeds,
+                                   MoreArgs = nlist(control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)),
                             error = function(e) e)
     
       stopCluster(cluster)
       
-      if (is(tryResult, "error")) {
+      if (inherits(tryResult, "error")) {
         warning("error running multithreaded, defaulting to single: ", tryResult$message)
         runSingleThreaded <- TRUE
       }
@@ -505,8 +533,19 @@ mstan4bart_fit <-
   }
   
   if (runSingleThreaded) {
+    if (!is.na(seed)) {
+      # If the seed was passed in, since we're running single threaded everything will draw
+      # from the built-in generator. In that case, we just have to set.seed and set it
+      # back when done.
+      oldSeed <- .GlobalEnv[[".Random.seed"]]
+      set.seed(seed)
+    }
+    
     for (chainNum in seq_len(chains))
-      chainResults[[chainNum]] <- mstan4bart_fit_worker(chainNum, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
+      chainResults[[chainNum]] <- mstan4bart_fit_worker(chainNum, NA_integer_, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
+    
+    if (exists("oldSeed"))
+      .Random.seed <- oldSeed
   }
   
   if (!is.null(chainResults[[1L]]$state.bart)) {

@@ -6,12 +6,22 @@ testData <- generateFriedmanData(100, TRUE, TRUE, FALSE)
 rm(generateFriedmanData)
 
 df <- with(testData, data.frame(x, g.1, g.2, y, z))
+
+fixef.true <- with(testData, mu.fixef.1 * z + mu.fixef.0 * (1 - z))
+ranef.true <- with(testData, mu.ranef.1 * z + mu.ranef.0 * (1 - z))
+bart.true  <- with(testData, mu.bart.1  * z + mu.bart.0  * (1 - z))
+
 rm(testData)
 
 fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                     cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11),
                     treatment = z)
+
+test_that("no intercept parameter was included", {
+  expect_true(!("(Intercept)" %in% colnames(fit$X)))
+  expect_true(!any(startsWith("gamma", dimnames(fit$stan)$parameters)))
+})
 
 test_that("extract matches fitted in causal setting model", {
   samples.ev.train <- extract(fit)
@@ -81,10 +91,13 @@ test_that("nonlinearities are estimated well", {
   skip_on_cran()
   skip_if_not_installed("lme4")
   
-  df.train <- df[seq_len(floor(0.8 * nrow(df))),]
-  df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
+  ind.train <- seq_len(floor(0.8 * nrow(df)))
+  ind.test <- seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df))
+  df.train <- df[ind.train,]
+  df.test  <- df[ind.test,]
   
   bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                         seed = 0,
                          df.train,
                          verbose = -1L,
                          test = df.test)
@@ -95,15 +108,22 @@ test_that("nonlinearities are estimated well", {
   lmer_control <- lme4::lmerControl(check.conv.grad     = "ignore",
                                     check.conv.singular = "ignore",
                                     check.conv.hess     = "ignore")
+  # predict doesn't like the .
   lmer_fit <- lme4::lmer(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10 + z + (1 + X4 | g.1) + (1 | g.2),
                          df.train,
                          control = lmer_control)
   
   lmer_fitted <- predict(lmer_fit, newdata = df.test, type = "response")
-  # predict doesn't like the .
   lmer_rmse <- sqrt(mean((df.test$y - lmer_fitted)^2)) / sd(df.train$y)
   
   expect_true(bart_rmse <= lmer_rmse)
+  
+  indiv.bart <- fitted(bart_fit, type = "indiv.bart", sample = "train") 
+  expect_true(cor(indiv.bart, bart.true[ind.train]) >= 0.95)
+  indiv.ranef <- fitted(bart_fit, type = "indiv.ranef", sample = "train")
+  expect_true(cor(indiv.ranef, ranef.true[ind.train]) >= 0.8)
+  indiv.fixef <- fitted(bart_fit, type = "indiv.fixef", sample = "train")
+  expect_true(cor(indiv.fixef, fixef.true[ind.train]) >= 0.99)
 })
 
 test_that("predict matches supplied data", {
@@ -153,7 +173,7 @@ test_that("predict matches supplied data", {
 test_that("ppd has approximately right amount of noise", {
   df.train <- df
   
-  set.seed(0)
+  set.seed(28)
   fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
                     cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11))
@@ -162,7 +182,7 @@ test_that("ppd has approximately right amount of noise", {
   samples.ev  <- extract(fit)
   samples.ppd <- extract(fit, type = "ppd")
   
-  expect_true(mean((apply(samples.ev, 2, mean) - apply(samples.ppd, 2, mean))^2) <= 1e-1)
+  expect_true(mean((apply(samples.ev, 2, mean) - apply(samples.ppd, 2, mean))^2) <= 0.1)
   r <- mean(apply(samples.ev - samples.ppd, 2, sd)) / fitted(fit, "sigma")
   r <- max(r, 1 / r)
   expect_true(r <= 1.1)
