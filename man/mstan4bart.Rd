@@ -32,11 +32,12 @@ mstan4bart(formula,
            verbose = FALSE,
            iter = 2000L,
            warmup = iter \%/\% 2L,
-           thin = 1L,
+           skip = 1L,
            chains = 4L,
            cores = getOption("mc.cores", 1L),
            refresh = max(iter \%/\% 10L, 1L),
            offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
+           seed = NA_integer_,
            stan_args = NULL,
            bart_args = NULL)
 }
@@ -91,6 +92,11 @@ mstan4bart(formula,
   parametric components. Sampling is still done for these components and their
   draws are stored, however whenever they were present in the fit the
   supplied value is used instead.}
+  \item{seed}{Optional integer specifying the desired pRNG \link[=set.seed]{seed}.
+  It should not be needed when running single-threaded - calling
+  \code{\link{set.seed}} will suffice. The primary use of \code{seed} is to
+  obtain reproducible results when multi-threaded. See Reproducibility section
+  below.}
   \item{stan_args}{optional list, specifying further arguments to Stan. See
   details below.}
   \item{bart_args}{optional list, specifying further arguments to BART. See
@@ -187,6 +193,24 @@ mstan4bart(formula,
       \code{n.trees}; keeping trees can be costly in terms of memory, but is
       required to use \code{\link[=mstan4bart-generics]{predict}}
     }
+  }
+  \subsection{Reproducibility}{
+    Behavior differs when running multi- and single-threaded, as the pseudo random
+    number generators (pRNG) used by R are not thread safe. When single-threaded,
+    R's built-in generator is used; if set at the start, \code{\link{.Random.seed}}
+    will be used and its value updated as samples are drawn. When multi-threaded,
+    the default behavior is draw new random seeds for each thread using the clock
+    and use thread-specific pRNGs.
+    
+    This behavior can be modified by setting \code{seed}. For the single-threaded
+    case, that seed will be installed and the existing seed replaced at the end,
+    if applicable. For multi-threaded runs, the seeds for threads are drawn
+    sequentially using the supplied seed, and will not change the state of 
+    R's built-in generator.
+    
+    Consequently, the \code{seed} argument should not be needed when running
+    single-threaded - \code{\link{set.seed}} will suffice. When multi-threaded,
+    \code{seed} can be used to obtain reproducible results.
   }
 }
 \value{

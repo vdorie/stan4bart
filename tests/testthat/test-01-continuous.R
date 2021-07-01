@@ -173,7 +173,8 @@ test_that("predict matches supplied data", {
 test_that("ppd has approximately right amount of noise", {
   df.train <- df
   
-  set.seed(28)
+  set.seed(15)
+  
   fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
                     cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
                     bart_args = list(n.trees = 11))

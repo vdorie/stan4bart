@@ -473,11 +473,14 @@ fitted_fixed <- function(object, x, include_warmup)
   keep_cols <- names(x_means) != "(Intercept)"
   # If there is an intercept, center_x sweeps out the column means and bundles it into
   # that term. If there is not, x is used un-centered.
-  intercept_delta <- 
-    if (!all(keep_cols))
-      apply(fixef[keep_cols,,drop = FALSE] * x_means[keep_cols], 2L, sum)
-    else
-      0
+  #intercept_delta <- 
+  #  if (!all(keep_cols))
+  #    apply(fixef[keep_cols,,drop = FALSE] * x_means[keep_cols], 2L, sum)
+  #  else
+  #    0
+  
+  # stan4bart will always have an intercept, although it should never be present in the x matrix
+  intercept_delta <- apply(fixef[keep_cols,,drop = FALSE] * x_means[keep_cols], 2L, sum)
   
   n_obs     <- nrow(x)
   # n_warmup  <- dim(object$warmup$bart_train)[2L]
