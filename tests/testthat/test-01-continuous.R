@@ -126,6 +126,47 @@ test_that("nonlinearities are estimated well", {
   expect_true(cor(indiv.fixef, fixef.true[ind.train]) >= 0.99)
 })
 
+test_that("works when QR is true", {
+  skip_on_cran()
+  skip_if_not_installed("lme4")
+  
+  ind.train <- seq_len(floor(0.8 * nrow(df)))
+  ind.test <- seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df))
+  df.train <- df[ind.train,]
+  df.test  <- df[ind.test,]
+  
+  bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                         seed = 0,
+                         df.train,
+                         verbose = -1L,
+                         test = df.test,
+                         stan_args = list(QR = TRUE))
+  
+  bart_fitted <- fitted(bart_fit, sample = "test")
+  bart_rmse <- sqrt(mean((df.test$y - bart_fitted)^2)) / sd(df.train$y)
+  
+  lmer_control <- lme4::lmerControl(check.conv.grad     = "ignore",
+                                    check.conv.singular = "ignore",
+                                    check.conv.hess     = "ignore")
+  # predict doesn't like the .
+  lmer_fit <- lme4::lmer(y ~ X1 + X2 + X3 + X4 + X5 + X6 + X7 + X8 + X9 + X10 + z + (1 + X4 | g.1) + (1 | g.2),
+                         df.train,
+                         control = lmer_control)
+  
+  lmer_fitted <- predict(lmer_fit, newdata = df.test, type = "response")
+  lmer_rmse <- sqrt(mean((df.test$y - lmer_fitted)^2)) / sd(df.train$y)
+  
+  expect_true(bart_rmse <= lmer_rmse)
+  
+  indiv.bart <- fitted(bart_fit, type = "indiv.bart", sample = "train") 
+  expect_true(cor(indiv.bart, bart.true[ind.train]) >= 0.95)
+  indiv.ranef <- fitted(bart_fit, type = "indiv.ranef", sample = "train")
+  expect_true(cor(indiv.ranef, ranef.true[ind.train]) >= 0.8)
+  indiv.fixef <- fitted(bart_fit, type = "indiv.fixef", sample = "train")
+  expect_true(cor(indiv.fixef, fixef.true[ind.train]) >= 0.99)
+})
+
+
 test_that("predict matches supplied data", {
   df.train <- df[seq_len(floor(0.8 * nrow(df))),]
   df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]

@@ -180,7 +180,7 @@ mstan4bart(formula,
     Stan arguments include:
     \itemize{
       \item \code{prior_covariance} - see \code{\link[rstanarm]{stan_glmer}}
-      \item \code{prior}, \code{prior_intercept}, \code{prior_aux} - see
+      \item \code{prior}, \code{prior_intercept}, \code{prior_aux}, \code{QR} - see
       \code{\link[rstanarm]{stan_glm}}
       \item \code{init_r}, \code{adapt_gamma}, \code{adapt_delta},
       \code{adapt_kappa} - see \code{\link[rstan]{stan}}

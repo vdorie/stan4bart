@@ -136,7 +136,7 @@ mstan4bart_fit <-
   
   
   x_stuff <- center_x(x, FALSE)
-  xtemp <- has_intercept <- NULL # R CMD check
+  xtemp <- xbar <- has_intercept <- NULL # R CMD check
   for (i in names(x_stuff)) # xtemp, xbar, has_intercept
     assign(i, x_stuff[[i]])
   nvars.fixef <- ncol(xtemp)
@@ -228,8 +228,9 @@ mstan4bart_fit <-
       stan_args$prior_scale_for_aux <- ss * stan_args$prior_scale_for_aux
   }
   
-  #if (!QR && prior_dist > 0L && prior_autoscale) {
-  if (stan_args$prior_dist > 0L && stan_args$prior_autoscale) {
+  if (is.null(stan_args[["QR"]]))
+    stan_args[["QR"]] <- FALSE
+  if (!stan_args$QR && stan_args$prior_dist > 0L && stan_args$prior_autoscale) {
     min_prior_scale <- 1e-12
     stan_args$prior_scale <-
       pmax(min_prior_scale, stan_args$prior_scale / 
@@ -250,21 +251,21 @@ mstan4bart_fit <-
   stan_args$prior_scale_for_intercept <- 
     min(.Machine$double.xmax, stan_args$prior_scale_for_intercept)
   
-  #if (QR) {
-  #  if (ncol(xtemp) <= 1)
-  #    stop("'QR' can only be specified when there are multiple predictors.")
-  #  if (sparse)
-  #    stop("'QR' and 'sparse' cannot both be TRUE.")
-  #  cn <- colnames(xtemp)
-  #  decomposition <- qr(xtemp)
-  #  Q <- qr.Q(decomposition)
-  #  if (prior_autoscale) scale_factor <- sqrt(nrow(xtemp) - 1L)
-  #  else scale_factor <- diag(qr.R(decomposition))[ncol(xtemp)]
-  #  R_inv <- qr.solve(decomposition, Q) * scale_factor
-  #  xtemp <- Q * scale_factor
-  #  colnames(xtemp) <- cn
-  #  xbar <- c(xbar %*% R_inv)
-  #}
+  if (stan_args$QR && ncol(xtemp) > 0L) {
+    if (ncol(xtemp) <= 1)
+      stop("'QR' can only be specified when there are multiple predictors.")
+    #if (sparse)
+    #  stop("'QR' and 'sparse' cannot both be TRUE.")
+    cn <- colnames(xtemp)
+    decomposition <- qr(xtemp)
+    Q <- qr.Q(decomposition)
+    if (stan_args$prior_autoscale) scale_factor <- sqrt(nrow(xtemp) - 1L)
+    else scale_factor <- diag(qr.R(decomposition))[ncol(xtemp)]
+    R_inv <- qr.solve(decomposition, Q) * scale_factor
+    xtemp <- Q * scale_factor
+    colnames(xtemp) <- cn
+    xbar <- c(xbar %*% R_inv)
+  }
     
   if (length(weights) > 0L && all(weights == 1)) weights <- double()
   if (length(offset)  > 0L && all(offset  == 0)) offset  <- double()
@@ -546,6 +547,17 @@ mstan4bart_fit <-
     
     if (exists("oldSeed"))
       .Random.seed <- oldSeed
+  }
+  
+  if (stan_args$QR) {
+    fixef_rows <- dimnames(chainResults[[1L]]$warmup$stan)[[1L]]
+    fixef_rows <- startsWith(fixef_rows, "beta.")
+    if (any(fixef_rows) && exists("R_inv")) for (chainNum in seq_len(chains)) {
+      chainResults[[chainNum]]$warmup$stan[fixef_rows,] <-
+        R_inv %*% chainResults[[chainNum]]$warmup$stan[fixef_rows,]
+      chainResults[[chainNum]]$sample$stan[fixef_rows,] <-
+        R_inv %*% chainResults[[chainNum]]$sample$stan[fixef_rows,]
+    }
   }
   
   if (!is.null(chainResults[[1L]]$state.bart)) {
