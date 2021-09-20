@@ -1,6 +1,6 @@
 Package: stan4bart
 Version: 0.0-1
-Date: 2021-01-21
+Date: 2021-09-20
 Title: Bayesian Additive Regression Trees with Stan-Sampled Parametric Extensions 
 Authors@R: c(
   person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
@@ -32,7 +32,7 @@ LinkingTo:
 Suggests:
   testthat (>= 2.0-0),
   lme4
-Description: Uses Stan sampler and math library to semiparametrically fit linear and multilevel models with additive Bayesian Additive Regression Tree (BART) components.
+Description: Fits semiparametric linear and multilevel models with additive Bayesian additive regression tree (BART) components using the Stan sampler and math library.
 License: GPL (>= 2)
 NeedsCompilation: yes
 Biarch: yes

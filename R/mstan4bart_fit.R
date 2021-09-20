@@ -11,6 +11,7 @@ getSigma <- function(cnms, samples) {
   names(Sigmas) <- names(Sigma[[1L]])
   Sigmas
 }
+
 getFixef <- function(samples)
   samples[grep("^(?:beta|gamma)\\.", rownames(samples), perl = TRUE),,drop = FALSE]
 
@@ -550,11 +551,12 @@ mstan4bart_fit <-
   }
   
   if (stan_args$QR) {
-    fixef_rows <- dimnames(chainResults[[1L]]$warmup$stan)[[1L]]
+    fixef_rows <- dimnames(chainResults[[1L]]$sample$stan)[[1L]]
     fixef_rows <- startsWith(fixef_rows, "beta.")
     if (any(fixef_rows) && exists("R_inv")) for (chainNum in seq_len(chains)) {
-      chainResults[[chainNum]]$warmup$stan[fixef_rows,] <-
-        R_inv %*% chainResults[[chainNum]]$warmup$stan[fixef_rows,]
+      if (!is.null(chainResults[[chainNum]]$warmup))
+        chainResults[[chainNum]]$warmup$stan[fixef_rows,] <-
+          R_inv %*% chainResults[[chainNum]]$warmup$stan[fixef_rows,]
       chainResults[[chainNum]]$sample$stan[fixef_rows,] <-
         R_inv %*% chainResults[[chainNum]]$sample$stan[fixef_rows,]
     }
