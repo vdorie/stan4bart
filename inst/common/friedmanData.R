@@ -1,14 +1,18 @@
 generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALSE) {
+  
   f <- function(x)
-    10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 10 * x[,4] + 5 * x[,5]
+    # round is necessary to adjust for different implementations of sin
+    # across platforms
+    #10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 5 * x[,5]
+    10 * round(sin(pi * x[,1] * x[,2]), 14) + 20 * (x[,3] - 0.5)^2 + 5 * x[,5]
   
   set.seed(99)
   sigma <- 1.0
   
   x <- matrix(runif(n * 10), n, 10)
-  mu <- f(x)
   
-  result <- list(x = x, sigma = sigma)
+  result <- list(x = x, sigma = sigma,
+                 mu.bart = f(x), mu.fixef = x[,4] * 10)
   
   if (ranef) {
     n.g.1 <- 5L
@@ -27,14 +31,11 @@ generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALS
       Sigma.b.2 <- as.matrix(1.2)
       b.2 <- rnorm(n.g.2, 0, sqrt(Sigma.b.2))
       
-      mu.fixef <- x[,4] * 10
-      mu.bart <- mu - mu.fixef
       mu.ranef <- b.1[g.1,1] + x[,4] * b.1[g.1,2] + b.2[g.2]
-      mu <- mu + mu.ranef
+      mu <- mu.bart + mu.fixef + mu.ranef
     })
   } else {
-    mu.fixef <- x[,4] * 10
-    mu.bart <- mu - mu.fixef 
+    result$mu <- with(result, mu.bart + mu.fixef)
   }
   
   if (causal) {

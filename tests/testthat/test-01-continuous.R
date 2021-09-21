@@ -140,6 +140,7 @@ test_that("works when QR is true", {
                          df.train,
                          verbose = -1L,
                          test = df.test,
+                         cores = 4,
                          stan_args = list(QR = TRUE))
   
   bart_fitted <- fitted(bart_fit, sample = "test")

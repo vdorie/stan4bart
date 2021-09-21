@@ -508,7 +508,7 @@ extern "C" {
         
         // Rprintf("sampling bart\n");
         bartFunctions.runSamplerWithResults(sampler.bartSampler, 0, bartSamples);
-               
+        
         // bart with an offset will produce predictions that have the offset added;
         // in order to just get the tree predictions, subtract out that offset
         for (size_t j = 0; j < n; ++j)
