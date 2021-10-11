@@ -20,13 +20,23 @@
 #endif
 
 #ifdef SUPPRESS_DIAGNOSTIC
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wunused-parameter"
-#  pragma GCC diagnostic ignored "-Wunused-local-typedef"
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wunused-parameter"
+#    pragma clang diagnostic ignored "-Wunused-local-typedef"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wunused-parameter"
+#    pragma GCC diagnostic ignored "-Wunused-local-typedefs"
+#  endif
 #endif
 #include "stan_files/continuous.hpp" // should include Eigen
 #ifdef SUPPRESS_DIAGNOSTIC
-#  pragma GCC diagnostic pop
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 #include "double_writer.hpp"

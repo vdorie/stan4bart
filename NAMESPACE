@@ -20,6 +20,6 @@ importFrom(stats, contrasts, "contrasts<-")
 importFrom(stats, model.frame, model.frame.default, model.matrix,
            model.offset, model.response, model.weights,
            delete.response)
-importFrom(stats, fitted, uniroot, sigma, sd, na.pass, var)
+importFrom(stats, fitted, uniroot, sigma, sd, na.pass, var, setNames)
 
 importFrom(methods, as, new)

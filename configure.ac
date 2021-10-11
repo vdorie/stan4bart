@@ -12,17 +12,19 @@ if test -z "${R_HOME}"; then
   exit 1
 fi
 
-STANHEADERS_SRC=`"${R_HOME}/bin${R_ARCH_BIN}/Rscript" -e "message()" -e "cat(system.file('include', 'src', package = 'StanHeaders', mustWork = TRUE))" -e "message()" | grep "StanHeaders"`
+STANHEADERS_SRC=`"${R_HOME}/bin/Rscript" -e "message()" -e "cat(system.file('include', 'src', package = 'StanHeaders', mustWork = TRUE))" -e "message()" | grep "StanHeaders"`
 
-TBB=`"${R_HOME}/bin${R_ARCH_BIN}/Rscript" -e "message()" -e "cat(system.file('lib', package = 'RcppParallel', mustWork = TRUE))" -e "message()" | grep "RcppParallel"`
+TBB_LIB=`"${R_HOME}/bin/Rscript" -e "message()" -e "cat(system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE))" -e "message()" | grep "RcppParallel"`
 
-CPPFLAGS_1=`"${R_HOME}/bin/Rscript" -e "RcppParallel::CxxFlags()"`
-CPPFLAGS_2=`"${R_HOME}/bin/Rscript" -e "StanHeaders:::CxxFlags()"`
-EXTRA_CPPFLAGS="${CPPFLAGS_1} ${CPPFLAGS_2}"
+PKG_CXXFLAGS=${STANHEADERS_SRC} `"${R_HOME}/bin/Rscript" -e "RcppParallel::CxxFlags()" -e "
+TBB <- system.file('include', package = 'RcppParallel', mustWork = TRUE)
+cat(paste0('-I', shQuote(TBB), ' -D_REENTRANT -DSTAN_THREADS'), ' ')"`
 
-AC_SUBST(STANHEADERS_SRC)
-AC_SUBST(TBB)
-AC_SUBST(EXTRA_CPPFLAGS)
+PKG_LIBS=`"${R_HOME}/bin/Rscript" -e "RcppParallel::RcppParallelLibs()"`
+
+AC_SUBST(TBB_LIB)
+AC_SUBST(PKG_CXXFLAGS)
+AC_SUBST(PKG_LIBS)
 
 AC_CONFIG_FILES([src/Makevars])
 AC_OUTPUT

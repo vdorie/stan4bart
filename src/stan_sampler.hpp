@@ -17,19 +17,33 @@
 
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS 1
 #ifdef SUPPRESS_DIAGNOSTIC
-#  pragma GCC diagnostic push
-#  pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#  pragma GCC diagnostic ignored "-Wunused-variable"
-#  pragma GCC diagnostic ignored "-Wunused-parameter"
-#  pragma GCC diagnostic ignored "-Wunused-local-typedef"
-#  pragma GCC diagnostic ignored "-Wunneeded-internal-declaration"
-#  pragma GCC diagnostic ignored "-Wunused-function"
-#  pragma GCC diagnostic ignored "-Wsign-compare"
-#  pragma GCC diagnostic ignored "-Wlanguage-extension-token"
-#  pragma GCC diagnostic ignored "-Winfinite-recursion"
-#  pragma GCC diagnostic ignored "-Wignored-qualifiers"
-#  pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#  ifdef __clang__
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wunknown-pragmas"
+#    pragma clang diagnostic ignored "-Wunused-variable"
+#    pragma clang diagnostic ignored "-Wunused-parameter"
+#    pragma clang diagnostic ignored "-Wunused-local-typedef"
+#    pragma clang diagnostic ignored "-Wunused-function"
+#    pragma clang diagnostic ignored "-Wsign-compare"
+#    pragma clang diagnostic ignored "-Wlanguage-extension-token"
+#    pragma clang diagnostic ignored "-Winfinite-recursion"
+#    pragma clang diagnostic ignored "-Wignored-qualifiers"
+#    pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#    pragma clang diagnostic ignored "-Wdeprecated-copy"
+#  else
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wunknown-pragmas"
+#    pragma GCC diagnostic ignored "-Wunused-variable"
+#    pragma GCC diagnostic ignored "-Wunused-parameter"
+#    pragma GCC diagnostic ignored "-Wunused-local-typedefs"
+#    pragma GCC diagnostic ignored "-Wunused-function"
+#    pragma GCC diagnostic ignored "-Wsign-compare"
+#    pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#    pragma GCC diagnostic ignored "-Wignored-attributes"
+#    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#  endif
 #endif
+
 #include <stan/callbacks/interrupt.hpp>
 #include <stan/callbacks/stream_logger.hpp>
 #include <stan/callbacks/stream_writer.hpp>
@@ -38,7 +52,11 @@
 #include <stan/io/empty_var_context.hpp>
 #include <stan/io/var_context.hpp>
 #ifdef SUPPRESS_DIAGNOSTIC
-#  pragma GCC diagnostic pop
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
 #endif
 
 #include "double_writer.hpp"

@@ -230,20 +230,24 @@ glmerControl <- glmerControl %ORifNotInLme4% function (optimizer = c("bobyqa", "
     ret
 }
 
+tolPwrss <- tolPwrss %ORifNotInLme4% NULL
+compDev <- compDev %ORifNotInLme4% NULL
+nAGQ0initStep <- nAGQ0initStep %ORifNotInLme4% NULL
+check.response.not.const <- check.response.not.const %ORifNotInLme4% NULL
+
 lmerControl <- lmerControl %ORifNotInLme4%
-  function(optimizer = "nloptwrap", restart_edge = TRUE, boundary.tol = 1e-05, 
-           calc.derivs = TRUE, use.last.params = FALSE, sparseX = FALSE, 
-           standardize.X = FALSE, check.nobs.vs.rankZ = "ignore", check.nobs.vs.nlev = "stop", 
-           check.nlev.gtreq.5 = "ignore", check.nlev.gtr.1 = "stop", 
-           check.nobs.vs.nRE = "stop",
-           check.rankX = c("message+drop.cols", "silent.drop.cols", "warn+drop.cols",
-                           "stop.deficient", "ignore"),
-           check.scaleX = c("warning", "stop", "silent.rescale", "message+rescale",
-                            "warn+rescale", "ignore"), check.formula.LHS = "stop", 
-           check.conv.grad = .makeCC("warning", tol = 0.002, relTol = NULL), 
-           check.conv.singular = .makeCC(action = "message", tol = formals(isSingular)$tol), 
-           check.conv.hess = .makeCC(action = "warning", tol = 1e-06), 
-           optCtrl = list(), mod.type = "lmer") 
+  function (optimizer = "nloptwrap", restart_edge = TRUE, boundary.tol = 1e-05, 
+    calc.derivs = TRUE, use.last.params = FALSE, sparseX = FALSE, 
+    standardize.X = FALSE, check.nobs.vs.rankZ = "ignore", check.nobs.vs.nlev = "stop", 
+    check.nlev.gtreq.5 = "ignore", check.nlev.gtr.1 = "stop", 
+    check.nobs.vs.nRE = "stop", check.rankX = c("message+drop.cols", 
+        "silent.drop.cols", "warn+drop.cols", "stop.deficient", 
+        "ignore"), check.scaleX = c("warning", "stop", "silent.rescale", 
+        "message+rescale", "warn+rescale", "ignore"), check.formula.LHS = "stop", 
+    check.conv.grad = .makeCC("warning", tol = 0.002, relTol = NULL), 
+    check.conv.singular = .makeCC(action = "message", tol = formals(isSingular)$tol), 
+    check.conv.hess = .makeCC(action = "warning", tol = 1e-06), 
+    optCtrl = list(), mod.type = "lmer") 
 {
     stopifnot(is.list(optCtrl))
     if (mod.type == "glmer" && length(optimizer) == 1) {
@@ -979,6 +983,113 @@ mkVarCorr <- mkVarCorr %ORifNotInLme4% function (sc, cnms, nc, theta, nms)
     }
     structure(ans, sc = sc)
 }
+
+wmsg <- wgmsg %ORifNotInLme4% function (n, cmp.val, allow.n, msg1 = "", msg2 = "", msg3 = "") 
+{
+    if (allow.n) {
+        unident <- n < cmp.val
+        cmp <- "<"
+        rstr <- ""
+    }
+    else {
+        unident <- n <= cmp.val
+        cmp <- "<="
+        rstr <- " and the residual variance (or scale parameter)"
+    }
+    wstr <- sprintf("%s (=%d) %s %s (=%d)%s; the random-effects parameters%s are probably unidentifiable", 
+        msg1, n, cmp, msg2, cmp.val, msg3, rstr)
+    list(unident = unident, wstr = wstr)
+}
+
+.makeCC <- .makeCC %ORifNotInLme4% function (action, tol, relTol, ...) 
+{
+    stopifnot(is.character(action), length(action) == 1)
+    if (!is.numeric(tol)) 
+        stop("must have a numeric 'tol' component")
+    if (length(tol) != 1 || tol < 0) 
+        stop("'tol' must be number >= 0")
+    mis.rt <- missing(relTol)
+    if (!mis.rt && !is.null(relTol)) 
+        stopifnot(is.numeric(relTol), length(relTol) == 1, relTol >= 
+            0)
+    c(list(action = action, tol = tol), if (!mis.rt) list(relTol = relTol), 
+        list(...))
+}
+
+isSingular <- isSingular %ORifNotInLme4% function (x, tol = 1e-04) 
+{
+    lwr <- getME(x, "lower")
+    theta <- getME(x, "theta")
+    any(theta[lwr == 0] < tol)
+}
+
+.get.checkingOpts <- .get.checkingOpts %ORifNotInLme4% function (nms) 
+  nms[grepl("^check\\.(?!conv|rankX|scaleX)", nms, perl = TRUE)]
+
+chk.cconv <- chk.cconv %ORifNotInLme4% function (copt, callingFn) 
+{
+    cnm <- deparse(substitute(copt))
+    if (is.character(copt)) {
+        def <- eval(formals(callingFn)[[cnm]])
+        def$action <- copt
+        assign(cnm, def, envir = sys.frame(sys.parent()))
+    }
+    else chk.convOpt(copt)
+}
+
+namedList <- namedList %ORifNotInLme4% function (...) 
+{
+    L <- list(...)
+    snm <- sapply(substitute(list(...)), deparse)[-1]
+    if (is.null(nm <- names(L))) 
+        nm <- snm
+    if (any(nonames <- nm == "")) 
+        nm[nonames] <- snm[nonames]
+    setNames(L, nm)
+}
+
+colSort <- colSort %ORifNotInLme4% function (x) 
+{
+    termlev <- vapply(strsplit(x, ":"), length, integer(1))
+    iterms <- split(x, termlev)
+    iterms <- sapply(iterms, sort, simplify = FALSE)
+    ilab <- "(Intercept)"
+    if (ilab %in% iterms[[1]]) {
+        iterms[[1]] <- c(ilab, setdiff(iterms[[1]], ilab))
+    }
+    unlist(iterms)
+}
+
+isAnyArgBar <- isAnyArgBar %ORifNotInLme4% function (term) 
+{
+    if ((term[[1]] != as.name("~")) && (term[[1]] != as.name("("))) {
+        for (i in seq_along(term)) {
+            if (isBar(term[[i]])) 
+                return(TRUE)
+        }
+    }
+    FALSE
+}
+
+chk.convOpt <- chk.convOpt %ORifNotInLme4% function (opt) 
+{
+    cnm <- deparse(nm <- substitute(opt))[[1]]
+    if (!is.list(opt)) 
+        stop("check.conv* option ", cnm, " must be a list")
+    if (!is.character(opt$action)) 
+        stop("check.conv* option ", cnm, " has no 'action' string")
+    if (!is.numeric(tol <- opt$tol)) 
+        stop("check.conv* option ", cnm, " must have a numeric 'tol' component")
+    if (length(tol) != 1 || tol < 0) 
+        stop("check.conv* option ", cnm, "$tol must be number >= 0")
+    if (!is.null(relTol <- opt$relTol)) 
+        stopifnot(is.numeric(relTol), length(relTol) == 1, relTol >= 
+            0)
+    invisible()
+}
+
+getME <- getME %ORifNotInLme4% function (object, name, ...) 
+UseMethod("getME")
 
 levelfun <- function (x, nl.n, sample_new_levels, Sigma) 
 {
