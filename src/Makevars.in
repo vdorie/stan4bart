@@ -3,7 +3,8 @@ PKG_CPPFLAGS = -I"include" -I"include/sundials" -I"../inst/include" -DBOOST_DISA
 PKG_CXXFLAGS = @PKG_CXXFLAGS@
 SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS)
 SHLIB_LD = $(SHLIB_CXXLD
-PKG_LIBS = @PKG_LIBS@ -L"$(TBB_LIB)" -Wl,-rpath,"$(TBB_LIB)" -ltbb -ltbbmalloc
+#PKG_LIBS = @PKG_LIBS@ -L"$(TBB_LIB)" -Wl,-rpath,"$(TBB_LIB)" -ltbb -ltbbmalloc
+PKG_LIBS = @PKG_LIBS@
 
 CXX_STD = CXX14
 SOURCES = bart_util.cpp init.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c stan_sampler.cpp
