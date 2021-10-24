@@ -23,7 +23,6 @@ Imports:
   Matrix,
   parallel
 LinkingTo:
-  StanHeaders (>= 2.21.0-6),
   BH (>= 1.72.0.3),
   Rcpp (>= 1.0.5),
   RcppEigen (>= 0.3.3.7.0),

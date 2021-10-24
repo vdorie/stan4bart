@@ -107,7 +107,7 @@ namespace {
     const double* userOffset;
     UserOffsetType offsetType;
     
-    model_continuous_namespace::model_continuous* stanModel;
+    continuous_model_namespace::continuous_model* stanModel;
     stan4bart::StanControl stanControl;
     stan4bart::StanSampler* stanSampler;
     

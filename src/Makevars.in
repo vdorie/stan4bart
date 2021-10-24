@@ -1,7 +1,9 @@
-STANHEADERS_SRC=@STANHEADERS_SRC@
-TBB=@TBB@
-PKG_CPPFLAGS = -I"include" -I"../inst/include" -I"$(STANHEADERS_SRC)" -DBOOST_DISABLE_ASSERTS -DEIGEN_NO_DEBUG @EXTRA_CPPFLAGS@
-PKG_LIBS = -L"$(TBB)$(R_ARCH)" -Wl,-rpath,"$(TBB)$(R_ARCH)" -ltbb -ltbbmalloc
+TBB_LIB = @TBB_LIB@
+PKG_CPPFLAGS = -I"include" -I"include/sundials" -I"../inst/include" -DBOOST_DISABLE_ASSERTS -DEIGEN_NO_DEBUG
+PKG_CXXFLAGS = @PKG_CXXFLAGS@
+SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS)
+SHLIB_LD = $(SHLIB_CXXLD
+PKG_LIBS = @PKG_LIBS@ -L"$(TBB_LIB)" -Wl,-rpath,"$(TBB_LIB)" -ltbb -ltbbmalloc
 
 CXX_STD = CXX14
 SOURCES = bart_util.cpp init.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c stan_sampler.cpp

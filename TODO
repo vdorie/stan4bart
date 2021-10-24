@@ -5,3 +5,7 @@ strip down stan model
 pass through more control options (e.g. n.cuts)
 
 binary model
+
+
+Notes: continuous.hpp compiled using
+  bin/stanc --allow-undefined ~/Repositories/stan4bart/src/stan_files/continuous.stan

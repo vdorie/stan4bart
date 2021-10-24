@@ -25,6 +25,9 @@
 #    pragma clang diagnostic ignored "-Winfinite-recursion"
 #    pragma clang diagnostic ignored "-Wignored-qualifiers"
 #    pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
+#    pragma clang diagnostic ignored "-Wunused-lambda-capture"
+#    pragma clang diagnostic ignored "-Wdeprecated-copy"
+#    pragma clang diagnostic ignored "-Wmismatched-tags"
 #  else
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wunknown-pragmas"

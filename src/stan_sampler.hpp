@@ -51,6 +51,7 @@
 #include <stan/io/dump.hpp>
 #include <stan/io/empty_var_context.hpp>
 #include <stan/io/var_context.hpp>
+
 #ifdef SUPPRESS_DIAGNOSTIC
 #  ifdef __clang__
 #    pragma clang diagnostic pop
@@ -64,8 +65,8 @@
 
 // #include "stan_files/continuous.hpp"
 
-namespace model_continuous_namespace {
-  class model_continuous;
+namespace continuous_model_namespace {
+  class continuous_model;
 }
 
 namespace stan4bart {
@@ -92,7 +93,7 @@ namespace stan4bart {
     }
   };
   
-  typedef model_continuous_namespace::model_continuous StanModel;
+  typedef continuous_model_namespace::continuous_model StanModel;
   
   struct StanSampler {
     std::ostream& c_out;

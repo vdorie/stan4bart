@@ -13,31 +13,7 @@
 
 #include <stan/services/util/create_unit_e_diag_inv_metric.hpp>
 
-#if defined(__GNUC__) && (\
-  (!defined(__clang__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || \
-  ( defined(__clang__) && (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 7))))
-#  define SUPPRESS_DIAGNOSTIC 1
-#endif
-
-#ifdef SUPPRESS_DIAGNOSTIC
-#  ifdef __clang__
-#    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wunused-parameter"
-#    pragma clang diagnostic ignored "-Wunused-local-typedef"
-#  else
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wunused-parameter"
-#    pragma GCC diagnostic ignored "-Wunused-local-typedefs"
-#  endif
-#endif
 #include "stan_files/continuous.hpp" // should include Eigen
-#ifdef SUPPRESS_DIAGNOSTIC
-#  ifdef __clang__
-#    pragma clang diagnostic pop
-#  else
-#    pragma GCC diagnostic pop
-#  endif
-#endif
 
 #include "double_writer.hpp"
 
@@ -196,7 +172,7 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   Rprintf("value >= 0.0: %s, >= -0.0: %s, >= -1.0e-16: %s\n", REAL(VECTOR_ELT(dataExpr, matchPos[11]))[0] >= 0.0 ? "true" : "false",
                                                     REAL(VECTOR_ELT(dataExpr, matchPos[11]))[0] >= -0.0 ? "true" : "false",
                                                     REAL(VECTOR_ELT(dataExpr, matchPos[11]))[0] >= -1.0e-16 ? "true" : "false"); */
-  model_continuous_namespace::model_continuous* result = new model_continuous_namespace::model_continuous(
+  continuous_model_namespace::continuous_model* result = new continuous_model_namespace::continuous_model(
     rc_getIntAt(  dataExpr, matchPos[ 0], "N",     RC_VALUE | RC_GEQ, 0, RC_END),
     rc_getIntAt(  dataExpr, matchPos[ 1], "K",     RC_VALUE | RC_GEQ, 0, RC_END),
     getEigenMatrix(VECTOR_ELT(dataExpr, matchPos[ 2])), // X
