@@ -51,7 +51,7 @@ LinkingTo:
   BH (>= 1.72.0.3),
   Rcpp (>= 1.0.5),
   RcppEigen (>= 0.3.3.7.0),
-  RcppParallel,
+  RcppParallel (>= 5.1.1),
   dbarts (>= 0.9-19)
 Suggests:
   testthat (>= 2.0-0),
