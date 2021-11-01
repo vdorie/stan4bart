@@ -44,7 +44,7 @@ Authors@R: c(
   person("Christophe", "Tournayre", role = "ctb", comment = "ax_ext.m4"),
   person("Michael", "Petch", role = "ctb", comment = "ax_ext.m4, ax_gcc_x86_avx_xgetbv.m4, ax_gcc_x86_cpuid.m4"),
   person("Rafael", "de Lucena Valle", role = "ctb", comment = "ax_ext.m4"),
-person("Steven G.", "Johnson", role = "ctb", comment = c("ax_gcc_x86_cpuid.m4", ORCID = "0000-0001-7327-4967")),
+  person("Steven G.", "Johnson", role = "ctb", comment = c("ax_gcc_x86_cpuid.m4", ORCID = "0000-0001-7327-4967")),
   person("Matteo", "Frigo", role = "ctb", comment = "ax_gcc_x86_cpuid.m4"),
   person("Scott", "Pakin", role = "ctb", comment = c("ax_func_posix_memalign.m4", ORCID = "0000-0002-5220-1985")))
 Depends:
