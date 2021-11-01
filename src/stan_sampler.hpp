@@ -41,6 +41,13 @@
 #    pragma GCC diagnostic ignored "-Wignored-qualifiers"
 #    pragma GCC diagnostic ignored "-Wignored-attributes"
 #    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#    pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+// this is only for gcc under -Wpedantic, since some some warnings can't
+// be silenced
+#    include <boost/math/tools/config.hpp>
+#    ifdef BOOST_MATH_USE_FLOAT128
+#      pragma GCC system_header
+#    endif
 #  endif
 #endif
 

@@ -1,5 +1,4 @@
-ihdp
-R/compile_stan_file.R
-.git
-.gitignore
-readme.md
+^ihdp
+^.git$
+^.gitignore$
+^readme.md$

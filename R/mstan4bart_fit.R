@@ -32,10 +32,6 @@ getRanef <- function(group, samples) {
 # putting this out here so we can export it when parallelizing
 mstan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
 {
-  # TODO: figure out why the C refs aren't reachable when dispatched to cluster
-  
-  ns <- asNamespace("stan4bart")
-  
   if (!is.na(seed))
     set.seed(seed)
   
@@ -43,21 +39,21 @@ mstan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, mode
   if (is.na(seed))
     orig_seed <- .Random.seed
   
-  sampler <- .Call(ns$C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
+  sampler <- .Call(C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
   if (control.common$verbose > 0L) {
     cat("fitting chain ", chain.num, "\n", sep = "")
-    .Call(ns$C_stan4bart_printInitialSummary, sampler)
+    .Call(C_stan4bart_printInitialSummary, sampler)
   }
   results <- list()
   if (control.common$warmup > 0L)
-    results$warmup  <- .Call(ns$C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
-  .Call(ns$C_stan4bart_disengageAdaptation, sampler)
-  results$sample <- .Call(ns$C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
+    results$warmup  <- .Call(C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
+  .Call(C_stan4bart_disengageAdaptation, sampler)
+  results$sample <- .Call(C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
                           FALSE, "both")
   
   if (control.bart@keepTrees) {
-    results$state.bart <- .Call(ns$C_stan4bart_exportBARTState, sampler)
-    results$range.bart <- .Call(ns$C_stan4bart_getBARTDataRange, sampler)
+    results$state.bart <- .Call(C_stan4bart_exportBARTState, sampler)
+    results$range.bart <- .Call(C_stan4bart_getBARTDataRange, sampler)
   }
   
   results
@@ -505,10 +501,12 @@ mstan4bart_fit <-
       clusterEvalQ(cluster, require(stan4bart))
       
       tryResult <- tryCatch(
-        chainResults <- clusterMap(cluster, "mstan4bart_fit_worker",
-                                   seq_len(chains), randomSeeds,
-                                   MoreArgs = nlist(control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)),
-                            error = function(e) e)
+        chainResults <- clusterMap(
+          cluster, "mstan4bart_fit_worker",
+          seq_len(chains), randomSeeds,
+          MoreArgs = nlist(control.bart, data.bart, model.bart, data.stan,
+                           control.stan, control.common, group)),
+        error = function(e) e)
     
       stopCluster(cluster)
       

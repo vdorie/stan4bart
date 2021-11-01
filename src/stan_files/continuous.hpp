@@ -76,6 +76,7 @@
 #    pragma GCC diagnostic ignored "-Wunknown-pragmas"
 #    pragma GCC diagnostic ignored "-Wunused-parameter"
 #    pragma GCC diagnostic ignored "-Wsign-compare"
+#    pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 #  endif
 #endif
 
@@ -1278,157 +1279,6 @@ class continuous_model final : public model_base_crtp<continuous_model> {
   Eigen::Map<Eigen::Matrix<double, -1, 1>> w{nullptr, 0};
  
  public:
-  continuous_model(
-    int N,
-    int K,
-    Eigen::Matrix<double, -1, -1> X,
-    int len_y,
-    double lb_y,
-    double ub_y,
-    Eigen::Matrix<double, -1, 1> y,
-    int has_intercept,
-    int is_binary,
-    int prior_dist,
-    int prior_dist_for_intercept,
-    int prior_dist_for_aux,
-    int has_weights,
-    Eigen::Matrix<double, -1, 1> weights,
-    Eigen::Matrix<double, -1, 1> offset_,
-    Eigen::Matrix<double, -1, 1> prior_scale,
-    double prior_scale_for_intercept,
-    double prior_scale_for_aux,
-    Eigen::Matrix<double, -1, 1> prior_mean,
-    double prior_mean_for_intercept,
-    double prior_mean_for_aux,
-    Eigen::Matrix<double, -1, 1> prior_df,
-    double prior_df_for_intercept,
-    double prior_df_for_aux,
-    double global_prior_df,
-    double global_prior_scale,
-    double slab_df,
-    double slab_scale,
-    std::vector<int> num_normals,
-    int t,
-    std::vector<int> p,
-    std::vector<int> l,
-    int q,
-    int len_theta_L,
-    Eigen::Matrix<double, -1, 1> shape,
-    Eigen::Matrix<double, -1, 1> scale,
-    int len_concentration,
-    std::vector<double> concentration,
-    int len_regularization,
-    std::vector<double> regularization,
-    int num_non_zero,
-    Eigen::Matrix<double, -1, 1> w,
-    std::vector<int> v,
-    std::vector<int> u,
-    int len_z_T,
-    int len_var_group,
-    int len_rho,
-    int pos,
-    std::vector<double> delta,
-    int hs) :
-      model_base_crtp(0),
-      N(N),
-      K(K),
-      X__(X),
-      len_y(len_y), 
-      ub_y(ub_y),
-      y__(y),
-      has_intercept(has_intercept),
-      is_binary(is_binary),
-      prior_dist(prior_dist),
-      prior_dist_for_intercept(prior_dist_for_intercept),
-      prior_dist_for_aux(prior_dist_for_aux),
-      has_weights(has_weights),
-      weights__(weights),
-      offset___(offset_),
-      prior_scale__(prior_scale),
-      prior_scale_for_intercept(prior_scale_for_intercept),
-      prior_scale_for_aux(prior_scale_for_aux),
-      prior_mean__(prior_mean),
-      prior_mean_for_intercept(prior_mean_for_intercept),
-      prior_mean_for_aux(prior_mean_for_aux),
-      prior_df__(prior_df),
-      prior_df_for_intercept(prior_df_for_intercept),
-      prior_df_for_aux(prior_df_for_aux),
-      global_prior_df(global_prior_df),
-      global_prior_scale(global_prior_scale),
-      slab_df(slab_df),
-      slab_scale(slab_scale),
-      num_normals(num_normals),
-      t(t),
-      p(p),
-      l(l),
-      q(q),
-      len_theta_L(len_theta_L),
-      shape__(shape),
-      scale__(scale),
-      len_concentration(len_concentration),
-      concentration(concentration),
-      len_regularization(len_regularization),
-      regularization(regularization),
-      num_non_zero(num_non_zero),
-      w__(w),
-      v(v),
-      u(u),
-      len_z_T(len_z_T),
-      len_var_group(len_var_group),
-      len_rho(len_rho),
-      pos(pos),
-      delta(delta),
-      hs(hs),
-      z_beta_1dim__(prior_dist == 7 ? sum(num_normals) : K),
-      caux_1dim__(hs > 0 ? 1 : 0),
-      mix_1dim__(prior_dist == 5 || prior_dist == 6 ? K : 0),
-      one_over_lambda_1dim__(prior_dist == 6 ? 1 : 0),
-      aux_unscaled_1dim__(!is_binary ? 1 : 0),
-      aux_1dim__(!is_binary ? 1 : 0),
-      
-      X(X__.data(), X__.rows(), X__.cols()),
-      y(y__.data(), y__.size()),
-      weights(weights__.data(), weights__.size()),
-      offset_(offset___.data(), offset___.size()),
-      prior_scale(prior_scale__.data(), prior_scale__.size()),
-      prior_mean(prior_mean__.data(), prior_mean__.size()),
-      prior_df(prior_df__.data(), prior_df__.size()),
-      shape(shape__.data(), shape__.size()),
-      scale(scale__.data(), scale__.size()),
-      w(w__.data(), w__.size())
-    {
-      num_params_r__ = 
-        has_intercept + // gammma
-        z_beta_1dim__ + // z_beta
-        hs + // global
-        hs * K + // local
-        caux_1dim__ + // caux
-        mix_1dim__ + // mix
-        one_over_lambda_1dim__ + // one_over_lambda
-        q + // z_b
-        len_z_T + // z_T
-        len_rho + // rho
-        len_concentration + // zeta
-        t + // tau
-        aux_unscaled_1dim__; // + // aux_unscaled; transformed not part of num_params_r
-        // (!is_binary ? 1 : 0) + // aux
-        // K + // beta
-        // q + // b
-        // len_theta_L; // theta_L
-    }
-  ~continuous_model() { }
-  
-  void set_response(const double* new_response) {
-    for (int i = 0; i < N; ++i)
-      y[i] = new_response[i];
-  }
-  
-  void set_offset(const double* offset) {
-    offset_.resize(N);
-    for (int i = 0; i < N; ++i)
-      offset_(i) = offset[i];
-  }
-  
   inline std::string model_name() const final { return "continuous_model"; }
 
   inline std::vector<std::string> model_compile_info() const noexcept {
@@ -3196,138 +3046,6 @@ class continuous_model final : public model_base_crtp<continuous_model> {
     }
     } // transform_inits_impl() 
   
-  template <typename T__>
-    T__ get_aux(const T__* sample) const {
-      
-      size_t aux_offset = 
-        has_intercept + // gammma
-        z_beta_1dim__ + // z_beta
-        hs + // global
-        hs * K + //local
-        caux_1dim__ + // caux
-        mix_1dim__ + // mix
-        one_over_lambda_1dim__ + // one_over_lambda
-        q + // z_b
-        len_z_T + // z_T
-        len_rho + // rho
-        len_concentration + // zeta
-        t + // tau
-        aux_unscaled_1dim__; // aux_unscaled
-        // aux_1dim__ //  aux
-        // K // beta
-        // q // b
-        // len_theta_L // theta_L
-
-      return sample[aux_offset];
-    }
-
-    template <typename T__>
-    void get_parametric_mean(const T__* sample,  T__* result) const {
-      typedef T__ local_scalar_t__;
-      
-      size_t offset = 0;
-      
-      local_scalar_t__ gamma;
-      if (has_intercept) gamma = sample[offset++];
-      
-      offset += z_beta_1dim__;
-      
-      if (hs > 0) offset += 2 + K;
-      
-      if (prior_dist == 5 || prior_dist == 6) offset += K;
-      
-      if (prior_dist == 6) offset += 1;
-       
-      offset += q;
-      
-      offset += len_z_T;
-      
-      offset += len_rho;
-      
-      offset += len_concentration;
-      
-      offset += t;
-      
-      offset += aux_unscaled_1dim__;
-      
-      /* extract transformed parameters from sample */
-      offset += aux_1dim__;
-      
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > beta(sample + offset, K);
-      offset += K; 
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > b(sample + offset, q);
-      
-      Eigen::Matrix<local_scalar_t__, -1, 1> eta(N);
-      if (K > 0) {
-        eta = X * beta;
-      } else {
-        eta = Eigen::Matrix<local_scalar_t__, -1, 1>::Zero(N);
-      }
-      eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
-      
-      if (has_intercept) {
-        eta += Eigen::Matrix<local_scalar_t__, -1, 1>::Constant(N, gamma);
-      }
-      
-      std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));
-    }
-    
-    template <typename T__>
-    void get_parametric_mean(const T__* sample,  T__* result, bool include_fixed, bool include_random) const
-    {
-      typedef T__ local_scalar_t__;
-      
-      size_t offset = 0;
-      
-      local_scalar_t__ gamma;
-      if (has_intercept) gamma = sample[offset++];
-      
-      offset += z_beta_1dim__;
-      
-      if (hs > 0) offset += 2 + K;
-      
-      if (prior_dist == 5 || prior_dist == 6) offset += K;
-      
-      if (prior_dist == 6) offset += 1;
-       
-      offset += q;
-      
-      offset += len_z_T;
-      
-      offset += len_rho;
-      
-      offset += len_concentration;
-      
-      offset += t;
-      
-      offset += aux_unscaled_1dim__;
-      
-      /* extract transformed parameters from sample */
-      offset += aux_1dim__; // aux
-      
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > beta(sample + offset, K);
-      offset += K; 
-      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > b(sample + offset, q);
-      
-      
-      Eigen::Matrix<local_scalar_t__, -1, 1> eta(N);
-      eta = Eigen::Matrix<local_scalar_t__, -1, 1>::Zero(N);
-      
-      if (include_fixed) {
-        if (K > 0)
-          eta += X * beta;
-                
-        if (has_intercept) {
-          eta += Eigen::Matrix<local_scalar_t__, -1, 1>::Constant(N, gamma);
-        }
-      }
-      if (include_random) {
-        eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
-      }
-      
-      std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));
-    }
-  
   inline void get_param_names(std::vector<std::string>& names__) const {
     
     names__ = std::vector<std::string>{"gamma", "z_beta", "global", "local",
@@ -3689,7 +3407,301 @@ class continuous_model final : public model_base_crtp<continuous_model> {
      transform_inits_impl(params_r_flat__, params_i, vars, pstream__);
     } // transform_inits() 
     
+
+#ifdef SUPPRESS_DIAGNOSTIC
+#  ifdef __clang__
+#    pragma clang diagnostic pop
+#  else
+#    pragma GCC diagnostic pop
+#  endif
+#endif
+    
+    continuous_model(
+    int N,
+    int K,
+    Eigen::Matrix<double, -1, -1> X,
+    int len_y,
+    double lb_y,
+    double ub_y,
+    Eigen::Matrix<double, -1, 1> y,
+    int has_intercept,
+    int is_binary,
+    int prior_dist,
+    int prior_dist_for_intercept,
+    int prior_dist_for_aux,
+    int has_weights,
+    Eigen::Matrix<double, -1, 1> weights,
+    Eigen::Matrix<double, -1, 1> offset_,
+    Eigen::Matrix<double, -1, 1> prior_scale,
+    double prior_scale_for_intercept,
+    double prior_scale_for_aux,
+    Eigen::Matrix<double, -1, 1> prior_mean,
+    double prior_mean_for_intercept,
+    double prior_mean_for_aux,
+    Eigen::Matrix<double, -1, 1> prior_df,
+    double prior_df_for_intercept,
+    double prior_df_for_aux,
+    double global_prior_df,
+    double global_prior_scale,
+    double slab_df,
+    double slab_scale,
+    std::vector<int> num_normals,
+    int t,
+    std::vector<int> p,
+    std::vector<int> l,
+    int q,
+    int len_theta_L,
+    Eigen::Matrix<double, -1, 1> shape,
+    Eigen::Matrix<double, -1, 1> scale,
+    int len_concentration,
+    std::vector<double> concentration,
+    int len_regularization,
+    std::vector<double> regularization,
+    int num_non_zero,
+    Eigen::Matrix<double, -1, 1> w,
+    std::vector<int> v,
+    std::vector<int> u,
+    int len_z_T,
+    int len_var_group,
+    int len_rho,
+    int pos,
+    std::vector<double> delta,
+    int hs) :
+      model_base_crtp(0),
+      N(N),
+      K(K),
+      X__(X),
+      len_y(len_y), 
+      lb_y(lb_y),
+      ub_y(ub_y),
+      y__(y),
+      has_intercept(has_intercept),
+      is_binary(is_binary),
+      prior_dist(prior_dist),
+      prior_dist_for_intercept(prior_dist_for_intercept),
+      prior_dist_for_aux(prior_dist_for_aux),
+      has_weights(has_weights),
+      weights__(weights),
+      offset___(offset_),
+      prior_scale__(prior_scale),
+      prior_scale_for_intercept(prior_scale_for_intercept),
+      prior_scale_for_aux(prior_scale_for_aux),
+      prior_mean__(prior_mean),
+      prior_mean_for_intercept(prior_mean_for_intercept),
+      prior_mean_for_aux(prior_mean_for_aux),
+      prior_df__(prior_df),
+      prior_df_for_intercept(prior_df_for_intercept),
+      prior_df_for_aux(prior_df_for_aux),
+      global_prior_df(global_prior_df),
+      global_prior_scale(global_prior_scale),
+      slab_df(slab_df),
+      slab_scale(slab_scale),
+      num_normals(num_normals),
+      t(t),
+      p(p),
+      l(l),
+      q(q),
+      len_theta_L(len_theta_L),
+      shape__(shape),
+      scale__(scale),
+      len_concentration(len_concentration),
+      concentration(concentration),
+      len_regularization(len_regularization),
+      regularization(regularization),
+      num_non_zero(num_non_zero),
+      w__(w),
+      v(v),
+      u(u),
+      len_z_T(len_z_T),
+      len_var_group(len_var_group),
+      len_rho(len_rho),
+      pos(pos),
+      delta(delta),
+      hs(hs),
+      z_beta_1dim__(prior_dist == 7 ? sum(num_normals) : K),
+      caux_1dim__(hs > 0 ? 1 : 0),
+      mix_1dim__(prior_dist == 5 || prior_dist == 6 ? K : 0),
+      one_over_lambda_1dim__(prior_dist == 6 ? 1 : 0),
+      aux_unscaled_1dim__(!is_binary ? 1 : 0),
+      aux_1dim__(!is_binary ? 1 : 0),
+      
+      X(X__.data(), X__.rows(), X__.cols()),
+      y(y__.data(), y__.size()),
+      weights(weights__.data(), weights__.size()),
+      offset_(offset___.data(), offset___.size()),
+      prior_scale(prior_scale__.data(), prior_scale__.size()),
+      prior_mean(prior_mean__.data(), prior_mean__.size()),
+      prior_df(prior_df__.data(), prior_df__.size()),
+      shape(shape__.data(), shape__.size()),
+      scale(scale__.data(), scale__.size()),
+      w(w__.data(), w__.size())
+    {
+      num_params_r__ = 
+        has_intercept + // gammma
+        z_beta_1dim__ + // z_beta
+        hs + // global
+        hs * K + // local
+        caux_1dim__ + // caux
+        mix_1dim__ + // mix
+        one_over_lambda_1dim__ + // one_over_lambda
+        q + // z_b
+        len_z_T + // z_T
+        len_rho + // rho
+        len_concentration + // zeta
+        t + // tau
+        aux_unscaled_1dim__; // + // aux_unscaled; transformed not part of num_params_r
+        // (!is_binary ? 1 : 0) + // aux
+        // K + // beta
+        // q + // b
+        // len_theta_L; // theta_L
+    }
+  ~continuous_model() { }
+  
+    void set_response(const double* new_response) {
+      for (int i = 0; i < N; ++i)
+        y[i] = new_response[i];
+    }
+    
+    void set_offset(const double* offset) {
+      offset_.resize(N);
+      for (int i = 0; i < N; ++i)
+        offset_(i) = offset[i];
+    }
+  
+    template <typename T__>
+    T__ get_aux(const T__* sample) const {
+      
+      size_t aux_offset = 
+        has_intercept + // gammma
+        z_beta_1dim__ + // z_beta
+        hs + // global
+        hs * K + //local
+        caux_1dim__ + // caux
+        mix_1dim__ + // mix
+        one_over_lambda_1dim__ + // one_over_lambda
+        q + // z_b
+        len_z_T + // z_T
+        len_rho + // rho
+        len_concentration + // zeta
+        t + // tau
+        aux_unscaled_1dim__; // aux_unscaled
+        // aux_1dim__ //  aux
+        // K // beta
+        // q // b
+        // len_theta_L // theta_L
+
+      return sample[aux_offset];
+    }
+    
+    template <typename T__>
+    void get_parametric_mean(const T__* sample,  T__* result) const {
+      typedef T__ local_scalar_t__;
+      
+      size_t offset = 0;
+      
+      local_scalar_t__ gamma;
+      if (has_intercept) gamma = sample[offset++];
+      
+      offset += z_beta_1dim__;
+      
+      if (hs > 0) offset += 2 + K;
+      
+      if (prior_dist == 5 || prior_dist == 6) offset += K;
+      
+      if (prior_dist == 6) offset += 1;
+       
+      offset += q;
+      
+      offset += len_z_T;
+      
+      offset += len_rho;
+      
+      offset += len_concentration;
+      
+      offset += t;
+      
+      offset += aux_unscaled_1dim__;
+      
+      /* extract transformed parameters from sample */
+      offset += aux_1dim__;
+      
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > beta(sample + offset, K);
+      offset += K; 
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > b(sample + offset, q);
+      
+      Eigen::Matrix<local_scalar_t__, -1, 1> eta(N);
+      if (K > 0) {
+        eta = X * beta;
+      } else {
+        eta = Eigen::Matrix<local_scalar_t__, -1, 1>::Zero(N);
+      }
+      eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
+      
+      if (has_intercept) {
+        eta += Eigen::Matrix<local_scalar_t__, -1, 1>::Constant(N, gamma);
+      }
+      
+      std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));
+    }
+    
+    template <typename T__>
+    void get_parametric_mean(const T__* sample,  T__* result, bool include_fixed, bool include_random) const
+    {
+      typedef T__ local_scalar_t__;
+      
+      size_t offset = 0;
+      
+      local_scalar_t__ gamma;
+      if (has_intercept) gamma = sample[offset++];
+      
+      offset += z_beta_1dim__;
+      
+      if (hs > 0) offset += 2 + K;
+      
+      if (prior_dist == 5 || prior_dist == 6) offset += K;
+      
+      if (prior_dist == 6) offset += 1;
+       
+      offset += q;
+      
+      offset += len_z_T;
+      
+      offset += len_rho;
+      
+      offset += len_concentration;
+      
+      offset += t;
+      
+      offset += aux_unscaled_1dim__;
+      
+      /* extract transformed parameters from sample */
+      offset += aux_1dim__; // aux
+      
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > beta(sample + offset, K);
+      offset += K; 
+      Eigen::Map<const Eigen::Matrix<local_scalar_t__, -1, 1> > b(sample + offset, q);
+      
+      
+      Eigen::Matrix<local_scalar_t__, -1, 1> eta(N);
+      eta = Eigen::Matrix<local_scalar_t__, -1, 1>::Zero(N);
+      
+      if (include_fixed) {
+        if (K > 0)
+          eta += X * beta;
+                
+        if (has_intercept) {
+          eta += Eigen::Matrix<local_scalar_t__, -1, 1>::Constant(N, gamma);
+        }
+      }
+      if (include_random) {
+        eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
+      }
+      
+      std::memcpy(result, const_cast<const local_scalar_t__*>(eta.data()), N * sizeof(local_scalar_t__));
+    }
+
 };
+
 }
 using stan_model = continuous_model_namespace::continuous_model;
 
@@ -3709,13 +3721,6 @@ stan::math::profile_map& get_stan_profile_data() {
 }
 #endif
 
-#ifdef SUPPRESS_DIAGNOSTIC
-#  ifdef __clang__
-#    pragma clang diagnostic pop
-#  else
-#    pragma GCC diagnostic pop
-#  endif
-#endif
 
 
 #endif //MODELS_HPP

@@ -634,6 +634,53 @@ void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
 
 }
 
+#if __cplusplus >= 202002L
+#  include <bit>
+#else
+#  include <cstring>
+
+namespace std {
+
+#  if __cplusplus >= 201103L
+#    include <type_traits>
+
+template <class To, class From>
+typename std::enable_if<
+  sizeof(To) == sizeof(From) &&
+  std::is_trivially_copyable<From>::value &&
+  std::is_trivially_copyable<To>::value,
+  To>::type
+// constexpr support needs compiler magic
+bit_cast(const From& src) noexcept
+{
+  static_assert(std::is_trivially_constructible<To>::value,
+    "This implementation additionally requires destination type to be trivially constructible");
+
+  To dst;
+  std::memcpy(&dst, &src, sizeof(To));
+  return dst;
+}
+
+#  else
+
+// We are only using this to cast function pointers, which are trivially copiable.
+// is_trivially_copyable is compiler specific and isn't worth trying to drop in
+// an implementation.
+template <class To, class From>
+typename To
+bit_cast(const From& src)
+{
+  To dst;
+  std::memcpy(&dst, &src, sizeof(To));
+  return dst;
+}
+
+#  endif
+
+}
+
+#endif
+
 // this unusual set of declarations solves a rather obscure warning on Solaris
 typedef void* (*C_voidPtrFunction)(void);
 extern "C" typedef C_voidPtrFunction (*C_voidPtrFunctionLookup)(const char* _namespace, const char* name);
@@ -642,28 +689,28 @@ namespace {
   
   void lookupBARTFunctions()
   {
-    bartFunctions.initializeFit         = reinterpret_cast<void (*)(dbarts::BARTFit*, dbarts::Control*, dbarts::Model*, dbarts::Data*)>(R_GetCCallable("dbarts", "initializeFit"));
-    bartFunctions.invalidateFit         = reinterpret_cast<void (*)(dbarts::BARTFit*)>(R_GetCCallable("dbarts", "invalidateFit"));
-    bartFunctions.initializeControl     = reinterpret_cast<void (*)(dbarts::Control*, SEXP)>(R_GetCCallable("dbarts", "initializeControl"));
-    bartFunctions.initializeData        = reinterpret_cast<void (*)(dbarts::Data*, SEXP)>(R_GetCCallable("dbarts", "initializeData"));
-    bartFunctions.invalidateData        = reinterpret_cast<void (*)(dbarts::Data*)>(R_GetCCallable("dbarts", "invalidateData"));
-    bartFunctions.initializeModel       = reinterpret_cast<void (*)(dbarts::Model*, SEXP, const dbarts::Control*)>(R_GetCCallable("dbarts", "initializeModel"));
-    bartFunctions.invalidateModel       = reinterpret_cast<void (*)(dbarts::Model*)>(R_GetCCallable("dbarts", "invalidateModel"));
-    bartFunctions.setControl            = reinterpret_cast<void (*)(dbarts::BARTFit*, const dbarts::Control*)>(R_GetCCallable("dbarts", "setControl"));
+    bartFunctions.initializeFit         = std::bit_cast<void (*)(dbarts::BARTFit*, dbarts::Control*, dbarts::Model*, dbarts::Data*)>(R_GetCCallable("dbarts", "initializeFit"));
+    bartFunctions.invalidateFit         = std::bit_cast<void (*)(dbarts::BARTFit*)>(R_GetCCallable("dbarts", "invalidateFit"));
+    bartFunctions.initializeControl     = std::bit_cast<void (*)(dbarts::Control*, SEXP)>(R_GetCCallable("dbarts", "initializeControl"));
+    bartFunctions.initializeData        = std::bit_cast<void (*)(dbarts::Data*, SEXP)>(R_GetCCallable("dbarts", "initializeData"));
+    bartFunctions.invalidateData        = std::bit_cast<void (*)(dbarts::Data*)>(R_GetCCallable("dbarts", "invalidateData"));
+    bartFunctions.initializeModel       = std::bit_cast<void (*)(dbarts::Model*, SEXP, const dbarts::Control*)>(R_GetCCallable("dbarts", "initializeModel"));
+    bartFunctions.invalidateModel       = std::bit_cast<void (*)(dbarts::Model*)>(R_GetCCallable("dbarts", "invalidateModel"));
+    bartFunctions.setControl            = std::bit_cast<void (*)(dbarts::BARTFit*, const dbarts::Control*)>(R_GetCCallable("dbarts", "setControl"));
     
-    bartFunctions.predict               = reinterpret_cast<void (*)(const dbarts::BARTFit*, const double*, std::size_t, const double*, double*)>(R_GetCCallable("dbarts", "predict"));
-    bartFunctions.setResponse           = reinterpret_cast<void (*)(dbarts::BARTFit*, const double*)>(R_GetCCallable("dbarts", "setResponse"));
-    bartFunctions.setOffset             = reinterpret_cast<void (*)(dbarts::BARTFit*, const double*, bool)>(R_GetCCallable("dbarts", "setOffset"));
-    bartFunctions.setSigma              = reinterpret_cast<void (*)(dbarts::BARTFit*, const double*)>(R_GetCCallable("dbarts", "setSigma"));
+    bartFunctions.predict               = std::bit_cast<void (*)(const dbarts::BARTFit*, const double*, std::size_t, const double*, double*)>(R_GetCCallable("dbarts", "predict"));
+    bartFunctions.setResponse           = std::bit_cast<void (*)(dbarts::BARTFit*, const double*)>(R_GetCCallable("dbarts", "setResponse"));
+    bartFunctions.setOffset             = std::bit_cast<void (*)(dbarts::BARTFit*, const double*, bool)>(R_GetCCallable("dbarts", "setOffset"));
+    bartFunctions.setSigma              = std::bit_cast<void (*)(dbarts::BARTFit*, const double*)>(R_GetCCallable("dbarts", "setSigma"));
     
-    bartFunctions.createStateExpression = reinterpret_cast<SEXP (*)(const dbarts::BARTFit*)>(R_GetCCallable("dbarts", "createStateExpression"));
-    bartFunctions.initializeState       = reinterpret_cast<void (*)(dbarts::BARTFit*, SEXP)>(R_GetCCallable("dbarts", "initializeState"));
+    bartFunctions.createStateExpression = std::bit_cast<SEXP (*)(const dbarts::BARTFit*)>(R_GetCCallable("dbarts", "createStateExpression"));
+    bartFunctions.initializeState       = std::bit_cast<void (*)(dbarts::BARTFit*, SEXP)>(R_GetCCallable("dbarts", "initializeState"));
     
-    bartFunctions.runSamplerWithResults = reinterpret_cast<void (*)(dbarts::BARTFit*, std::size_t, dbarts::Results*)>(R_GetCCallable("dbarts", "runSamplerWithResults"));
-    bartFunctions.sampleTreesFromPrior  = reinterpret_cast<void (*)(dbarts::BARTFit*)>(R_GetCCallable("dbarts", "sampleTreesFromPrior"));
-    bartFunctions.printInitialSummary   = reinterpret_cast<void (*)(const dbarts::BARTFit*)>(R_GetCCallable("dbarts", "printInitialSummary"));
+    bartFunctions.runSamplerWithResults = std::bit_cast<void (*)(dbarts::BARTFit*, std::size_t, dbarts::Results*)>(R_GetCCallable("dbarts", "runSamplerWithResults"));
+    bartFunctions.sampleTreesFromPrior  = std::bit_cast<void (*)(dbarts::BARTFit*)>(R_GetCCallable("dbarts", "sampleTreesFromPrior"));
+    bartFunctions.printInitialSummary   = std::bit_cast<void (*)(const dbarts::BARTFit*)>(R_GetCCallable("dbarts", "printInitialSummary"));
     
-    bartFunctions.getLatentVariables    = reinterpret_cast<void (*)(const dbarts::BARTFit*, double*)>(R_GetCCallable("dbarts", "storeLatents"));
+    bartFunctions.getLatentVariables    = std::bit_cast<void (*)(const dbarts::BARTFit*, double*)>(R_GetCCallable("dbarts", "storeLatents"));
   }
 }
 
@@ -730,7 +777,7 @@ static SEXP finalize(void)
   return R_NilValue;
 }
 
-#define DEF_FUNC(_N_, _F_, _A_) { _N_, reinterpret_cast<DL_FUNC>(&_F_), _A_ }
+#define DEF_FUNC(_N_, _F_, _A_) { _N_, std::bit_cast<DL_FUNC>(&_F_), _A_ }
 
 static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_create", createSampler, 6),

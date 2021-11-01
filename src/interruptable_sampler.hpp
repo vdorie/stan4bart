@@ -39,6 +39,7 @@
 #    pragma GCC diagnostic ignored "-Wignored-qualifiers"
 #    pragma GCC diagnostic ignored "-Wignored-attributes"
 #    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#    pragma GCC diagnostic ignored "-Wdeprecated-copy"
 #  endif
 #endif
 

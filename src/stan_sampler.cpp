@@ -476,7 +476,7 @@ StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, i
     init_writer,
     sample_writer,
     diagnostic_writer);
-  } catch (std::bad_alloc e) {
+  } catch (const std::bad_alloc& e) {
     Rprintf("bad alloc: %s", e.what());
     throw e;
   }
