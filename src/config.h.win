@@ -1,0 +1,30 @@
+#ifdef _WIN64
+#  define SIZEOF_SIZE_T 8
+#  define ALIGNOF_VOIDP 8
+#else
+#  define SIZEOF_SIZE_T 4
+#  define ALIGNOF_VOIDP 4
+#endif
+
+#define HAVE_MALLOC_H 1
+// #define HAVE_ALLOCA 1
+// #undef HAVE_ALLOCA_H
+// #define HAVE_FFS 1
+
+#if (defined(_MSC_VER) && _M_IX86_FP >= 2) || defined(__SSE2__) || defined(__ia64) || defined(__x64_64__) || defined(_M_X64) || defined(_M_AMD64)
+#  define HAVE_SSE2 1
+#  define HAVE_SSE4_1 1
+#  define HAVE_AVX 1
+#  define HAVE_AVX2 1
+#  ifndef __SSE2__
+#    define __SSE2__ 1
+#  endif
+#endif
+
+#define PACKAGE_BUGREPORT "vdorie@gmail.com"
+#define PACKAGE_NAME "stan4bart"
+#define PACKAGE_STRING "stan4bart 0.0.1"
+#define PACKAGE_TARNAME "stan4bart"
+#define PACKAGE_URL ""
+#define PACKAGE_VERSION "0.0.1"
+

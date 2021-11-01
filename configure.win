@@ -1,0 +1,3 @@
+#!/bin/sh
+
+cp -f src/config.h.win src/config.h

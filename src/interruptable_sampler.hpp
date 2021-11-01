@@ -59,6 +59,7 @@
 #include <stan/services/util/mcmc_writer.hpp>
 #include <stan/services/util/read_diag_inv_metric.hpp>
 #include <stan/services/util/validate_diag_inv_metric.hpp>
+
 #ifdef SUPPRESS_DIAGNOSTIC
 #  ifdef __clang__
 #    pragma clang diagnostic pop

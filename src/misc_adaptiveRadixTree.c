@@ -75,7 +75,6 @@
 #  define ALIGN16
 #endif
 
-
 // we define partial as part of the prefix, prefix being
 // the whole shared initial string; so partial is the prefix
 // if the prefix has length <= MAX_PARTIAL_LENGTH

@@ -38,7 +38,15 @@ Authors@R: c(
   person("Martin", "Maechler", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0002-8685-9910")),
   person("Ben", "Bolker", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0002-2127-0443")),
   person("Steve", "Walker", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0002-4394-9078")),
-  person("Armon", "Dadgar", role = "ctb", comment = "adaptive radix tree"))
+  person("Armon", "Dadgar", role = "ctb", comment = "adaptive radix tree"),
+  person("Guido U", "Draheim", role = "ctb", comment = "ax_check_compile_flag.m4"),
+  person("Maarten", "Bosmans", role = "ctb", comment = "ax_check_compile_flag.m4"),
+  person("Christophe", "Tournayre", role = "ctb", comment = "ax_ext.m4"),
+  person("Michael", "Petch", role = "ctb", comment = "ax_ext.m4, ax_gcc_x86_avx_xgetbv.m4, ax_gcc_x86_cpuid.m4"),
+  person("Rafael", "de Lucena Valle", role = "ctb", comment = "ax_ext.m4"),
+person("Steven G.", "Johnson", role = "ctb", comment = c("ax_gcc_x86_cpuid.m4", ORCID = "0000-0001-7327-4967")),
+  person("Matteo", "Frigo", role = "ctb", comment = "ax_gcc_x86_cpuid.m4"),
+  person("Scott", "Pakin", role = "ctb", comment = c("ax_func_posix_memalign.m4", ORCID = "0000-0002-5220-1985")))
 Depends:
   R (>= 3.5-0),
   methods,
@@ -60,5 +68,6 @@ Description: Fits semiparametric linear and multilevel models with additive Baye
 License: GPL (>= 2)
 NeedsCompilation: yes
 Biarch: yes
+UseLTO: true
 URL: https://github.com/vdorie/stan4bart
 BugReports: https://github.com/vdorie/stan4bart/issues

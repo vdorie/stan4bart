@@ -11,12 +11,14 @@
 #      include <emmintrin.h> // SSE2 intrinsics
 #    endif
 #  endif
+/*
 #  ifdef HAVE_SSE4_1
 #    include <smmintrin.h>
 #  endif
 #  ifdef HAVE_AVX
 #    include <immintrin.h>
 #  endif
+*/
 #endif
 
 #ifdef __GNUC__

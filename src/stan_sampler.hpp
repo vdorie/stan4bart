@@ -42,8 +42,9 @@
 #    pragma GCC diagnostic ignored "-Wignored-attributes"
 #    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #    pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-// this is only for gcc under -Wpedantic, since some some warnings can't
-// be silenced
+// This is for gcc under -Wpedantic, since some some warnings can't
+// be silenced. It is highly undesirably, as it can suppress other,
+// useful warnings with later code.
 #    include <boost/math/tools/config.hpp>
 #    ifdef BOOST_MATH_USE_FLOAT128
 #      pragma GCC system_header
@@ -55,6 +56,9 @@
 #include <stan/callbacks/stream_logger.hpp>
 #include <stan/callbacks/stream_writer.hpp>
 
+#if defined(_WIN32)
+#  define BOOST_MATH_DISABLE_DEPRECATED_03_WARNING 1
+#endif
 #include <stan/io/dump.hpp>
 #include <stan/io/empty_var_context.hpp>
 #include <stan/io/var_context.hpp>

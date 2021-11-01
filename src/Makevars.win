@@ -1,15 +1,11 @@
 PKG_CPPFLAGS = -I"include" -I"include/sundials" -I"../inst/include" -DBOOST_DISABLE_ASSERTS -DEIGEN_NO_DEBUG
-PKG_CXXFLAGS = `"${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()"` `"${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "
-TBB <- system.file('include', package = 'RcppParallel', mustWork = TRUE)
-cat(paste0('-I', shQuote(TBB), ' -D_REENTRANT -DSTAN_THREADS'), ' ')
-"`
+
+PKG_CXXFLAGS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()")
+PKG_CXXFLAGS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('include', package = 'RcppParallel', mustWork = TRUE); cat(paste0('-I', shQuote(TBB), ' -D_REENTRANT -DSTAN_THREADS'), ' ')")
 PKG_CXXFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "message()" -e "cat(ifelse(R.version[['major']] == '4' && R.version[['minor']] < '1', '-flto=jobserver', ''))" -e "message()")
 
-PKG_LIBS = `"${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::LdFlags()"` `"${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "
-TBB <- system.file('lib', .Platform$r_arch, package = 'RcppParallel', mustWork = TRUE)
-PKG_LIBS <- paste0('-L', shQuote(TBB), ' -Wl,-rpath,', shQuote(TBB), ' -ltbb -ltbbmalloc')
-cat(PKG_LIBS, ' ')
-"`
+PKG_LIBS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
+PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE); cat(paste0('-L', shQuote(TBB), ' -Wl,-rpath,', shQuote(TBB), ' -ltbb -ltbbmalloc'), ' ')")
 PKG_LIBS += -Wl,--allow-multiple-definition
 
 CXX_STD = CXX14
@@ -24,6 +20,7 @@ all: $(SHLIB)
 
 clean:
 		RM -rf *.so *.o
+		RM -rf config.h
 
 .phony: all clean
 

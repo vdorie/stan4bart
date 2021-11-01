@@ -1,77 +1,76 @@
-/* src/config.h.  Generated from config.h.in by configure.  */
 /* src/config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* The normal alignment of `void*', in bytes. */
-#define ALIGNOF_VOIDP 8
+#undef ALIGNOF_VOIDP
 
 /* Define to 1 if using 'alloca.c'. */
-/* #undef C_ALLOCA */
+#undef C_ALLOCA
 
 /* Define to 1 if you have 'alloca', as a function or macro. */
-#define HAVE_ALLOCA 1
+#undef HAVE_ALLOCA
 
 /* Define to 1 if <alloca.h> works. */
-#define HAVE_ALLOCA_H 1
+#undef HAVE_ALLOCA_H
 
 /* Define to 1 if you have the `ffs' function. */
-#define HAVE_FFS 1
+#undef HAVE_FFS
 
 /* Define to 1 if you have the <inttypes.h> header file. */
-#define HAVE_INTTYPES_H 1
+#undef HAVE_INTTYPES_H
 
 /* Define to 1 if you have the <malloc.h> header file. */
-/* #undef HAVE_MALLOC_H */
+#undef HAVE_MALLOC_H
 
 /* Define to 1 if `posix_memalign' works. */
-#define HAVE_POSIX_MEMALIGN 1
+#undef HAVE_POSIX_MEMALIGN
 
 /* Define to 1 to support Streaming SIMD Extensions */
-#define HAVE_SSE2 1
+#undef HAVE_SSE2
 
 /* Define to 1 if you have the <stdint.h> header file. */
-#define HAVE_STDINT_H 1
+#undef HAVE_STDINT_H
 
 /* Define to 1 if you have the <stdio.h> header file. */
-#define HAVE_STDIO_H 1
+#undef HAVE_STDIO_H
 
 /* Define to 1 if you have the <stdlib.h> header file. */
-#define HAVE_STDLIB_H 1
+#undef HAVE_STDLIB_H
 
 /* Define to 1 if you have the <strings.h> header file. */
-#define HAVE_STRINGS_H 1
+#undef HAVE_STRINGS_H
 
 /* Define to 1 if you have the <string.h> header file. */
-#define HAVE_STRING_H 1
+#undef HAVE_STRING_H
 
 /* Define to 1 if you have the <sys/stat.h> header file. */
-#define HAVE_SYS_STAT_H 1
+#undef HAVE_SYS_STAT_H
 
 /* Define to 1 if you have the <sys/types.h> header file. */
-#define HAVE_SYS_TYPES_H 1
+#undef HAVE_SYS_TYPES_H
 
 /* Define to 1 if you have the <unistd.h> header file. */
-#define HAVE_UNISTD_H 1
+#undef HAVE_UNISTD_H
 
 /* Define to the address where bug reports for this package should be sent. */
-#define PACKAGE_BUGREPORT "vdorie@gmail.com"
+#undef PACKAGE_BUGREPORT
 
 /* Define to the full name of this package. */
-#define PACKAGE_NAME "stan4bart"
+#undef PACKAGE_NAME
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "stan4bart 0.0.1"
+#undef PACKAGE_STRING
 
 /* Define to the one symbol short name of this package. */
-#define PACKAGE_TARNAME "stan4bart"
+#undef PACKAGE_TARNAME
 
 /* Define to the home page for this package. */
-#define PACKAGE_URL ""
+#undef PACKAGE_URL
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "0.0.1"
+#undef PACKAGE_VERSION
 
 /* The size of `size_t', as computed by sizeof. */
-#define SIZEOF_SIZE_T 8
+#undef SIZEOF_SIZE_T
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be
@@ -79,12 +78,12 @@
 	STACK_DIRECTION > 0 => grows toward higher addresses
 	STACK_DIRECTION < 0 => grows toward lower addresses
 	STACK_DIRECTION = 0 => direction of growth unknown */
-/* #undef STACK_DIRECTION */
+#undef STACK_DIRECTION
 
 /* Define to 1 if all of the C90 standard headers exist (not just the ones
    required in a freestanding environment). This macro is provided for
    backward compatibility; new code need not use it. */
-#define STDC_HEADERS 1
+#undef STDC_HEADERS
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
-/* #undef size_t */
+#undef size_t
