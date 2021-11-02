@@ -5,6 +5,10 @@
 
 #include <Rversion.h>
 
+#if R_VERSION >= R_Version(3, 6, 2)
+#  define USE_FC_LEN_T
+#endif
+
 // for older versions of R we attempt to not include unnecessary headers,
 // which assists in checking namespace and inclusion correctness
 #if R_VERSION <= R_Version(3,3,1)
@@ -25,6 +29,7 @@ using std::size_t;
 
 #undef NO_C_HEADERS
 #undef R_NO_REMAP
+#undef USE_FC_LEN_T
 
 #endif // EXTERNAL_R_H
 

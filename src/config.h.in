@@ -70,7 +70,9 @@
 #undef PACKAGE_VERSION
 
 /* The size of `size_t', as computed by sizeof. */
+#ifndef SIZEOF_SIZE_T
 #undef SIZEOF_SIZE_T
+#endif
 
 /* If using the C implementation of alloca, define if you know the
    direction of stack growth for your system; otherwise it will be

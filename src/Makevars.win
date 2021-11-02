@@ -5,7 +5,7 @@ PKG_CXXFLAGS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.f
 PKG_CXXFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "message()" -e "cat(ifelse(R.version[['major']] == '4' && R.version[['minor']] < '1', '-flto=jobserver', ''))" -e "message()")
 
 PKG_LIBS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
-PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE); cat(paste0('-L', shQuote(TBB), ' -Wl,-rpath,', shQuote(TBB), ' -ltbb -ltbbmalloc'), ' ')")
+PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE); cat(paste0('-Wl,-rpath,', shQuote(TBB)), ' ')")
 PKG_LIBS += -Wl,--allow-multiple-definition
 
 CXX_STD = CXX14

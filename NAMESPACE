@@ -1,4 +1,4 @@
-useDynLib(stan4bart, .registration = TRUE, .fixes = "C_")
+# useDynLib(stan4bart, .registration = TRUE, .fixes = "C_")
 
 export(mstan4bart)
 S3method(extract, mstan4bartFit)

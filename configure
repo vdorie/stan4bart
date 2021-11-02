@@ -3297,13 +3297,13 @@ PKG_LIBS="$RCPP_PKG_LIBS $TBB_PKG_LIBS"
 
 
 
-CXX14=`"${R_HOME}/bin/R" CMD config CXX14`
-if test -z "$CXX14"; then
-  as_fn_error $? "No C++14 compiler is available" "$LINENO" 5
-fi
-CXX14STD=`"${R_HOME}/bin/R" CMD config CXX14STD`
-CXX="${CXX14} ${CXX14STD}"
-CXXFLAGS=`"${R_HOME}/bin/R" CMD config CXX14FLAGS`
+#CXX14=`"${R_HOME}/bin/R" CMD config CXX14`
+#if test -z "$CXX14"; then
+#  AC_MSG_ERROR([No C++14 compiler is available])
+#fi
+#CXX14STD=`"${R_HOME}/bin/R" CMD config CXX14STD`
+#CXX="${CXX14} ${CXX14STD}"
+#CXXFLAGS=`"${R_HOME}/bin/R" CMD config CXX14FLAGS`
 
 ac_ext=cpp
 ac_cpp='$CXXCPP $CPPFLAGS'

@@ -34,14 +34,6 @@ AC_SUBST(TBB_LIB)
 AC_SUBST(PKG_CXXFLAGS)
 AC_SUBST(PKG_LIBS)
 
-CXX14=`"${R_HOME}/bin/R" CMD config CXX14`
-if test -z "$CXX14"; then
-  AC_MSG_ERROR([No C++14 compiler is available])
-fi
-CXX14STD=`"${R_HOME}/bin/R" CMD config CXX14STD`
-CXX="${CXX14} ${CXX14STD}"
-CXXFLAGS=`"${R_HOME}/bin/R" CMD config CXX14FLAGS`
-
 AC_LANG(C++)
 AC_REQUIRE_CPP
 AC_PROG_CXX
