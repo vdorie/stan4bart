@@ -6,7 +6,7 @@
 #else
 #  ifndef SIZEOF_SIZE_T
 #    define SIZEOF_SIZE_T 4
-#  endf
+#  endif
 #  define ALIGNOF_VOIDP 4
 #endif
 
