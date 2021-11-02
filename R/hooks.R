@@ -10,10 +10,11 @@
 }
 
 .onLoad <- function(libname, pkgname) {
-  if (.Platform$OS.type %in% "Windows" && !("RcppParallel" %in% sapply(.dynLibs(), "[[", "name")))
+  if (.Platform$OS.type %in% "windows" && !("RcppParallel" %in% sapply(.dynLibs(), "[[", "name")))
     library.dynam("stan4bart", pkgname, libname,
                   DLLpath = file.path(system.file("lib", package = "RcppParallel"), .Platform$r_arch))
   else 
     library.dynam("stan4bart", pkgname, libname)
 }
+
 
