@@ -168,23 +168,26 @@ mstan4bart(formula,
     
     All three components can be present in a single model, however are
     \code{bart} part must present. If you wish to fit a model without one, use
-    \code{\link[rstanarm]{stan_glmer}} instead.
+    \code{stan_glmer} in the \code{rstanarm} package instead.
   }
   \subsection{Additional Arguments}{
     The \code{stan_args} and \code{bart_args} arguments to \code{mstan4bart} can
     be used to pass further arguments to \code{stan} and \code{bart}
-    respectively. These are similar to the functions \code{\link[rstan]{stan}}
-    and \code{\link{bart}}, but not identical as \code{mstan4bart} constructs its
-    own model internally.
+    respectively. These are similar to the functions \code{stan} in the
+    \code{rstan} package and \code{\link{bart}}, but not identical as
+    \code{mstan4bart} constructs its own model internally.
     
     Stan arguments include:
     \itemize{
-      \item \code{prior_covariance} - see \code{\link[rstanarm]{stan_glmer}}
-      \item \code{prior}, \code{prior_intercept}, \code{prior_aux}, \code{QR} - see
-      \code{\link[rstanarm]{stan_glm}}
+      \item \code{prior_covariance}
+      \item \code{prior}, \code{prior_intercept}, \code{prior_aux}, \code{QR}
       \item \code{init_r}, \code{adapt_gamma}, \code{adapt_delta},
       \code{adapt_kappa} - see \code{\link[rstan]{stan}}
     }
+    For reference on the first two sets of options, see the help page for
+    \code{stan_glmer} in the \code{rstanarm} package; for reference on
+    the third set, see the help page for \code{stan} in the \code{rstan}
+    package.
     
     BART arguments include:
     \itemize{
@@ -268,7 +271,8 @@ mstan4bart(formula,
   Vincent Dorie: \email{vdorie@gmail.com}.
 }
 \seealso{
-  \code{\link{bart}}, \code{\link[rstan]{stan}}, \code{\link[lme4]{lmer}}
+  \code{\link{bart}}, \code{\link[lme4]{lmer}}, and \code{stan_glmer} in the 
+  \code{rstanarm} package
 }
 \examples{
 # simulate data (extension of Friedman MARS paper)
