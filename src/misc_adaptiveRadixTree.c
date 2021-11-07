@@ -52,9 +52,8 @@
 
 #include <ext/io.h>
 
-#if defined(__GNUC__) && (\
-  (!defined(__clang__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || \
-  ( defined(__clang__) && (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 7))))
+#if (defined(__clang__) && (__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 7))) || \
+    (defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)))
 #  define SUPPRESS_DIAGNOSTIC 1
 #endif
 
@@ -819,7 +818,7 @@ static int addChild16(Node16* restrict n, uint8_t c, void* restrict child, Node*
 static int addChild48(Node48* restrict n, uint8_t c, void* restrict child, Node* restrict* restrict positionInParent)
 {
   if (n->n.numChildren < 48) {
-    size_t pos = 0;
+    uint8_t pos = 0;
     while (n->children[pos] != NULL) ++pos;
     n->children[pos] = child;
     n->keys[c] = pos + 1;
@@ -1026,7 +1025,7 @@ static Node* createNode(NodeType type) {
   }
   if (n == NULL) return NULL;
   
-  n->type = type;
+  n->type = (uint8_t) type;
   return n;
 }
 

@@ -275,7 +275,8 @@ mstan4bart(formula,
 # x consists of 10 variables, only first 5 matter
 # x_4 is linear
 f <- function(x)
- 10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 10 * x[,4] + 5 * x[,5]
+  10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 +
+      10 * x[,4] + 5 * x[,5]
 
 set.seed(99)
 sigma <- 1.0
@@ -306,13 +307,13 @@ y <- mu.bart + mu.fixef + mu.ranef + rnorm(n, 0, sigma)
 df <- data.frame(y, x, g.1, g.2)
 
 fit <- mstan4bart(
-  formula = y ~
-    X4 +                         # linear component ("fixef")
-    (1 + X4 | g.1) + (1 | g.2) + # multilevel ("ranef")
-    bart(. - g.1 - g.2 - X4),    # use bart for other variables
- # low numbers for illustration
- data = df,
- chains = 1, iter = 10, bart_args = list(n.trees = 5))
+    formula = y ~
+        X4 +                         # linear component ("fixef")
+        (1 + X4 | g.1) + (1 | g.2) + # multilevel ("ranef")
+        bart(. - g.1 - g.2 - X4),    # use bart for other variables
+    # low numbers for illustration
+    data = df,
+    chains = 1, iter = 10, bart_args = list(n.trees = 5))
 
 # posterior means of individual expected values
 y.hat <- fitted(fit)

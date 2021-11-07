@@ -5,9 +5,8 @@
 #include <ctime> // clock_t, CLOCKS_PER_SEC
 #include <vector>
 
-#if defined(__GNUC__) && (\
-  (!defined(__clang__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6))) || \
-  ( defined(__clang__) && (__GNUC__ > 3 || (__GNUC__ == 3 && __GNUC_MINOR__ >= 7))))
+#if (defined(__clang__) && (__clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 7))) || \
+    (defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)))
 #  define SUPPRESS_DIAGNOSTIC 1
 #endif
 
@@ -28,6 +27,11 @@
 #    pragma clang diagnostic ignored "-Wunused-lambda-capture"
 #    pragma clang diagnostic ignored "-Wdeprecated-copy"
 #    pragma clang diagnostic ignored "-Wmismatched-tags"
+#    pragma clang diagnostic ignored "-Wshorten-64-to-32"
+#    pragma clang diagnostic ignored "-Wfloat-conversion"
+#    if __clang_major__ >= 10
+#      pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
+#    endif
 #  else
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -37,9 +41,13 @@
 #    pragma GCC diagnostic ignored "-Wunused-function"
 #    pragma GCC diagnostic ignored "-Wsign-compare"
 #    pragma GCC diagnostic ignored "-Wignored-qualifiers"
-#    pragma GCC diagnostic ignored "-Wignored-attributes"
+#    if __GNUC__ >= 6
+#      pragma GCC diagnostic ignored "-Wignored-attributes"
+#    endif
 #    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#    pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#    if __GNUC__ >= 9
+#      pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#    endif
 #  endif
 #endif
 

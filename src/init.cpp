@@ -152,6 +152,11 @@ extern "C" {
   static void samplerFinalizer(SEXP samplerExpr);
   static void storedBARTSamplerFinalizer(SEXP samplerExpr);
   
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#endif
+  
   static SEXP createSampler(SEXP bartControlExpr, SEXP bartDataExpr, SEXP bartModelExpr,
                             SEXP stanDataExpr, SEXP stanControlExpr,
                             SEXP commonControlExpr)
@@ -273,6 +278,10 @@ extern "C" {
     return result;
   }
   
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic pop
+#endif
+  
   static SEXP getBARTDataRange(SEXP samplerExpr)
   {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
@@ -305,6 +314,11 @@ extern "C" {
     
     return result;
   }
+  
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#endif
   
   static SEXP predictBART(SEXP storedBARTSamplerExpr, SEXP x_testExpr, SEXP offset_testExpr)
   {
@@ -357,6 +371,10 @@ extern "C" {
     return result;
   }
   
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic pop
+#endif
+  
   static SEXP exportBARTState(SEXP samplerExpr)
   {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
@@ -395,6 +413,11 @@ extern "C" {
     
     return result;
   }
+  
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#endif
   
   static SEXP run(SEXP samplerExpr, SEXP numIterExpr, SEXP isWarmupExpr, SEXP resultsTypeExpr)
   {
@@ -566,6 +589,10 @@ extern "C" {
     return(resultExpr);
   }
   
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic pop
+#endif
+  
   static SEXP printInitialSummary(SEXP samplerExpr) {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
     if (samplerPtr == NULL) Rf_error("printInitialSummary called on NULL external pointer");
@@ -603,6 +630,11 @@ extern "C" {
 
 namespace {
 
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#endif
+
 void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
 {
   sampler.defaultWarmup = rc_getInt(rc_getListElement(commonControlExpr, "warmup"), "warmup",
@@ -631,6 +663,10 @@ void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
   if (sampler.refresh == R_NaInt)
     sampler.refresh = 200;
 }
+
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic pop
+#endif
 
 }
 

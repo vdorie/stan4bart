@@ -91,6 +91,11 @@ std::ostream nullout(nullptr);
 
 namespace stan4bart {
 
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#endif
+
 StanModel* createStanModelFromExpression(SEXP dataExpr)
 {
   SEXP inputDataNamesExpr = rc_getNames(dataExpr);
@@ -253,7 +258,7 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   const int* v = INTEGER(VECTOR_ELT(dataExpr, matchPos[42]));
   const int* u = INTEGER(VECTOR_ELT(dataExpr, matchPos[43]));
   
-  int maxU = rc_getLength(VECTOR_ELT(dataExpr, matchPos[41])) + 1;
+  int maxU = static_cast<int>(rc_getLength(VECTOR_ELT(dataExpr, matchPos[41]))) + 1;
   int q = INTEGER(VECTOR_ELT(dataExpr, matchPos[32]))[0];
   
   misc_stackFree(matchPos);
@@ -354,9 +359,18 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   return result;
 }
 
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic pop
+#endif
+
 void deleteStanModel(StanModel* model) {
   delete model;
 }
+
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic push
+#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#endif
 
 void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
 {
@@ -423,6 +437,10 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
   misc_stackFree(matchPos);
 }
 
+#if defined(__clang__) && __clang_major__ >= 10
+#  pragma clang diagnostic pop
+#endif
+
 StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup, int verbose) :
   c_out(verbose >  0 ? rstan::io::rcout : nullout),
   c_err(verbose >= 0 ? rstan::io::rcerr : nullout),
@@ -448,7 +466,7 @@ StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, i
   
   init_writer.resize(stanModel.num_params_r(), 1);
   
-  num_pars = sample_names.size() + sampler_names.size() + constrained_param_names.size();
+  num_pars = static_cast<int>(sample_names.size() + sampler_names.size() + constrained_param_names.size());
   // sample_writer.resize(sample_names.size() + sampler_names.size() + constrained_param_names.size(), num_warmup + num_iter);
   
   try {
