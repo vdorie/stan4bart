@@ -109,12 +109,16 @@ glFormula <- function (formula, data = NULL, subset, weights,
       }
     }
     
-    reTrms <- mkReTrms(findbars(RHSForm(formula)), ranfr)
-    
-    wmsgNlev <- checkNlevels(reTrms$flist, n = nrow(ranfr), control, allow.n = TRUE)
-    wmsgZdims <- checkZdims(reTrms$Ztlist, n = nrow(ranfr), control, allow.n = TRUE)
-    wmsgZrank <- checkZrank(reTrms$Zt, n = nrow(ranfr), control, nonSmall = 1e+06, 
-        allow.n = TRUE)
+    if (length(attr(ranterms, "term.labels")) > 0L) {
+      reTrms <- mkReTrms(findbars(RHSForm(formula)), ranfr)
+      
+      wmsgNlev <- checkNlevels(reTrms$flist, n = nrow(ranfr), control, allow.n = TRUE)
+      wmsgZdims <- checkZdims(reTrms$Ztlist, n = nrow(ranfr), control, allow.n = TRUE)
+      wmsgZrank <- checkZrank(reTrms$Zt, n = nrow(ranfr), control, nonSmall = 1e+06, 
+          allow.n = TRUE)
+    } else {
+      reTrms = list()
+    }
     
     # dbartsData can't handle columns in the model frame not in the formula terms, so we
     # pull out  "(offset)" if it exists
@@ -156,8 +160,9 @@ glFormula <- function (formula, data = NULL, subset, weights,
               "model will fit but some results may be uninterpretable")
     
     result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, formula = formula, 
-                   terms = terms,
-                   wmsgs = c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank))
+                   terms = terms)
+    if (length(reTrms) > 0L)
+      result$wmsgs <- c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank)
     
     result
 }
@@ -952,11 +957,14 @@ allbart <- function(term)
     formula
 }
 
-reOnly <- reOnly %ORifNotInLme4% function (f, response = FALSE) 
+reOnly <- function (f, response = FALSE) 
 {
-    reformulate(paste0("(", vapply(findbars(f), safeDeparse, 
-        ""), ")"), response = if (response && length(f) == 3L) 
-        f[[2]])
+  found_bars <- findbars(f)
+  if (is.null(found_bars)) return(~0)
+  
+  reformulate(paste0("(", vapply(findbars(f), safeDeparse, 
+      ""), ")"), response = if (response && length(f) == 3L) 
+      f[[2]])
 }
 
 mkVarCorr <- mkVarCorr %ORifNotInLme4% function (sc, cnms, nc, theta, nms) 

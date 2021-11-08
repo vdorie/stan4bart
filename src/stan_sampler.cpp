@@ -134,14 +134,18 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   
   int t = rc_getIntAt(dataExpr, matchPos[29], "t", RC_VALUE | RC_GEQ, 0, RC_END);
   
-  int len_var_group = 0;
   SEXP pExpr = VECTOR_ELT(dataExpr, matchPos[30]);
-  rc_assertIntConstraints(pExpr, "p", RC_VALUE | RC_GEQ, 1, RC_END);
+  if (t != static_cast<int>(rc_getLength(pExpr))) {
+    misc_stackFree(matchPos);
+    Rf_error("length of p must be equal to %d", t);
+  }
   const int* p_int = INTEGER(pExpr);
+  
+  int len_var_group = 0;
   for (size_t i = 0; i < rc_getLength(pExpr); ++i) {
-    if (p_int[i] < 1) {
+    if (p_int[i] == R_NaInt || p_int[i] < 1) {
       misc_stackFree(matchPos);
-      Rf_error("p[%lu] less than 1", i + 1);
+      Rf_error("p[%lu] NA or less than 1", i + 1);
     }
     len_var_group += p_int[i];
   }
@@ -256,7 +260,8 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   
   int numNonZero = rc_getInt0(VECTOR_ELT(dataExpr, matchPos[40]), "num_non_zero");
   const int* v = INTEGER(VECTOR_ELT(dataExpr, matchPos[42]));
-  const int* u = INTEGER(VECTOR_ELT(dataExpr, matchPos[43]));
+  SEXP uExpr = VECTOR_ELT(dataExpr, matchPos[43]);
+  const int* u = INTEGER(uExpr);
   
   int maxU = static_cast<int>(rc_getLength(VECTOR_ELT(dataExpr, matchPos[41]))) + 1;
   int q = INTEGER(VECTOR_ELT(dataExpr, matchPos[32]))[0];
@@ -282,6 +287,12 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
       delete result;
       Rf_error("y[%lu] out of [%f, %f] range", i + 1, lb, ub);
     }
+  }
+  if (rc_getLength(uExpr) != n + 1) {
+    delete result;
+    Rf_error("length of u must be equal to number of observations + 1");
+  }
+  for (size_t i = 0; i < n + 1; ++i) {
     if (u[i] < 0 || u[i] > maxU) {
       delete result;
       Rf_error("u[%lu] out of [0, %d] range", i + 1, maxU);
@@ -345,10 +356,6 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
     Rf_error("prior_df length mismatch: got %lu, expected %lu", rc_getLength(num_normalsExpr), 0);
   }
   
-  if (u[n] < 0 || u[n] > maxU) {
-    delete result;
-    Rf_error("u[%lu] out of [0, %d] range", n + 1, maxU);
-  }
   for (size_t i = 0; i < static_cast<size_t>(numNonZero); ++i) {
     if (v[i] < 0 || v[i] > q - 1) {
       delete result;

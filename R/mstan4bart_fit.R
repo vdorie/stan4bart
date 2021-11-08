@@ -1,4 +1,4 @@
-getSigma <- function(cnms, samples) {
+if (FALSE) getSigma <- function(cnms, samples) {
   thetas <- samples[grep("^theta_L", rownames(samples)),,drop = FALSE]
   nc <- sapply(cnms, FUN = length)
   nms <- names(cnms)
@@ -12,10 +12,10 @@ getSigma <- function(cnms, samples) {
   Sigmas
 }
 
-getFixef <- function(samples)
+if (FALSE) getFixef <- function(samples)
   samples[grep("^(?:beta|gamma)\\.", rownames(samples), perl = TRUE),,drop = FALSE]
 
-getRanef <- function(group, samples) {
+if (FALSE) getRanef <- function(group, samples) {
   ranef <- samples[grep("^b\\.", rownames(samples)),,drop = FALSE]
   numGroupingFactors <- length(group$cnms)
   numRanefPerGroupingFactor <- unname(sapply(group$cnms, length))
@@ -331,7 +331,7 @@ mstan4bart_fit <-
     data.stan$num_non_zero <- 0L
     data.stan$w <- double(0)
     data.stan$v <- integer(0)
-    data.stan$u <- integer(0)
+    data.stan$u <- rep.int(0L, length(y) + 1L)
     
     data.stan$shape <- data.stan$scale <- data.stan$concentration <-
       data.stan$regularization <- rep(0, 0)

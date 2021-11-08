@@ -67,39 +67,40 @@ as.array.mstan4bartFit <- function (x, include_warmup = FALSE, ...)
   
   # TODO: modify this to avoid using extract and pull directly from theta_L
    # very low priority
-  Sigmas <- extract(x, "Sigma", include_warmup = include_warmup_orig, combine_chains = FALSE)
-  if (length(Sigmas) > 0L) {
-    Sigmas.list <- lapply(Sigmas, function(Sigma) {
-      r <- apply(Sigma, c(3L, 4L), function(x) x[upper.tri(x, diag = TRUE)])
-      if (length(dim(r)) == 2L) r <- array(r, c(1L, dim(r)))
+  if (any(startsWith(par_names, "theta_L."))) {
+    Sigmas <- extract(x, "Sigma", include_warmup = include_warmup_orig, combine_chains = FALSE)
+    if (length(Sigmas) > 0L) {
+      Sigmas.list <- lapply(Sigmas, function(Sigma) {
+        r <- apply(Sigma, c(3L, 4L), function(x) x[upper.tri(x, diag = TRUE)])
+        if (length(dim(r)) == 2L) r <- array(r, c(1L, dim(r)))
+        
+        dn <- outer(dimnames(Sigma)[[1]], dimnames(Sigma)[[2]], FUN = paste, sep = ",")
+        dimnames(r)[[1L]] <- dn[upper.tri(dn, diag = TRUE)]
+        aperm(r, c(2L, 3L, 1L))
+      })
+      n_samples <- dim(Sigmas.list[[1L]])[1L]
+      n_chains  <- dim(Sigmas.list[[1L]])[2L]
+      n_pars    <- sapply(Sigmas.list, function(x) dim(x)[3L])
       
-      dn <- outer(dimnames(Sigma)[[1]], dimnames(Sigma)[[2]], FUN = paste, sep = ",")
-      dimnames(r)[[1L]] <- dn[upper.tri(dn, diag = TRUE)]
-      aperm(r, c(2L, 3L, 1L))
-    })
-    n_samples <- dim(Sigmas.list[[1L]])[1L]
-    n_chains  <- dim(Sigmas.list[[1L]])[2L]
-    n_pars    <- sapply(Sigmas.list, function(x) dim(x)[3L])
-    
-    Sigma_names <- paste0("Sigma[",
-                          rep(names(Sigmas), times = n_pars),
+      Sigma_names <- paste0("Sigma[",
+                            rep(names(Sigmas), times = n_pars),
                           ":",
-                          unlist(lapply(Sigmas.list, function(x) dimnames(x)[[3L]])),
-                          "]")
-    Sigmas.arr <- array(unlist(Sigmas.list),
-                        dim = c(n_samples, n_chains, sum(n_pars)),
-                        dimnames = list(iterations = NULL, chains = dimnames(Sigmas[[1L]])[[3L]],
-                                        Sigma_names))
-    result <- aperm(result, c(2L, 3L, 1L))
-    result <- array(c(result, Sigmas.arr),
-                    dim = c(n_samples, n_chains, dim(result)[3L] + dim(Sigmas.arr)[3L]),
-                    dimnames = list(iterations = dimnames(result)[[1]],
-                                    chains = dimnames(result)[[2]],
-                                    parameters = c(dimnames(result)[[3L]], dimnames(Sigmas.arr)[[3L]])))
-    
-    result <- aperm(result, c(3L, 1L, 2L))
+                            unlist(lapply(Sigmas.list, function(x) dimnames(x)[[3L]])),
+                            "]")
+      Sigmas.arr <- array(unlist(Sigmas.list),
+                          dim = c(n_samples, n_chains, sum(n_pars)),
+                          dimnames = list(iterations = NULL, chains = dimnames(Sigmas[[1L]])[[3L]],
+                                          Sigma_names))
+      result <- aperm(result, c(2L, 3L, 1L))
+      result <- array(c(result, Sigmas.arr),
+                      dim = c(n_samples, n_chains, dim(result)[3L] + dim(Sigmas.arr)[3L]),
+                      dimnames = list(iterations = dimnames(result)[[1]],
+                                      chains = dimnames(result)[[2]],
+                                      parameters = c(dimnames(result)[[3L]], dimnames(Sigmas.arr)[[3L]])))
+      
+      result <- aperm(result, c(3L, 1L, 2L))
+    }
   }
-  
   aperm(result, c(2L, 3L, 1L))
 }
 
@@ -198,13 +199,23 @@ extract.mstan4bartFit <-
   if (type == "k" && is.null(object$k))
     stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
   
+  fixef_parameters <- grep("^beta|gamma", dimnames(object$stan)[[1L]])
+  ranef_parameters <- startsWith(dimnames(object$stan)[[1L]], "b.")
+  Sigma_parameters <- startsWith(dimnames(object$stan)[[1L]], "theta_L.")
+  sigma_parameters <- dimnames(object$stan)[[1L]] %in% "aux.1"
+  
   if (type == "fixef") {
-    result <- get_samples(object$stan[grep("^beta|gamma", dimnames(object$stan)[[1L]]),,,drop = FALSE],
+    if (!any(fixef_parameters))
+      stop("cannot extract fixef for model with no unmodeled parameters")
+    result <- get_samples(object$stan[fixef_parameters,,,drop = FALSE],
                            include_warmup, only_warmup)
     dimnames(result)[[1L]] <- colnames(object$X)
     names(dimnames(result))[1L] <- "predictor"
   } else if (type == "ranef") {
-    ranef <- get_samples(object$stan[grep("^b\\.", dimnames(object$stan)[[1L]]),,,drop = FALSE],
+    if (!any(ranef_parameters))
+      stop("cannot extract ranef for model with no modeled parameters")
+    
+    ranef <- get_samples(object$stan[ranef_parameters,,,drop = FALSE],
                          include_warmup, only_warmup)
     
     numGroupingFactors <- length(object$reTrms$cnms)
@@ -222,7 +233,10 @@ extract.mstan4bartFit <-
     })
     names(result) <- names(object$reTrms$cnms)
   } else if (type == "Sigma") {
-    thetas <- get_samples(object$stan[grep("^theta_L", dimnames(object$stan)[[1L]]),,,drop = FALSE],
+    if (!any(Sigma_parameters))
+      stop("cannot extract Sigma for model with no modeled parameters")
+    
+    thetas <- get_samples(object$stan[Sigma_parameters,,,drop = FALSE],
                           include_warmup, only_warmup)
     numRanefPerGroupingFactor <- unname(lengths(object$reTrms$cnms))
     nms <- names(object$reTrms$cnms)
@@ -235,7 +249,8 @@ extract.mstan4bartFit <-
     })
     names(result) <- names(Sigma[[1L]])
   } else if (type == "sigma") {
-    result <- get_samples(object$stan[grep("^aux\\.", dimnames(object$stan)[[1L]]),,],
+    # test that this exists is above
+    result <- get_samples(object$stan[sigma_parameters,,],
                           include_warmup, only_warmup)
   } else if (type %in% c("bart_varcount", "k", "stan")) {
     result <- get_samples(object[[type]],
@@ -257,11 +272,11 @@ extract.mstan4bartFit <-
   n_samples <- dim(object$bart_train)[2L]
   n_obs     <- 0L
   n_chains  <- dim(object$bart_train)[3L]
-  n_fixef <- sum(grepl("^beta|gamma", dimnames(object$stan)[[1L]]))
+  n_fixef <- sum(fixef_parameters)
   n_warmup <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
   n_bart_vars <- dim(object$bart_varcount)[1L]
   
-  if (!is.null(object$reTrms)) {
+  if (!is.null(object$reTrms) && length(object$reTrms) > 0L) {
     n_ranef_levels <- length(object$reTrms$cnms)
   } else {
     n_ranef_levels <- 0L
@@ -342,7 +357,7 @@ extract.mstan4bartFit <-
       indiv.fixef <- indiv.fixef.all
     }
   }
-  if (type %in% c("ev", "ppd", "indiv.ranef") %% n_ranef_levels > 0L) {
+  if (type %in% c("ev", "ppd", "indiv.ranef") && n_ranef_levels > 0L) {
     if (!is.null(offset) && offset_type %in% c("random", "parametric") && type != "indiv.ranef") {
       if (offset_type == "parametric")
         indiv.ranef <- 0
@@ -578,7 +593,7 @@ predict.mstan4bartFit <-
   n_bart_vars <- dim(object$bart_varcount)[1L]
   is_bernoulli <- object$family$family == "binomial"
   
-  if (!is.null(object$reTrms)) {
+  if (!is.null(object$reTrms) && length(object$reTrms) > 0L) {
     n_ranef_levels <- length(object$reTrms$cnms)
   } else {
     n_ranef_levels <- 0L
@@ -606,7 +621,7 @@ predict.mstan4bartFit <-
   }
   if (type %in% c("ev", "ppd", "indiv.ranef")) {
     
-    if (!is.null(testData$reTrms)) {
+    if (!is.null(testData$reTrms) && length(testData$reTrms) > 0L) {
       indiv.ranef <- fitted_random(object, testData$reTrms, FALSE, sample_new_levels)
     } else {
       if (type == "indiv.ranef")

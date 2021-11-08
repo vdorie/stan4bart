@@ -3633,7 +3633,8 @@ class continuous_model final : public model_base_crtp<continuous_model> {
       } else {
         eta = Eigen::Matrix<local_scalar_t__, -1, 1>::Zero(N);
       }
-      eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
+      if (t > 0)
+        eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
       
       if (has_intercept) {
         eta += Eigen::Matrix<local_scalar_t__, -1, 1>::Constant(N, gamma);
@@ -3691,7 +3692,7 @@ class continuous_model final : public model_base_crtp<continuous_model> {
           eta += Eigen::Matrix<local_scalar_t__, -1, 1>::Constant(N, gamma);
         }
       }
-      if (include_random) {
+      if (include_random && t > 0) {
         eta += csr_matrix_times_vector3(N, q, w, v, u, b, NULL);
       }
       

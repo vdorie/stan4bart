@@ -37,7 +37,7 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
       result$na.action.bart <- attr(mf.bart, "na.action")
   }
   
-  if (type %in% c("all", "random") && !is.null(object$reTrms)) {
+  if (type %in% c("all", "random") && !is.null(object$reTrms) && length(object$reTrms) > 0L) {
     terms.random <- terms(object, type = "random")
     form.random <- formula(object, type = "random")
     
