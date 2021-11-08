@@ -152,7 +152,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     varnames.mixed <- varnames.bart %in% varnames.random | varnames.bart %in% varnames.fixed
     if (any(varnames.mixed))
       warning("variable(s) '", paste0(varnames.bart[varnames.mixed], collapse = "', '"),
-              "' appear in both parametric and nonparametric are not identifiable; ",
+              "' that appear in both parametric and nonparametric are not identifiable; ",
               "model will fit but some results may be uninterpretable")
     
     result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, formula = formula, 
