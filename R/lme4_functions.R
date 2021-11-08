@@ -145,9 +145,9 @@ glFormula <- function (formula, data = NULL, subset, weights,
     
     terms <- attr(fr, "terms")
     
-    varnames.random <- attr(ranterms,   "termlabels")[attr(ranterms,   "order") == 1]
-    varnames.fixed  <- attr(fixedterms, "termlabels")[attr(fixedterms, "order") == 1]
-    varnames.bart   <- attr(bartterms,  "termlabels")[attr(bartterms,  "order") == 1]
+    varnames.random <- attr(ranterms,   "term.labels")[attr(ranterms,   "order") == 1]
+    varnames.fixed  <- attr(fixedterms, "term.labels")[attr(fixedterms, "order") == 1]
+    varnames.bart   <- attr(bartterms,  "term.labels")[attr(bartterms,  "order") == 1]
     
     varnames.mixed <- varnames.bart %in% varnames.random | varnames.bart %in% varnames.fixed
     if (any(varnames.mixed))
