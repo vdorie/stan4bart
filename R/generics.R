@@ -250,8 +250,9 @@ extract.mstan4bartFit <-
     names(result) <- names(Sigma[[1L]])
   } else if (type == "sigma") {
     # test that this exists is above
-    result <- get_samples(object$stan[sigma_parameters,,],
+    result <- get_samples(object$stan[sigma_parameters,,,drop = FALSE],
                           include_warmup, only_warmup)
+    result <- matrix(result, dim(result)[2L], dim(result)[3L], dimnames = dimnames(result)[2L:3L])
   } else if (type %in% c("bart_varcount", "k", "stan")) {
     result <- get_samples(object[[type]],
                           include_warmup, only_warmup)
