@@ -84,7 +84,7 @@ as.array.mstan4bartFit <- function (x, include_warmup = FALSE, ...)
       
       Sigma_names <- paste0("Sigma[",
                             rep(names(Sigmas), times = n_pars),
-                          ":",
+                            ":",
                             unlist(lapply(Sigmas.list, function(x) dimnames(x)[[3L]])),
                             "]")
       Sigmas.arr <- array(unlist(Sigmas.list),
@@ -602,7 +602,7 @@ predict.mstan4bartFit <-
   
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef")) {
-    if (!is.null(testData$X)) {
+    if (!is.null(testData$X) && n_fixef > 0L) {
       indiv.fixef <- fitted_fixed(object, testData$X, FALSE)
     } else {
       if (type == "indiv.fixef")
