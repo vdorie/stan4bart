@@ -31,9 +31,11 @@
 #    pragma GCC diagnostic ignored "-Wunused-function"
 #    pragma GCC diagnostic ignored "-Wsign-compare"
 #    pragma GCC diagnostic ignored "-Wignored-qualifiers"
-#    pragma GCC diagnostic ignored "-Wignored-attributes"
 #    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #    pragma GCC diagnostic ignored "-Wconversion"
+#    if __GNUC__ >= 6
+#      pragma GCC diagnostic ignored "-Wignored-attributes"
+#    endif
 #  endif
 #endif
 
