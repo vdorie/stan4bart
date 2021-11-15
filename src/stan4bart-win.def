@@ -1,3 +1,0 @@
-LIBRARY stan4bart.dll
-EXPORTS
- R_init_stan4bart
