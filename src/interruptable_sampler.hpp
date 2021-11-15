@@ -41,12 +41,17 @@
 #    pragma GCC diagnostic ignored "-Wunused-function"
 #    pragma GCC diagnostic ignored "-Wsign-compare"
 #    pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#    pragma GCC diagnostic ignored "-Wfloat-conversion"
+#    pragma GCC diagnostic ignored "-Wconversion"
 #    if __GNUC__ >= 6
 #      pragma GCC diagnostic ignored "-Wignored-attributes"
 #    endif
 #    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #    if __GNUC__ >= 9
 #      pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#    endif
+#    if defined(__MINGW32__) || defined(__MINGW64__)
+#      pragma GCC diagnostic ignored "-Wattributes"
 #    endif
 #  endif
 #endif

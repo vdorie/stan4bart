@@ -39,21 +39,21 @@ mstan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, mode
   if (is.na(seed))
     orig_seed <- .Random.seed
   
-  sampler <- .Call("stan4bart_create", control.bart, data.bart, model.bart, data.stan, control.stan, control.common, PACKAGE = "stan4bart")
+  sampler <- .Call(C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
   if (control.common$verbose > 0L) {
     cat("fitting chain ", chain.num, "\n", sep = "")
-    .Call("stan4bart_printInitialSummary", sampler, PACKAGE = "stan4bart")
+    .Call(C_stan4bart_printInitialSummary, sampler)
   }
   results <- list()
   if (control.common$warmup > 0L)
-    results$warmup  <- .Call("stan4bart_run", sampler, control.common$warmup, TRUE, "both", PACKAGE = "stan4bart")
-  .Call("stan4bart_disengageAdaptation", sampler, PACKAGE = "stan4bart")
-  results$sample <- .Call("stan4bart_run", sampler, control.common$iter - control.common$warmup,
-                          FALSE, "both", PACKAGE = "stan4bart")
+    results$warmup  <- .Call(C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
+  .Call(C_stan4bart_disengageAdaptation, sampler)
+  results$sample <- .Call(C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
+                          FALSE, "both")
   
   if (control.bart@keepTrees) {
-    results$state.bart <- .Call("stan4bart_exportBARTState", sampler, PACKAGE = "stan4bart")
-    results$range.bart <- .Call("stan4bart_getBARTDataRange", sampler, PACKAGE = "stan4bart")
+    results$state.bart <- .Call(C_stan4bart_exportBARTState, sampler)
+    results$range.bart <- .Call(C_stan4bart_getBARTDataRange, sampler)
   }
   
   results
@@ -552,7 +552,7 @@ mstan4bart_fit <-
     
     
     attr(chainResults, "sampler.bart") <- 
-      .Call("stan4bart_createStoredBARTSampler", control.bart, data.bart, model.bart, all_state, PACKAGE = "stan4bart")
+      .Call(C_stan4bart_createStoredBARTSampler, control.bart, data.bart, model.bart, all_state)
   }
   
   chainResults

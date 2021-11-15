@@ -182,7 +182,8 @@ mstan4bart(formula,
       \item \code{prior_covariance}
       \item \code{prior}, \code{prior_intercept}, \code{prior_aux}, \code{QR}
       \item \code{init_r}, \code{adapt_gamma}, \code{adapt_delta},
-      \code{adapt_kappa} - see \code{\link[rstan]{stan}}
+      \code{adapt_kappa} - see the help page for \code{stan} in the \code{rstan}
+      package.
     }
     For reference on the first two sets of options, see the help page for
     \code{stan_glmer} in the \code{rstanarm} package; for reference on
@@ -315,6 +316,7 @@ fit <- mstan4bart(
         X4 +                         # linear component ("fixef")
         (1 + X4 | g.1) + (1 | g.2) + # multilevel ("ranef")
         bart(. - g.1 - g.2 - X4),    # use bart for other variables
+    verbose = -1, # suppress ALL output
     # low numbers for illustration
     data = df,
     chains = 1, iter = 10, bart_args = list(n.trees = 5))

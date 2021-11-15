@@ -40,6 +40,9 @@
 #    endif
 #    pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #    pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#    if defined(__MINGW32__) || defined(__MINGW64__)
+#      pragma GCC diagnostic ignored "-Wattributes"
+#    endif
 // This is for gcc under -Wpedantic, since some some warnings can't
 // be silenced. It is highly undesirably, as it can suppress other,
 // useful warnings with later code.

@@ -613,7 +613,7 @@ predict.mstan4bartFit <-
   if (type %in% c("ev", "ppd", "indiv.bart")) {
     if (is.null(object$sampler.bart))
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
-    indiv.bart <- .Call("stan4bart_predictBART", object$sampler.bart, testData$X.bart, NULL, PACKAGE = "stan4bart")
+    indiv.bart <- .Call(C_stan4bart_predictBART, object$sampler.bart, testData$X.bart, NULL)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
     if (!is_bernoulli) for (i_chain in seq_len(n_chains)) {
       indiv.bart[,,i_chain] <- object$range.bart["min",i_chain] +

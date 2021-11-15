@@ -68,7 +68,9 @@
 #    pragma clang diagnostic ignored "-Wunknown-pragmas"
 #    pragma clang diagnostic ignored "-Wunused-parameter"
 #    pragma clang diagnostic ignored "-Wsign-compare"
-#    pragma clang diagnostic ignored "-Wunused-but-set-variable"
+#    if __clang_major__ >= 13
+#      pragma clang diagnostic ignored "-Wunused-but-set-variable"
+#    endif
 #  else
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -1152,22 +1154,44 @@ csr_matrix_times_vector2(const int& m, const int& n, const T2__& w_arg__,
                          const std::vector<int>& v,
                          const std::vector<int>& u, const T5__& b_arg__,
                          std::ostream* pstream__) ; */
-// dunno
-/*template <typename T2__, typename T5__>
-Eigen::Matrix<typename stan::promote_args_t<stan::value_type_t<T2__>,
-                                            stan::value_type_t<T5__>>::type, -1, 1> */
+// rstanarm
+/* template <typename T2__, typename T5__>
+inline
+Eigen::Matrix<typename boost::math::tools::promote_args<T2__, T5__>::type,
+              Eigen::Dynamic, 1>
+csr_matrix_times_vector3(const int& m,
+                         const int& n,
+                         const Eigen::Matrix<T2__, Eigen::Dynamic, 1>& w,
+                         const std::vector<int>& v,
+                         const std::vector<int>& u,
+                         const Eigen::Matrix<T5__, Eigen::Dynamic, 1>& b,
+                         std::ostream* pstream__) {
+  Eigen::Map<const Eigen::SparseMatrix<T2__,Eigen::RowMajor> >
+    sm(m, n, w.size(), &u[0], &v[0], &w[0]);
+  return sm * b;
+}*/
 // stan
 template <typename T2__, typename T5__>
-Eigen::Matrix<stan::promote_args_t<stan::value_type_t<T2__>,
-stan::value_type_t<T5__>>, -1, 1>
+inline
+Eigen::Matrix<stan::promote_args_t<stan::value_type_t<T2__>, stan::value_type_t<T5__>>, -1, 1>
 csr_matrix_times_vector3(const int& m, const int& n, const T2__& w_arg__,
                          const std::vector<int>& v,
                          const std::vector<int>& u, const T5__& b_arg__,
                          std::ostream* pstream__)
 {
-  Eigen::Map<const Eigen::SparseMatrix<typename T2__::Scalar, Eigen::RowMajor> >
-    sm(m, n, w_arg__.size(), &u[0], &v[0], &w_arg__[0]);
-  return sm * b_arg__;
+  using local_scalar_t__ = stan::promote_args_t<stan::value_type_t<T2__>,
+           stan::value_type_t<T5__>>;
+  
+  if (logical_eq(n, 0)) {
+    local_scalar_t__ zero(0.0);
+    Eigen::Matrix<local_scalar_t__, -1, 1> result(m);
+    stan::math::fill(result, zero);
+    return result;
+  } else {
+    Eigen::Map<const Eigen::SparseMatrix<typename T2__::Scalar, Eigen::RowMajor> >
+      sm(m, n, w_arg__.size(), &u[0], &v[0], &w_arg__[0]);
+    return sm * b_arg__;
+  }
 }
 
 template <typename T0__, typename T1__, typename T2__>

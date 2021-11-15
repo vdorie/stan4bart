@@ -134,7 +134,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     
     bartData <- dbarts::dbartsData(bartform, bartfr)
     if (ncol(bartData@x) == 0L)
-      stop("no bart component detected; consider using rstanarm instead")
+      stop("no bart component detected in formula; consider using rstanarm package instead")
     
     X <- model.matrix(fixedform, fixedfr, contrasts)
     if (is.null(rankX.chk <- control[["check.rankX"]])) 
@@ -158,6 +158,9 @@ glFormula <- function (formula, data = NULL, subset, weights,
       warning("variable(s) '", paste0(varnames.bart[varnames.mixed], collapse = "', '"),
               "' that appear in both parametric and nonparametric are not identifiable; ",
               "model will fit but some results may be uninterpretable")
+    
+    if (length(varnames.random) == 0L && length(varnames.fixed) == 0L)
+      stop("no parametric component detected in formula; consider using dbarts package instead")
     
     result <- list(fr = fr, X = X, bartData = bartData, reTrms = reTrms, formula = formula, 
                    terms = terms)

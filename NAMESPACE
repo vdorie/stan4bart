@@ -1,4 +1,4 @@
-# useDynLib(stan4bart, .registration = TRUE, .fixes = "C_")
+useDynLib(stan4bart, .registration = TRUE, .fixes = "C_")
 
 export(mstan4bart)
 S3method(extract, mstan4bartFit)
@@ -23,3 +23,7 @@ importFrom(stats, model.frame, model.frame.default, model.matrix,
 importFrom(stats, fitted, uniroot, sigma, sd, na.pass, var, setNames)
 
 importFrom(methods, as, new)
+
+# This is only to "touch" the package, to ensure that its shared sub-library is
+# loaded.
+importFrom(RcppParallel, RcppParallelLibs)
