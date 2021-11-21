@@ -1,18 +1,18 @@
-\name{mstan4bart-generics}
+\name{stan4bart-generics}
 
 \alias{extract}
-\alias{mstan4bart-generics}
-\alias{extract.mstan4bartFit}
-\alias{fitted.mstan4bartFit}
-\alias{predict.mstan4bartFit}
+\alias{stan4bart-generics}
+\alias{extract.stan4bartFit}
+\alias{fitted.stan4bartFit}
+\alias{predict.stan4bartFit}
 
-\title{Generic Functions for mstan4bart Model Fits}
+\title{Generic Functions for stan4bart Model Fits}
 \description{
   Commonly expected utility functions to derive useful quantities from fitted
   models.
 }
 \usage{
-\method{extract}{mstan4bartFit}(
+\method{extract}{stan4bartFit}(
   object,
   type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
            "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
@@ -22,7 +22,7 @@
   include_warmup = FALSE,
   \dots)
   
-\method{fitted}{mstan4bartFit}(
+\method{fitted}{stan4bartFit}(
   object,
   type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
            "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
@@ -30,7 +30,7 @@
   sample_new_levels = TRUE,
   \dots)
 
-\method{predict}{mstan4bartFit}(
+\method{predict}{stan4bartFit}(
   object, newdata, offset,
   type = c("ev", "ppd", "indiv.fixef", "indiv.ranef", "indiv.bart"),
   combine_chains = TRUE,
@@ -39,7 +39,7 @@
 }
 \arguments{
   \item{object}{a fitted model resulting from a call to
-  \code{\link{mstan4bart}}.}
+  \code{\link{stan4bart}}.}
   \item{type}{a character vector; one of the options listed below.}
   \item{sample}{one of \code{"train"} or \code{"test"}, indicating if the
   training or test data frames should be used.}

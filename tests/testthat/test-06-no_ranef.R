@@ -1,4 +1,4 @@
-context("mstan4bart with no random effects")
+context("stan4bart with no random effects")
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 
@@ -14,16 +14,16 @@ bart.true  <- with(testData, mu.bart.1  * z + mu.bart.0  * (1 - z))
 rm(testData)
 
 test_that("fit issues warning if overparameterized", {
-  expect_warning(mstan4bart(y ~ X1 + bart(X1), df,
-                            cores = 1L, verbose = -1L, chains = 1L, warmup = 0L, iter = 1L,
-                            bart_args = list(n.trees = 1L)))
+  expect_warning(stan4bart(y ~ X1 + bart(X1), df,
+                           cores = 1L, verbose = -1L, chains = 1L, warmup = 0L, iter = 1L,
+                           bart_args = list(n.trees = 1L)))
 })
 
 
-fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z, df,
-                    cores = 1, verbose = -1L, chains = 3, warmup = 2, iter = 3,
-                    bart_args = list(n.trees = 2),
-                    treatment = z)
+fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z, df,
+                 cores = 1, verbose = -1L, chains = 3, warmup = 2, iter = 3,
+                 bart_args = list(n.trees = 2),
+                 treatment = z)
 
 test_that("extract matches fitted in causal setting model for fixef only model", {
   samples.ev.train <- extract(fit)
@@ -69,11 +69,11 @@ test_that("predict matches supplied data for fixef only model", {
   df.train <- df[seq_len(floor(0.8 * nrow(df))),]
   df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
   
-  fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z,
-                    df.train,
-                    test = df.test,
-                    cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                    bart_args = list(n.trees = 11, keepTrees = TRUE))
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z,
+                   df.train,
+                   test = df.test,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11, keepTrees = TRUE))
 
   samples.pred <- predict(fit, df.train, type = "indiv.bart")
   samples.ev   <- extract(fit, "indiv.bart", "train")

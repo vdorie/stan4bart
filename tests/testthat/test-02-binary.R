@@ -1,4 +1,4 @@
-context("mstan4bart binary response")
+context("stan4bart binary response")
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 
@@ -12,10 +12,10 @@ rm(testData)
 test_that("extract matches fitted in causal setting model", {
   df.train <- df
   
-  fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
-                    cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                    bart_args = list(n.trees = 11),
-                    treatment = z)
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
+                   cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11),
+                   treatment = z)
   
   
   samples.ev.train <- extract(fit)
@@ -39,13 +39,13 @@ test_that("nonlinearities are estimated well", {
   df.train <- df[rows.train,]
   df.test  <- df[rows.test,]
   
-  mstan4bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
-                               df.train,
-                               verbose = -1L,
-                               test = df.test)
+  stan4bart_fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                             df.train,
+                             verbose = -1L,
+                             test = df.test)
   
-  mstan4bart_fitted <- fitted(mstan4bart_fit, sample = "test")
-  mstan4bart_dev <- -2 * mean(log(ifelse(df.test$y == 1, mstan4bart_fitted, 1 - mstan4bart_fitted)))
+  stan4bart_fitted <- fitted(stan4bart_fit, sample = "test")
+  stan4bart_dev <- -2 * mean(log(ifelse(df.test$y == 1, stan4bart_fitted, 1 - stan4bart_fitted)))
   
   glmer_control <- lme4::glmerControl(check.conv.grad     = "ignore",
                                       check.conv.singular = "ignore",
@@ -72,21 +72,21 @@ test_that("nonlinearities are estimated well", {
   rbart_fitted <- fitted(rbart_fit, sample = "test")
   rbart_dev <- -2 * mean(log(ifelse(df.test$y == 1, rbart_fitted, 1 - rbart_fitted)))
  
-  expect_true(mstan4bart_dev <= glmer_dev)
+  expect_true(stan4bart_dev <= glmer_dev)
   # low sample size, so we cut ourselves some slack
-  expect_true(mstan4bart_dev <= 1.35 * base_bart_dev)
-  expect_true(mstan4bart_dev <= 1.35 * rbart_dev)
+  expect_true(stan4bart_dev <= 1.35 * base_bart_dev)
+  expect_true(stan4bart_dev <= 1.35 * rbart_dev)
 })
 
 test_that("predict matches supplied data", {
   df.train <- df[seq_len(floor(0.8 * nrow(df))),]
   df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
   
-  fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
-                    df.train,
-                    test = df.test,
-                    cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                    bart_args = list(n.trees = 11, keepTrees = TRUE))
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                   df.train,
+                   test = df.test,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11, keepTrees = TRUE))
 
   samples.pred <- predict(fit, df.train, type = "indiv.bart")
   samples.ev   <- extract(fit, "indiv.bart", "train")
@@ -126,9 +126,9 @@ test_that("ppd has approximately right amount of noise", {
   df.train <- df
   
   set.seed(0)
-  fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
-                    cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                    bart_args = list(n.trees = 11))
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11))
   
   samples.ev  <- extract(fit)
   samples.ppd <- extract(fit, type = "ppd")

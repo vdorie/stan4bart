@@ -15,7 +15,7 @@ combine_chains_f <- function(x) {
   }
 }
 
-as.array.mstan4bartFit <- function (x, include_warmup = FALSE, ...) 
+as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...) 
 {
   include_warmup_orig <- include_warmup
   if (is.character(include_warmup)) {
@@ -104,7 +104,7 @@ as.array.mstan4bartFit <- function (x, include_warmup = FALSE, ...)
   aperm(result, c(2L, 3L, 1L))
 }
 
-as.matrix.mstan4bartFit <- function (x, ...) 
+as.matrix.stan4bartFit <- function (x, ...) 
 {
   result <- as.array(x, ...)
   
@@ -166,7 +166,7 @@ get_samples <- function(expr, include_warmup, only_warmup)
   result
 }
 
-extract.mstan4bartFit <-
+extract.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
                     "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
@@ -434,7 +434,7 @@ extract.mstan4bartFit <-
 
 
 
-fitted.mstan4bartFit <-
+fitted.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
                     "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
@@ -560,7 +560,7 @@ fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
         dimnames = list(observation = NULL, iterations = NULL, chain = dimnames(re_new[[1L]])$chain))
 }
 
-predict.mstan4bartFit <-
+predict.stan4bartFit <-
   function(object, newdata, offset,
            type = c("ev", "ppd", "indiv.fixef", "indiv.ranef", "indiv.bart"),
            combine_chains = TRUE,

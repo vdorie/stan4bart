@@ -1,3 +1,21 @@
+# Part of the lme4 package for estimating generalized linear
+# mixed effect models. Copyright (C) 2003-2021 Douglas Bates,
+# Martin Maechler, Ben Bolker, and Steven Walker.
+# 
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 glFormula <- function (formula, data = NULL, subset, weights, 
     na.action, offset, contrasts = NULL,
     start, mustart, etastart, 
@@ -1145,7 +1163,7 @@ levelfun <- function (x, nl.n, sample_new_levels, Sigma)
   x
 }
 
-# can't use lme4 version, as we need to use mstan4bartFit terms and model.frame
+# can't use lme4 version, as we need to use stan4bartFit terms and model.frame
 get.orig.levs <- function (object, FUN = levels, newdata = NULL, sparse = FALSE, ...) 
 {
   terms <- terms(object, ...)
@@ -1168,10 +1186,10 @@ get.orig.levs <- function (object, FUN = levels, newdata = NULL, sparse = FALSE,
   orig_levs
 }
 
-formula.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
+formula.stan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
 {
   if (is.null(formula <- x$formula)) {
-    if (!grepl("mstan4bart$", deparse(x$call[[1]]))) 
+    if (!grepl("stan4bart$", deparse(x$call[[1]]))) 
       stop("can't find formula stored in model frame or call")
     form <- as.formula(formula(x$call))
   }
@@ -1189,7 +1207,7 @@ formula.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
   formula
 }
 
-terms.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart")) 
+terms.stan4bartFit <- function(x, type = c("all", "fixed", "random", "bart")) 
 {
   type <- match.arg(type)
   
@@ -1228,7 +1246,7 @@ terms.mstan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
   tt
 }
 
-model.frame.mstan4bartFit <- function (formula, type = c("all", "fixed", "random", "bart"))
+model.frame.stan4bartFit <- function (formula, type = c("all", "fixed", "random", "bart"))
 {
   type <- match.arg(type)
   

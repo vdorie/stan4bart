@@ -30,7 +30,7 @@ if (FALSE) getRanef <- function(group, samples) {
 }
 
 # putting this out here so we can export it when parallelizing
-mstan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
+stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
 {
   if (!is.na(seed))
     set.seed(seed)
@@ -59,7 +59,7 @@ mstan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, mode
   results
 }
 
-mstan4bart_fit <- 
+stan4bart_fit <- 
   function(object,
            family,
            bart_offset_init,
@@ -133,7 +133,7 @@ mstan4bart_fit <-
     nvars = nvars.fixef,
     default_scale = 2.5,
     # link = family$link,
-    # mstan4bart: since we use latent variables, this is essentially a
+    # stan4bart: since we use latent variables, this is essentially a
     # gaussian/identity problem
     link = "identity", 
     ok_dists = ok_dists
@@ -157,7 +157,7 @@ mstan4bart_fit <-
     nvars = 1,
     default_scale = 2.5,
     # link = family$link,
-    # mstan4bart: since we use latent variables, this is essentially a
+    # stan4bart: since we use latent variables, this is essentially a
     # gaussian/identity problem
     link = "identity",
     ok_dists = ok_intercept_dists
@@ -497,12 +497,12 @@ mstan4bart_fit <-
         randomSeeds <- rep.int(NA_integer_, chains)
       }
       
-      clusterExport(cluster, "mstan4bart_fit_worker", asNamespace("stan4bart"))
+      clusterExport(cluster, "stan4bart_fit_worker", asNamespace("stan4bart"))
       clusterEvalQ(cluster, require(stan4bart))
       
       tryResult <- tryCatch(
         chainResults <- clusterMap(
-          cluster, "mstan4bart_fit_worker",
+          cluster, "stan4bart_fit_worker",
           seq_len(chains), randomSeeds,
           MoreArgs = nlist(control.bart, data.bart, model.bart, data.stan,
                            control.stan, control.common, group)),
@@ -527,7 +527,7 @@ mstan4bart_fit <-
     }
     
     for (chainNum in seq_len(chains))
-      chainResults[[chainNum]] <- mstan4bart_fit_worker(chainNum, NA_integer_, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
+      chainResults[[chainNum]] <- stan4bart_fit_worker(chainNum, NA_integer_, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
     
     if (exists("oldSeed"))
       .Random.seed <- oldSeed

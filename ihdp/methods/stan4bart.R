@@ -1,8 +1,8 @@
 # bart with unmodeled group parameters
 getFit <- function(df, cache) {
   
-  # see R/mstan4bart.R for a description of what this function returns
-  fit.s4b <- mstan4bart(y ~ . - g1 - (1 + z | g1), df, treatment = z, verbose = 0, chains = 10)
+  # see R/stan4bart.R for a description of what this function returns
+  fit.s4b <- stan4bart(y ~ . - g1 - (1 + z | g1), df, treatment = z, verbose = 0, chains = 10)
   rows.b <- grepl("^b\\.", rownames(fit.s4b[[1L]]$sample$stan$raw))
   n.obs <- nrow(df)
   n.samp <- ncol(fit.s4b[[1L]]$sample$bart$test)

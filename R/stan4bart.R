@@ -1,4 +1,4 @@
-mstan4bart <- 
+stan4bart <- 
   function(formula,
            data = NULL,
            subset,
@@ -36,7 +36,7 @@ mstan4bart <-
   if (identical(na.action, stats::na.pass) || identical(na.action, "na.pass"))
     stop("na.action of 'na.pass' not allowed")
   
-  for (name in setdiff(names(formals(mstan4bart)), names(formals(glFormula)))) {
+  for (name in setdiff(names(formals(stan4bart)), names(formals(glFormula)))) {
     if (name %in% names(gl_call)) gl_call[[name]] <- NULL
   }
   
@@ -44,7 +44,7 @@ mstan4bart <-
   
   bartData <- glmod$bartData
   if ("b" %in% colnames(bartData@x)) {
-    stop("mstan4bart does not allow the name 'b' for predictor variables", 
+    stop("stan4bart does not allow the name 'b' for predictor variables", 
          call. = FALSE)
   }
   
@@ -83,7 +83,7 @@ mstan4bart <-
   if (!is.null(glmod$reTrms)) {
     result$reTrms <- glmod$reTrms
   }
-  class(result) <- "mstan4bartFit"
+  class(result) <- "stan4bartFit"
   
   if (!is.null(mc$test) && !is.null(mc$treatment))
     stop("only one of 'treatment' or 'test' can be specified")
@@ -128,7 +128,7 @@ mstan4bart <-
     }
     
     formals_diff <-
-      setdiff(names(formals(mstan4bart)), names(formals(eval(init_call[[1L]]))))
+      setdiff(names(formals(stan4bart)), names(formals(eval(init_call[[1L]]))))
     for (name in formals_diff)
       if (name %in% names(init_call)) init_call[[name]] <- NULL
     
@@ -154,7 +154,7 @@ mstan4bart <-
     }
 
     formals_diff <-
-      setdiff(names(formals(mstan4bart)), names(formals(eval(init_call[[1L]]))))
+      setdiff(names(formals(stan4bart)), names(formals(eval(init_call[[1L]]))))
     for (name in formals_diff)
       if (name %in% names(init_call)) init_call[[name]] <- NULL
     
@@ -200,7 +200,7 @@ mstan4bart <-
   
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)
   
-  chain_results <- mstan4bart_fit(result,
+  chain_results <- stan4bart_fit(result,
                                   family,
                                   bart_offset_init,
                                   sigma_init,

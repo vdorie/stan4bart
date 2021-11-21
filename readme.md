@@ -14,7 +14,7 @@ remotes::install_github("vdorie/stan4bart")
 
 ## Use
 
-The package utilizes the flexible, expressive lme4 syntax for specifying group-level structures. See the package documentation `?mstan4bart` and `?stan4bart::mstan4bart-generics` for more information.
+The package utilizes the flexible, expressive lme4 syntax for specifying group-level structures. See the package documentation `?stan4bart` and `?stan4bart::stan4bart-generics` for more information.
 
 ### Formulas
 
@@ -24,18 +24,18 @@ The package utilizes the flexible, expressive lme4 syntax for specifying group-l
 
 ### Main Event
 
-The main function is `mstan4bart`.
+The main function is `stan4bart`.
 
 ### Results
 
-Results are retrieved using the `extract`, `fitted`, and `predict` generics. See `?"mstan4bart-generics"` for more information.
+Results are retrieved using the `extract`, `fitted`, and `predict` generics. See `?"stan4bart-generics"` for more information.
 
 ## Known Issues
 
 The name and definition of `extract` conflict with `rstan`. The `rstan` package is not needed to use `stan4bart` and does not need to be loaded. If a name-collision occurs, the `stan4bart` extract can be referenced as in:
 
 ```R
-stan4bart:::extract.mstan4bartFit(stan4bart_fit)
+stan4bart:::extract.stan4bartFit(stan4bart_fit)
 ```
 
 ## Example Code
@@ -56,11 +56,10 @@ testData <- generateFriedmanData(n = 100, ranef = TRUE, causal = TRUE, binary = 
 df <- with(testData, data.frame(x, g.1, g.2, y, z))
 
 # Causal inference example
-set.seed(0)
-fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
-                  cores = 1,
-                  verbose = 1,
-                  treatment = z)
+fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                 treatment = z,
+                 cores = 1, seed = 0,
+                 verbose = 1)
 
 samples.mu.train <- extract(fit)
 samples.mu.test  <- extract(fit, sample = "test")

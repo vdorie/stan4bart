@@ -1,4 +1,4 @@
-context("mstan4bart continuous response")
+context("stan4bart continuous response")
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 
@@ -13,10 +13,10 @@ bart.true  <- with(testData, mu.bart.1  * z + mu.bart.0  * (1 - z))
 
 rm(testData)
 
-fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
-                    cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                    bart_args = list(n.trees = 11),
-                    treatment = z)
+fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                 cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                 bart_args = list(n.trees = 11),
+                 treatment = z)
 
 test_that("no intercept parameter was included", {
   expect_true(!("(Intercept)" %in% colnames(fit$X)))
@@ -96,11 +96,11 @@ test_that("nonlinearities are estimated well", {
   df.train <- df[ind.train,]
   df.test  <- df[ind.test,]
   
-  bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
-                         seed = 0,
-                         df.train,
-                         verbose = -1L,
-                         test = df.test)
+  bart_fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                        seed = 0,
+                        df.train,
+                        verbose = -1L,
+                        test = df.test)
   
   bart_fitted <- fitted(bart_fit, sample = "test")
   bart_rmse <- sqrt(mean((df.test$y - bart_fitted)^2)) / sd(df.train$y)
@@ -135,13 +135,13 @@ test_that("works when QR is true", {
   df.train <- df[ind.train,]
   df.test  <- df[ind.test,]
   
-  bart_fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
-                         seed = 0,
-                         df.train,
-                         verbose = -1L,
-                         test = df.test,
-                         cores = 4,
-                         stan_args = list(QR = TRUE))
+  bart_fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                        seed = 0,
+                        df.train,
+                        verbose = -1L,
+                        test = df.test,
+                        cores = 4,
+                        stan_args = list(QR = TRUE))
   
   bart_fitted <- fitted(bart_fit, sample = "test")
   bart_rmse <- sqrt(mean((df.test$y - bart_fitted)^2)) / sd(df.train$y)
@@ -172,11 +172,11 @@ test_that("predict matches supplied data", {
   df.train <- df[seq_len(floor(0.8 * nrow(df))),]
   df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
   
-  fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
-                    df.train,
-                    test = df.test,
-                    cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                    bart_args = list(n.trees = 11, keepTrees = TRUE))
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                   df.train,
+                   test = df.test,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11, keepTrees = TRUE))
 
   samples.pred <- predict(fit, df.train, type = "indiv.bart")
   samples.ev   <- extract(fit, "indiv.bart", "train")
@@ -217,9 +217,9 @@ test_that("ppd has approximately right amount of noise", {
   
   set.seed(15)
   
-  fit <- mstan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
-                    cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                    bart_args = list(n.trees = 11))
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11))
   
   
   samples.ev  <- extract(fit)

@@ -1,4 +1,4 @@
-context("mstan4bart factor levels")
+context("stan4bart factor levels")
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 
@@ -18,11 +18,11 @@ levels(df.train$X1) <- c(levels(df.train$X1), letters[1L:2L + nlevels(df.train$X
 levels(df.test$X1) <- c(levels(df.test$X1), letters[c(1L, 3L) + nlevels(df.test$X1)])
 
 test_that("model fits with empty factor levels", {
-  fit <- mstan4bart(y ~ bart(X1 + X2 + X3 + X5 + X6 + X7 + X8 + X9 + X10) + 
-                             X4 + z + (1 + X4 | g.1) + (1 | g.2),
-                  df.train, test = df.test,
-                  cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                  bart_args = list(n.trees = 11))
+  fit <- stan4bart(y ~ bart(X1 + X2 + X3 + X5 + X6 + X7 + X8 + X9 + X10) + 
+                         X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                   df.train, test = df.test,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11))
   
   types <- c("ev", "indiv.fixef", "indiv.ranef", "indiv.bart")
   for (type in types) {

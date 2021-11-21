@@ -1,12 +1,12 @@
 useDynLib(stan4bart, .registration = TRUE, .fixes = "C_")
 
-export(mstan4bart)
-S3method(extract, mstan4bartFit)
-S3method(fitted, mstan4bartFit)
-S3method(predict, mstan4bartFit)
+export(stan4bart)
+S3method(extract, stan4bartFit)
+S3method(fitted, stan4bartFit)
+S3method(predict, stan4bartFit)
 
-S3method(as.array, mstan4bartFit)
-S3method(as.matrix, mstan4bartFit)
+S3method(as.array, stan4bartFit)
+S3method(as.matrix, stan4bartFit)
 
 importFrom(dbarts, extract)
 importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao, bdiag)

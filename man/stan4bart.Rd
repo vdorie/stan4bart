@@ -1,12 +1,13 @@
-\name{mstan4bart}
+\name{stan4bart}
 
-\alias{mstan4bart}
+\alias{stan4bart}
 
-\title{Multilevel Models Using Stan and BART}
+\title{Semiparametric Models Using Stan and BART}
 \description{
-  This function fits hierarchical/multilevel models that have a non-parametric,
-  BART component and one or more of a parametric fixed effect (unmodeled
-  coefficients), or a parametric random effect (modeled coefficients). If
+  This function fits semi-parametric linear and probit models that have a
+  non-parametric, BART component and one or more of a parametric fixed
+  effect (unmodeled coefficients), or a parametric random effect
+  (modeled coefficients). If
   \eqn{f(x)} is a BART \dQuote{sum-of-trees} \link[=bart]{model}, fits:
 \itemize{
   \item For continuous response variables:
@@ -19,27 +20,27 @@
   b ~ N(0, Sigma_b) }
 }}
 \usage{
-mstan4bart(formula,
-           data = NULL,
-           subset,
-           weights,
-           na.action = getOption("na.action", "na.omit"),
-           offset,
-           contrasts = NULL,
-           test = NULL,
-           treatment = NULL,
-           offset_test = NULL,
-           verbose = FALSE,
-           iter = 2000L,
-           warmup = iter \%/\% 2L,
-           skip = 1L,
-           chains = 4L,
-           cores = getOption("mc.cores", 1L),
-           refresh = max(iter \%/\% 10L, 1L),
-           offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
-           seed = NA_integer_,
-           stan_args = NULL,
-           bart_args = NULL)
+stan4bart(formula,
+          data = NULL,
+          subset,
+          weights,
+          na.action = getOption("na.action", "na.omit"),
+          offset,
+          contrasts = NULL,
+          test = NULL,
+          treatment = NULL,
+          offset_test = NULL,
+          verbose = FALSE,
+          iter = 2000L,
+          warmup = iter \%/\% 2L,
+          skip = 1L,
+          chains = 4L,
+          cores = getOption("mc.cores", 1L),
+          refresh = max(iter \%/\% 10L, 1L),
+          offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
+          seed = NA_integer_,
+          stan_args = NULL,
+          bart_args = NULL)
 }
 \arguments{
   \item{formula}{a \code{\link{formula}} object, or one that can be coerced to
@@ -137,7 +138,7 @@ mstan4bart(formula,
 
   
   \subsection{Terminology}{
-    As \code{mstan4bart} fits a Bayesian model, essentially all components are
+    As \code{stan4bart} fits a Bayesian model, essentially all components are
     \dQuote{modeled}. Furthermore, as it has two first-level, non-hierarchical
     components, \dQuote{fixed} effects are ambiguous. Thus we adopt:
     \itemize{
@@ -171,11 +172,11 @@ mstan4bart(formula,
     \code{stan_glmer} in the \code{rstanarm} package instead.
   }
   \subsection{Additional Arguments}{
-    The \code{stan_args} and \code{bart_args} arguments to \code{mstan4bart} can
+    The \code{stan_args} and \code{bart_args} arguments to \code{stan4bart} can
     be used to pass further arguments to \code{stan} and \code{bart}
     respectively. These are similar to the functions \code{stan} in the
     \code{rstan} package and \code{\link{bart}}, but not identical as
-    \code{mstan4bart} constructs its own model internally.
+    \code{stan4bart} constructs its own model internally.
     
     Stan arguments include:
     \itemize{
@@ -193,9 +194,9 @@ mstan4bart(formula,
     BART arguments include:
     \itemize{
       \item further arguments to \code{\link{dbartsControl}} that are not
-      specified by \code{mstan4bart}, such as \code{keepTrees} or
+      specified by \code{stan4bart}, such as \code{keepTrees} or
       \code{n.trees}; keeping trees can be costly in terms of memory, but is
-      required to use \code{\link[=mstan4bart-generics]{predict}}
+      required to use \code{\link[=stan4bart-generics]{predict}}
     }
   }
   \subsection{Reproducibility}{
@@ -218,7 +219,7 @@ mstan4bart(formula,
   }
 }
 \value{
-  Returns a list assigned class \code{mstan4bartFit}. Has components below, some
+  Returns a list assigned class \code{stan4bartFit}. Has components below, some
   of which will be \code{NULL} if not applicable.
   
   Input values:
@@ -242,7 +243,7 @@ mstan4bart(formula,
   \code{reTrms}; test data for BART is added to the \code{bartData} result}
   \item{\code{treatment}}{treatment vector, when applicable}
   
-  Results, better accessed using \code{\link[=mstan4bart-generics]{extract}}:
+  Results, better accessed using \code{\link[=stan4bart-generics]{extract}}:
   \item{\code{bart_train}}{samples of individual posterior predictions for BART
   component}
   \item{\code{bart_test}}{predicted test values for BART component, when
@@ -264,9 +265,9 @@ mstan4bart(formula,
   \item{\code{diagnostics}}{Stan sampler produced diagnostic information,
   include tree depth and divergent transitions}
   \item{\code{sampler.bart}}{external points to BART samplers; used only for
-  \code{\link[=mstan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
+  \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
   \item{\code{range.bart}}{internal scale used by BART samplers, used by 
-  \code{\link[=mstan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
+  \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
 }
 \author{
   Vincent Dorie: \email{vdorie@gmail.com}.
@@ -311,7 +312,7 @@ y <- mu.bart + mu.fixef + mu.ranef + rnorm(n, 0, sigma)
 
 df <- data.frame(y, x, g.1, g.2)
 
-fit <- mstan4bart(
+fit <- stan4bart(
     formula = y ~
         X4 +                         # linear component ("fixef")
         (1 + X4 | g.1) + (1 | g.2) + # multilevel ("ranef")

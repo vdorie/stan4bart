@@ -1,6 +1,6 @@
 Package: stan4bart
 Version: 0.0-1
-Date: 2021-11-14
+Date: 2021-11-20
 Title: Bayesian Additive Regression Trees with Stan-Sampled Parametric Extensions 
 Authors@R: c(
   person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
@@ -39,6 +39,9 @@ Authors@R: c(
   person("Ben", "Bolker", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0002-2127-0443")),
   person("Steve", "Walker", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0002-4394-9078")),
   person("Armon", "Dadgar", role = "ctb", comment = "adaptive radix tree"),
+  person("Bothner", "Per", role = "ctb", comment = "config.guess"),
+  person("Elliston", "Ben", role = "ctb", comment = "config.guess"),
+  person("Free Software", "Foundation", role = "cph", comment = "config.sub"),
   person("Guido U", "Draheim", role = "ctb", comment = "ax_check_compile_flag.m4"),
   person("Maarten", "Bosmans", role = "ctb", comment = "ax_check_compile_flag.m4"),
   person("Christophe", "Tournayre", role = "ctb", comment = "ax_ext.m4"),
@@ -65,10 +68,10 @@ LinkingTo:
 Suggests:
   testthat (>= 2.0-0),
   lme4
-Description: Fits semiparametric linear and multilevel models with additive Bayesian additive regression tree (BART) components using the Stan sampler and math library.
-License: GPL (>= 2)
-NeedsCompilation: yes
-Biarch: yes
+Description: Fits semiparametric linear and multilevel models with non-parametric additive Bayesian additive regression tree (BART; Chipman, George, and McCulloch (2010) <doi:10.1214/09-AOAS285>) components and Stan (Stan Development Team (2021) <https://mc-stan.org/>) sampled parametric ones. Multilevel models can be expressed using 'lme4' syntax (Bates, Maechler, Bolker, and Walker (2015) <doi:10.18637/jss.v067.i01>).
+License: GPL (>= 3)
+NeedsCompilation: true
+Biarch: true
 UseLTO: true
 URL: https://github.com/vdorie/stan4bart
 BugReports: https://github.com/vdorie/stan4bart/issues
