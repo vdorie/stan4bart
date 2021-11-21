@@ -2,7 +2,6 @@ PKG_CPPFLAGS = -I"include" -I"include/sundials" -I"../inst/include" -DBOOST_DISA
 
 PKG_CXXFLAGS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::CxxFlags()")
 PKG_CXXFLAGS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('include', package = 'RcppParallel', mustWork = TRUE); cat(paste0('-I', shQuote(TBB), ' -D_REENTRANT -DSTAN_THREADS'), ' ')")
-PKG_CXXFLAGS += $(shell "$(R_HOME)/bin$(R_ARCH_BIN)/Rscript" -e "message()" -e "cat(ifelse(R.version[['major']] == '4' && R.version[['minor']] < '1', '-flto=jobserver', ''))" -e "message()")
 
 PKG_LIBS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
 PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE); cat(paste0('-Wl,-rpath,', shQuote(TBB)), ' ')")
