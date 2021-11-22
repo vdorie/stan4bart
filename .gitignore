@@ -3,6 +3,7 @@
 *.o
 *.so
 src/Makevars
+src/config.h
 config.log
 config.status
 autom4te.cache
