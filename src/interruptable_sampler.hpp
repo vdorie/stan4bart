@@ -29,7 +29,7 @@
 #    pragma clang diagnostic ignored "-Wmismatched-tags"
 #    pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #    pragma clang diagnostic ignored "-Wfloat-conversion"
-#    if __clang_major__ >= 10
+#    if __has_warning("-Wimplicit-int-float-conversion")
 #      pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
 #    endif
 #  else

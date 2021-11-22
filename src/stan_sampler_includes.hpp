@@ -20,10 +20,10 @@
 #    pragma clang diagnostic ignored "-Wdeprecated-copy"
 #    pragma clang diagnostic ignored "-Wshorten-64-to-32"
 #    pragma clang diagnostic ignored "-Wfloat-conversion"
-#    if __clang_major__ >= 8
+#    if __has_warning("-Wimplicit-float-conversion")
 #      pragma clang diagnostic ignored "-Wimplicit-float-conversion"
 #    endif
-#    if __clang_major__ >= 10
+#    if __has_warning("-Wimplicit-int-float-conversion")
 #      pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
 #    endif
 #  else

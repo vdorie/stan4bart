@@ -70,7 +70,7 @@
 #    pragma clang diagnostic ignored "-Wunknown-pragmas"
 #    pragma clang diagnostic ignored "-Wunused-parameter"
 #    pragma clang diagnostic ignored "-Wsign-compare"
-#    if __clang_major__ >= 13
+#    if __has_warning("-Wunused-but-set-variable")
 #      pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #    endif
 #  else

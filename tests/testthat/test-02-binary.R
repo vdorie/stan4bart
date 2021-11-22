@@ -138,6 +138,6 @@ test_that("ppd has approximately right amount of noise", {
   
   r <- (samples.ev - samples.ppd) / sqrt(samples.ev * (1 - samples.ev))
   r <- mean(r[!is.nan(r)])
-  expect_true(abs(r) <= 0.021)
+  expect_true(abs(r) <= 0.026)
 })
 

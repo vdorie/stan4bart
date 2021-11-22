@@ -4,7 +4,7 @@ generateFriedmanData <- function(n, ranef = FALSE, causal = FALSE, binary = FALS
     # round is necessary to adjust for different implementations of sin
     # across platforms
     #10 * sin(pi * x[,1] * x[,2]) + 20 * (x[,3] - 0.5)^2 + 5 * x[,5]
-    10 * round(sin(pi * x[,1] * x[,2]), 14) + 20 * (x[,3] - 0.5)^2 + 5 * x[,5]
+    10 * round(sin(pi * x[,1] * x[,2]), 13) + 20 * (x[,3] - 0.5)^2 + 5 * x[,5]
   
   set.seed(99)
   sigma <- 1.0
