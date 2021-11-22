@@ -27,8 +27,8 @@
 
 #define PACKAGE_BUGREPORT "vdorie@gmail.com"
 #define PACKAGE_NAME "stan4bart"
-#define PACKAGE_STRING "stan4bart 0.0.1"
+#define PACKAGE_STRING "stan4bart 0.0.2"
 #define PACKAGE_TARNAME "stan4bart"
 #define PACKAGE_URL ""
-#define PACKAGE_VERSION "0.0.1"
+#define PACKAGE_VERSION "0.0.2"
 

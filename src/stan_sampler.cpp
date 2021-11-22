@@ -91,7 +91,7 @@ std::ostream nullout(nullptr);
 
 namespace stan4bart {
 
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -366,7 +366,7 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   return result;
 }
 
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic pop
 #endif
 
@@ -374,7 +374,7 @@ void deleteStanModel(StanModel* model) {
   delete model;
 }
 
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -444,7 +444,7 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
   misc_stackFree(matchPos);
 }
 
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic pop
 #endif
 

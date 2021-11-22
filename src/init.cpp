@@ -152,7 +152,7 @@ extern "C" {
   static void samplerFinalizer(SEXP samplerExpr);
   static void storedBARTSamplerFinalizer(SEXP samplerExpr);
   
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -278,7 +278,7 @@ extern "C" {
     return result;
   }
   
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic pop
 #endif
   
@@ -315,7 +315,7 @@ extern "C" {
     return result;
   }
   
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -371,7 +371,7 @@ extern "C" {
     return result;
   }
   
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic pop
 #endif
   
@@ -414,7 +414,7 @@ extern "C" {
     return result;
   }
   
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -589,7 +589,7 @@ extern "C" {
     return(resultExpr);
   }
   
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic pop
 #endif
   
@@ -630,7 +630,7 @@ extern "C" {
 
 namespace {
 
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -664,7 +664,7 @@ void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
     sampler.refresh = 200;
 }
 
-#if defined(__clang__) && __clang_major__ >= 10
+#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
 #  pragma clang diagnostic pop
 #endif
 
