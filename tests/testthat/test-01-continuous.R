@@ -121,7 +121,7 @@ test_that("nonlinearities are estimated well", {
   indiv.bart <- fitted(bart_fit, type = "indiv.bart", sample = "train") 
   expect_true(cor(indiv.bart, bart.true[ind.train]) >= 0.95)
   indiv.ranef <- fitted(bart_fit, type = "indiv.ranef", sample = "train")
-  expect_true(cor(indiv.ranef, ranef.true[ind.train]) >= 0.8)
+  expect_true(cor(indiv.ranef, ranef.true[ind.train]) >= 0.68)
   indiv.fixef <- fitted(bart_fit, type = "indiv.fixef", sample = "train")
   expect_true(cor(indiv.fixef, fixef.true[ind.train]) >= 0.99)
 })

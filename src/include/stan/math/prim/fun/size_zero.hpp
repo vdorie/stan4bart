@@ -16,7 +16,7 @@ namespace math {
  */
 template <typename T>
 inline bool size_zero(const T& x) {
-  return !size(x);
+  return !stan::math::size(x);
 }
 
 /**
