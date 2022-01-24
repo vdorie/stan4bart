@@ -15,7 +15,8 @@
 \method{extract}{stan4bartFit}(
   object,
   type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-           "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
+           "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan",
+           "trees"),
   sample = c("train", "test"),
   combine_chains = TRUE,
   sample_new_levels = TRUE,
@@ -93,6 +94,10 @@
       random effects
       \item \code{"stan"} - raw matrix or array of Stan sampled transformed
       parameters.
+      \item \code{"trees"} - a data frame of flatted trees; see the subsection
+      on extracted trees in \code{\link{bart}} and note that stan4bart variable
+      names can be found in the \code{bartData@x} element of a fitted stan4bart
+      model
     }
   }
 }

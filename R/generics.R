@@ -169,18 +169,30 @@ get_samples <- function(expr, include_warmup, only_warmup)
 extract.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-                    "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
+                    "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan",
+                    "trees"),
            sample = c("train", "test"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
            include_warmup = FALSE,
            ...)
 {
-  if (length(list(...)) > 0) warning("unused arguments ignored")
+  type <- match.arg(type)
   
-  type   <- match.arg(type)
+  if (type == "trees") {
+    if (is.null(object$sampler.bart))
+      stop("extracting trees requires stan4bart to be called with `bart.args = list('keepTrees' == TRUE)`")
+    dotsList <- list(...)
+    treeNums <- if ("treeNums" %in% names(dotsList)) as.integer(dotsList[["treeNums"]]) else NULL
+    chainNums <- if ("chainNums" %in% names(dotsList)) as.integer(dotsList[["chainNums"]]) else NULL
+    sampleNums <- if ("sampleNums" %in% names(dotsList)) as.integer(dotsList[["sampleNums"]]) else NULL
+    return(.Call(C_stan4bart_getTrees, object$sampler.bart, chainNums, sampleNums, treeNums))
+  } else {
+    if (length(list(...)) > 0) warning("unused arguments ignored")
+  }
+
   sample <- match.arg(sample)
-  
+
   include_warmup_orig <- include_warmup
   if (is.character(include_warmup)) {
     if (length(include_warmup) != 1L || include_warmup != "only")
@@ -444,6 +456,7 @@ fitted.stan4bartFit <-
 {
   if (length(list(...)) > 0) warning("unused arguments ignored")
   
+  type <- match.arg(type)
   samples <- extract(object, type, sample, combine_chains = TRUE, sample_new_levels = sample_new_levels)
   
   average_samples_f <- function(x) {
