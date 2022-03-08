@@ -167,9 +167,15 @@ glFormula <- function (formula, data = NULL, subset, weights,
     
     terms <- attr(fr, "terms")
     
-    varnames.random <- attr(ranterms,   "term.labels")[attr(ranterms,   "order") == 1]
-    varnames.fixed  <- attr(fixedterms, "term.labels")[attr(fixedterms, "order") == 1]
-    varnames.bart   <- attr(bartterms,  "term.labels")[attr(bartterms,  "order") == 1]
+    get_variable_names_from_terms <- function(terms) {
+      variables <- as.character(attr(terms, "variables"))[-1L]
+      response <- attr(terms, "response")
+      if (length(response) > 0L) variables[-response] else variables
+    }
+    
+    varnames.random <- get_variable_names_from_terms(ranterms)
+    varnames.fixed  <- get_variable_names_from_terms(fixedterms)
+    varnames.bart   <- get_variable_names_from_terms(bartterms)
     
     varnames.mixed <- varnames.bart %in% varnames.random | varnames.bart %in% varnames.fixed
     if (any(varnames.mixed))

@@ -83,6 +83,14 @@ test_that("extract include_samples works correctly", {
   expect_equal(unname(rbind(warmup, sample)), unname(both))
 })
 
+test_that("can be called when parametric component contains only nested factors", {
+  bart_fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + (1 | g.1:g.2), data = df,
+                        seed = 0,
+                        cores = 1, verbose = -1L, chains = 1L, warmup = 0L, iter = 2L,
+                        bart_args = list(n.trees = 3L))
+  expect_is(bart_fit, "stan4bartFit")
+})
+
 test_that("nonlinearities are estimated well", {
   # Because this is not documented, to enable this test execute from R
   #   Sys.setenv(NOT_CRAN = "true")
