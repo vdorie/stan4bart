@@ -16,7 +16,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-glFormula <- function (formula, data = NULL, subset, weights, 
+glFormula <- function(formula, data = NULL, subset, weights, 
     na.action, offset, contrasts = NULL,
     start, mustart, etastart, 
     control = glmerControl(), ...) 
@@ -61,6 +61,25 @@ glFormula <- function (formula, data = NULL, subset, weights,
     
     
     mf$na.action <- na.action
+
+    getVariableNames <- function(terms) {
+      # variables contains everything, even if there is a . - XX construction
+      # Subtracted out terms don't appear in the term labels.
+      
+      factors <- attr(terms, "factors")
+      if (NROW(factors) > 0L) result <- rownames(factors)[rowSums(factors) > 0L]
+      else result <- attr(terms, "term.labels")
+
+      variables <- as.character(attr(terms, "variables"))[-1L]
+      response <- attr(terms, "response")
+       
+      if (length(response) > 0L) {
+        response <- variables[response]
+        setdiff(result, response)
+      } else {
+        result
+      }
+    }
     
     fixedform <- formula
     RHSForm(fixedform) <- nobart(nobars(RHSForm(fixedform)))
@@ -68,7 +87,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     fixedfr <- eval(mf, parent.frame())
     fixedterms <- attr(fixedfr, "terms")
     attr(attr(fr, "terms"), "predvars.fixed") <- attr(fixedterms, "predvars")
-    attr(attr(fr, "terms"), "varnames.fixed") <- names(fixedfr)
+    attr(attr(fr, "terms"), "varnames.fixed") <- getVariableNames(fixedterms)
     attr(fr, "na.action.fixed") <- attr(fixedfr, "na.action")
     
     
@@ -79,7 +98,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     bartfr <- eval(mf, parent.frame())
     bartterms <- attr(bartfr, "terms")
     attr(attr(fr, "terms"), "predvars.bart") <- attr(bartterms, "predvars")
-    attr(attr(fr, "terms"), "varnames.bart") <- names(bartfr)
+    attr(attr(fr, "terms"), "varnames.bart") <- getVariableNames(bartterms)
     bartlevels <-
       lapply(colnames(attr(bartterms, "factors")), function(n) levels(bartfr[[n]]))
     names(bartlevels) <- colnames(attr(bartterms, "factors"))
@@ -93,7 +112,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
     ranfr <- eval(mf, parent.frame())
     ranterms <- attr(ranfr, "terms")
     attr(attr(fr, "terms"), "predvars.random") <- attr(ranterms, "predvars")
-    attr(attr(fr, "terms"), "varnames.random") <- names(ranfr)
+    attr(attr(fr, "terms"), "varnames.random") <- getVariableNames(ranterms)
     attr(fr, "na.action.random") <- attr(ranfr, "na.action")
     
     # We create a total frame with all of the data, and then subset the individual frames
@@ -147,7 +166,7 @@ glFormula <- function (formula, data = NULL, subset, weights,
       attr(bartfr, "terms") <- bartterms
       attr(attr(bartfr, "terms"), "dataClasses") <- attr(bartterms, "dataClasses")[keepcols]
       bartterms <- attr(bartfr, "terms")
-      attr(attr(fr, "terms"), "varnames.bart") <- names(bartfr)
+      attr(attr(fr, "terms"), "varnames.bart") <- getVariableNames(bartterms)
     }
     
     bartData <- dbarts::dbartsData(bartform, bartfr)
@@ -155,27 +174,20 @@ glFormula <- function (formula, data = NULL, subset, weights,
       stop("no bart component detected in formula; consider using rstanarm package instead")
     
     X <- model.matrix(fixedform, fixedfr, contrasts)
+    # drop intercept, offset
+    X <- X[,attr(fixedterms, "term.labels"),drop=FALSE]
     if (is.null(rankX.chk <- control[["check.rankX"]])) 
       rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
     X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
     if (is.null(scaleX.chk <- control[["check.scaleX"]])) 
       scaleX.chk <- eval(formals(lmerControl)[["check.scaleX"]])[[1]]
     X <- checkScaleX(X, kind = scaleX.chk)
-    intercept_col <- match("(Intercept)", colnames(X))
-    if (!is.na(intercept_col))
-      X <- X[, -intercept_col, drop = FALSE]
     
     terms <- attr(fr, "terms")
     
-    get_variable_names_from_terms <- function(terms) {
-      variables <- as.character(attr(terms, "variables"))[-1L]
-      response <- attr(terms, "response")
-      if (length(response) > 0L) variables[-response] else variables
-    }
-    
-    varnames.random <- get_variable_names_from_terms(ranterms)
-    varnames.fixed  <- get_variable_names_from_terms(fixedterms)
-    varnames.bart   <- get_variable_names_from_terms(bartterms)
+    varnames.random <- attr(terms, "varnames.random")
+    varnames.fixed  <- attr(terms, "varnames.fixed")
+    varnames.bart   <- attr(terms, "varnames.bart")
     
     varnames.mixed <- varnames.bart %in% varnames.random | varnames.bart %in% varnames.fixed
     if (any(varnames.mixed))
@@ -1259,9 +1271,10 @@ model.frame.stan4bartFit <- function (formula, type = c("all", "fixed", "random"
   frame <- formula$frame
   
   if (type == "fixed") {
-    frame <- frame[attr(terms(formula), "varnames.fixed")]
+    # can return a lot of useless junk
+    frame <- frame[as.character(attr(terms(formula), "predvars.fixed"))[-1L]]
   } else if (type == "random") {
-    frame <- frame[attr(terms(formula), "varnames.random")]
+    frame <- frame[as.character(attr(terms(formula), "predvars.random"))[-1L]]
   } else if (type == "bart") {
     frame <- frame[attr(terms(formula), "varnames.bart")]
   }

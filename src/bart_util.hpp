@@ -15,7 +15,7 @@ namespace stan4bart {
     double* base_sigmaSamples;
     double* base_trainingSamples;
     double* base_testSamples;
-    double* base_variableCountSamples;
+    std::uint32_t* base_variableCountSamples;
     double* base_kSamples;
     
     size_t base_numSamples;
