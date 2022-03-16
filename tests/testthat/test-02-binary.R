@@ -123,6 +123,9 @@ test_that("predict matches supplied data", {
 })
 
 test_that("ppd has approximately right amount of noise", {
+  # skip because the test is highly platform dependent due to small differences in how
+  # the data are simulated
+  skip_on_cran()
   df.train <- df
   
   set.seed(0)
