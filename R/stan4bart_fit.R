@@ -450,6 +450,16 @@ stan4bart_fit <-
     end_node_prior[[2L]] <- bart_args[["k"]]
     prior_call[[end_node_pos]] <- end_node_prior
   }
+  tree_pars <- c("power", "base", "split.probs")
+  tree_pars <- tree_pars[tree_pars %in% names(bart_args)]
+  if (length(tree_pars) > 0L) {
+    tree_pos <- which(as.character(prior_call) == "cgm")
+    tree_prior <- quote(cgm())
+    tree_prior[1L + seq_along(tree_pars)] <- bart_args[tree_pars]
+    names(tree_prior)[1 + seq_along(tree_pars)] <- tree_pars
+    prior_call[[tree_pos]] <- tree_prior
+  }
+  
   bart_priors <- eval(prior_call)
   model.bart <- new("dbartsModel", bart_priors$tree.prior, bart_priors$node.prior,
                     bart_priors$node.hyperprior, bart_priors$resid.prior,

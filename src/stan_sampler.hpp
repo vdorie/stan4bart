@@ -50,8 +50,8 @@ namespace stan4bart {
   typedef continuous_model_namespace::continuous_model StanModel;
   
   struct StanSampler {
-    std::ostream& c_out;
-    std::ostream& c_err;
+    std::ostream* c_out;
+    std::ostream* c_err;
     stan::callbacks::stream_logger logger;
     R_CheckUserInterrupt_Functor interrupt;
     
@@ -89,12 +89,13 @@ namespace stan4bart {
                            bool includeFixed, bool includeRandom) const;
     double getSigma(const StanModel& model) const;
     
+    void setVerbose(int level);
     // bool isDivergentTransition() const;
     // int getTreeDepth() const;
   };
   
   struct double_writer;
-   
+
   StanModel* createStanModelFromExpression(SEXP dataExpr);
   void deleteStanModel(StanModel* stanModel);
   void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr);

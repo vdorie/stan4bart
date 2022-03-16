@@ -38,7 +38,7 @@ namespace {
     void (*initializeControl)(dbarts::Control* control, SEXP controlExpr);
     void (*initializeData)(dbarts::Data* data, SEXP dataExpr);
     void (*invalidateData)(dbarts::Data* data);
-    void (*initializeModel)(dbarts::Model* model, SEXP modelExpr, const dbarts::Control* control);
+    void (*initializeModel)(dbarts::Model* model, SEXP modelExpr, const dbarts::Control* control, const dbarts::Data* data);
     void (*invalidateModel)(dbarts::Model* model);
     SEXP (*createStateExpression)(const dbarts::BARTFit* fit);
     void (*initializeState)(dbarts::BARTFit* fit, SEXP stateExpr);
@@ -183,7 +183,8 @@ extern "C" {
     }
     
     int chain_id = 1;
-    sampler.stanSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanControl, chain_id, sampler.defaultWarmup, sampler.verbose);
+    sampler.stanSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanControl, chain_id, sampler.defaultWarmup, -1);
+    sampler.stanSampler->setVerbose(sampler.verbose);
     
     bartFunctions.initializeControl(&sampler.bartControl, bartControlExpr);
     sampler.keepTrees = sampler.bartControl.keepTrees;
@@ -195,7 +196,7 @@ extern "C" {
     sampler.bartControl.responseIsBinary = sampler.responseIsBinary;
     
     bartFunctions.initializeData(&sampler.bartData, bartDataExpr);
-    bartFunctions.initializeModel(&sampler.bartModel, bartModelExpr, &sampler.bartControl);
+    bartFunctions.initializeModel(&sampler.bartModel, bartModelExpr, &sampler.bartControl, &sampler.bartData);
     
     sampler.bartSampler = static_cast<dbarts::BARTFit*>(::operator new (sizeof(dbarts::BARTFit)));
     bartFunctions.initializeFit(sampler.bartSampler, &sampler.bartControl, &sampler.bartModel, &sampler.bartData);
@@ -397,7 +398,7 @@ extern "C" {
     sampler.control.numChains = XLENGTH(stateExpr);
     sampler.control.keepTrees = true;
     bartFunctions.initializeData(&sampler.data, dataExpr);
-    bartFunctions.initializeModel(&sampler.model, modelExpr, &sampler.control);
+    bartFunctions.initializeModel(&sampler.model, modelExpr, &sampler.control, &sampler.data);
     
     sampler.fit = static_cast<dbarts::BARTFit*>(::operator new (sizeof(dbarts::BARTFit)));
     bartFunctions.initializeFit(sampler.fit, &sampler.control, &sampler.model, &sampler.data);
@@ -962,7 +963,11 @@ namespace {
     bartFunctions.initializeControl     = std::bit_cast<void (*)(dbarts::Control*, SEXP)>(R_GetCCallable("dbarts", "initializeControl"));
     bartFunctions.initializeData        = std::bit_cast<void (*)(dbarts::Data*, SEXP)>(R_GetCCallable("dbarts", "initializeData"));
     bartFunctions.invalidateData        = std::bit_cast<void (*)(dbarts::Data*)>(R_GetCCallable("dbarts", "invalidateData"));
-    bartFunctions.initializeModel       = std::bit_cast<void (*)(dbarts::Model*, SEXP, const dbarts::Control*)>(R_GetCCallable("dbarts", "initializeModel"));
+    bartFunctions.initializeModel       = std::bit_cast<void (*)(
+      dbarts::Model*,
+      SEXP,
+      const dbarts::Control*,
+      const dbarts::Data*)>(R_GetCCallable("dbarts", "initializeModel"));
     bartFunctions.invalidateModel       = std::bit_cast<void (*)(dbarts::Model*)>(R_GetCCallable("dbarts", "invalidateModel"));
     bartFunctions.setControl            = std::bit_cast<void (*)(dbarts::BARTFit*, const dbarts::Control*)>(R_GetCCallable("dbarts", "setControl"));
     

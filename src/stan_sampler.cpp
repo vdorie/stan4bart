@@ -449,9 +449,9 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
 #endif
 
 StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup, int verbose) :
-  c_out(verbose >  0 ? rstan::io::rcout : nullout),
-  c_err(verbose >= 0 ? rstan::io::rcerr : nullout),
-  logger(c_out, c_out, c_out, c_err, c_err),
+  c_out(verbose >  0 ? &rstan::io::rcout : &nullout),
+  c_err(verbose >= 0 ? &rstan::io::rcerr : &nullout),
+  logger(*c_out, *c_out, *c_out, *c_err, *c_err),
   diagnostic_writer(diagnostic_stream, "# "),
   init_context_ptr(new stan::io::empty_var_context()),
   init_writer("init"),
@@ -505,6 +505,13 @@ StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, i
     Rprintf("bad alloc: %s", e.what());
     throw e;
   }
+}
+
+void StanSampler::setVerbose(int level)
+{
+  c_out = level >  0 ? &rstan::io::rcout : &nullout;
+  c_err = level >= 0 ? &rstan::io::rcerr : &nullout;
+  new (&logger) stan::callbacks::stream_logger(*c_out, *c_out, *c_out, *c_err, *c_err);
 }
 
 void setStanOffset(StanModel& model, const double* offset)
