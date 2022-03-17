@@ -156,9 +156,12 @@ extern "C" {
   static void samplerFinalizer(SEXP samplerExpr);
   static void storedBARTSamplerFinalizer(SEXP samplerExpr);
   
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#ifdef __clang__
+#  if __has_warning("-Wenum-enum-conversion")
+#    define SUPPRESS_ENUM_CONVERSION_WARNING 1
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wenum-enum-conversion"
+#  endif
 #endif
   
   static SEXP createSampler(SEXP bartControlExpr, SEXP bartDataExpr, SEXP bartModelExpr,
@@ -283,7 +286,7 @@ extern "C" {
     return result;
   }
   
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
+#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
 #  pragma clang diagnostic pop
 #endif
   
@@ -320,7 +323,7 @@ extern "C" {
     return result;
   }
   
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
+#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -376,7 +379,7 @@ extern "C" {
     return result;
   }
   
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
+#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
 #  pragma clang diagnostic pop
 #endif
   
@@ -647,7 +650,7 @@ extern "C" {
     return resultExpr;
   }
   
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
+#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -822,7 +825,7 @@ extern "C" {
     return(resultExpr);
   }
   
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
+#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
 #  pragma clang diagnostic pop
 #endif
   
@@ -863,7 +866,7 @@ extern "C" {
 
 namespace {
 
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
+#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
 #  pragma clang diagnostic push
 #  pragma clang diagnostic ignored "-Wenum-enum-conversion"
 #endif
@@ -897,8 +900,9 @@ void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
     sampler.refresh = 200;
 }
 
-#if defined(__clang__) && __has_warning("-Wenum-enum-conversion")
+#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
 #  pragma clang diagnostic pop
+#  undef SUPPRESS_ENUM_CONVERSION_WARNING
 #endif
 
 }
@@ -1087,3 +1091,4 @@ void attribute_visible R_init_stan4bart(DllInfo *info) {
 }
 
 } // extern "C"
+

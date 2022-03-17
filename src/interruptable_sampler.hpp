@@ -25,10 +25,14 @@
 #    pragma clang diagnostic ignored "-Wignored-qualifiers"
 #    pragma clang diagnostic ignored "-Wunneeded-internal-declaration"
 #    pragma clang diagnostic ignored "-Wunused-lambda-capture"
-#    pragma clang diagnostic ignored "-Wdeprecated-copy"
-#    pragma clang diagnostic ignored "-Wmismatched-tags"
 #    pragma clang diagnostic ignored "-Wshorten-64-to-32"
-#    pragma clang diagnostic ignored "-Wfloat-conversion"
+#    pragma clang diagnostic ignored "-Wmismatched-tags"
+#    if __has_warning("-Wdeprecated-copy")
+#      pragma clang diagnostic ignored "-Wdeprecated-copy"
+#    endif
+#    if __has_warning("-Wfloat-conversion")
+#      pragma clang diagnostic ignored "-Wfloat-conversion"
+#    endif
 #    if __has_warning("-Wimplicit-int-float-conversion")
 #      pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
 #    endif
