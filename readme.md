@@ -3,6 +3,8 @@ This package is an implementation of a C++ sampler that uses [BART](https://cran
 ## Installation
 
   1. Install the developer tools for your platform ([Mac OS](https://cran.r-project.org/bin/macosx/tools), [Windows](https://cran.r-project.org/bin/windows/Rtools/)). Mac OS users will need the (linked) gfortan for their respective platforms.
+     * If on an ARM processor, install gfortran from [here](https://mac.r-project.org/libs-arm64/)
+     * If on an Intel processor, install gfortran from [here](https://github.com/fxcoudert/gfortran-for-macOS/releases/download/8.2/gfortran-8.2-Mojave.dmg)
   2. Execute:
 
 ```
