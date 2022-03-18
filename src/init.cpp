@@ -940,7 +940,7 @@ bit_cast(const From& src) noexcept
 // is_trivially_copyable is compiler specific and isn't worth trying to drop in
 // an implementation.
 template <class To, class From>
-typename To
+To
 bit_cast(const From& src)
 {
   To dst;
