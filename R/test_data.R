@@ -99,9 +99,8 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
     if (is.numeric(X.col.dropped) && length(X.col.dropped) > 0)
       X <- X[, -X.col.dropped, drop = FALSE]
     
-    intercept_col <- match("(Intercept)", colnames(X))
-    if (!is.na(intercept_col))
-      X <- X[, -intercept_col, drop = FALSE]
+    keepcols <- colnames(X) %not_in% c("(Intercept)", "`(offset)`")
+    X <- X[,keepcols,drop=FALSE]
     result$X <- X
 
   }

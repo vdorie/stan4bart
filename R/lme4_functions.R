@@ -175,7 +175,8 @@ glFormula <- function(formula, data = NULL, subset, weights,
     
     X <- model.matrix(fixedform, fixedfr, contrasts)
     # drop intercept, offset
-    X <- X[,attr(fixedterms, "term.labels"),drop=FALSE]
+    keepcols <- colnames(X) %not_in% c("(Intercept)", "`(offset)`")
+    X <- X[,keepcols,drop=FALSE]
     if (is.null(rankX.chk <- control[["check.rankX"]])) 
       rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
     X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)
