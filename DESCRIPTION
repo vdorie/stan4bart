@@ -1,6 +1,6 @@
 Package: stan4bart
 Version: 0.0-3
-Date: 2022-03-16
+Date: 2022-03-24
 Title: Bayesian Additive Regression Trees with Stan-Sampled Parametric Extensions 
 Authors@R: c(
   person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
@@ -53,7 +53,7 @@ Authors@R: c(
 Depends:
   R (>= 3.5-0),
   methods,
-  dbarts (>= 0.9-20)
+  dbarts (>= 0.9-21)
 Imports:
   stats,
   Matrix,

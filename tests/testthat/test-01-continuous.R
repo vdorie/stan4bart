@@ -232,3 +232,26 @@ test_that("ppd has approximately right amount of noise", {
 })
 
 
+test_that("data split in call itself based on variable in data frame", {
+  df$train <- sample(c(rep(TRUE, floor(0.8 * nrow(df))), rep(FALSE, nrow(df) - floor(0.8 * nrow(df)))))
+  df$X10 <- as.factor(LETTERS[1 + round(4 * df$X10, 0)])
+
+  fit <- stan4bart(y ~ bart(. - y - X10) + X10, df[df$train,],
+                   cores = 1, verbose = -1L, chains = 3, warmup = 1, iter = 3,
+                   bart_args = list(n.trees = 4),
+                   test = df[!df$train,])
+
+  terms <- attr(fit$frame, "terms")
+
+  expect_equal(attr(terms, "varnames.fixed"), "X10")
+  expect_setequal(attr(terms, "varnames.bart"), c(
+    "X1", "X2", "X3", "X4", "X5", "X6", "X7", "X8", "X9", "g.1", "g.2",
+    "z", "train"))
+  expect_equal(attr(terms, "varnames.random"), character())
+  expect_equal(nrow(fit$frame), sum(df$train == TRUE))
+
+  
+  expect_setequal(colnames(fit$test$frame), colnames(df))
+  expect_equal(nrow(fit$test$frame), sum(df$train == FALSE))
+})
+
