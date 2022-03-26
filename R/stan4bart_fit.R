@@ -422,6 +422,7 @@ stan4bart_fit <-
   # have to make sure that end node priors that are constructed as in chi(df, scale)
   # work correctly
   if (is.null(bart_args)) bart_args <- list()
+  if (!is.list(bart_args)) bart_args <- as.list(bart_args)
   data.bart@sigma <- sigma_init
   control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
                                               n.thin = skip.bart, n.threads = 1L,
