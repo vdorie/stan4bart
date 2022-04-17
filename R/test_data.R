@@ -102,8 +102,8 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass,
     keepcols <- colnames(X) %not_in% c("(Intercept)", "`(offset)`")
     X <- X[,keepcols,drop=FALSE]
     result$X <- X
-
   }
+
   if (exists("mf.bart")) {
     if (inherits(na.action.all, "omit")) {
       bart_rows <- seq_len(nrow(result$frame)) %not_in% (result$na.action.bart %ORifNULL% integer(0L))

@@ -388,7 +388,11 @@ getTreatmentData <- function(object, treatment) {
   if (length(uq) != 2L || !all(uq == c(0, 1)))
     stop("treatment must in { 0, 1 }^n")
   fr.test <- object$frame
-  fr.test[[treatment]] <- 1 - fr.test[[treatment]]
+  if (is.logical(fr.test[[treatment]])) {
+    fr.test[[treatment]] <- !fr.test[[treatment]]
+  } else {
+    fr.test[[treatment]] <- 1 - fr.test[[treatment]]
+  }
   
   nlist(fr.test, treatment)
 }

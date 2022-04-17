@@ -1,6 +1,13 @@
 \name{NEWS}
 \title{stan4bart News}
 \encoding{UTF-8}
+\section{CHANGES IN VERSION 0.0-4}{
+  \subsection{BUG FIXES}{
+    \itemize{
+      \item \code{treated} argument now works correctly with logical vectors.
+    }
+  }
+}
 \section{CHANGES IN VERSION 0.0-3}{
   \subsection{NEW FEATURES}{
     \itemize{

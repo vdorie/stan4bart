@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.64)
-AC_INIT(stan4bart, 0.0.2, vdorie@gmail.com)
+AC_INIT(stan4bart, 0.0.4, vdorie@gmail.com)
 AC_CONFIG_SRCDIR([src/init.cpp])
 AC_CONFIG_AUX_DIR([tools/build-aux])
 AC_CONFIG_HEADERS([src/config.h])

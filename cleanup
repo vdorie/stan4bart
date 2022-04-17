@@ -1,5 +1,9 @@
 #!/bin/sh
 
+if [ -z ${SHLIB+x} ]; then
+  SHLIB="stan4bart"`R CMD config SHLIB_EXT`
+  export SHLIB
+fi
 if [ -f src/Makevars ]; then
   (cd src; make -f Makevars clean)
 else
