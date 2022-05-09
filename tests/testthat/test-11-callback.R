@@ -45,21 +45,25 @@ test_that("callback is passed sample correctly", {
                    callback = callback)
   expect_is(fit, "stan4bartFit")
 
-  indiv.bart  <- extract(fit, type = "indiv.bart",  sample = "test", combine_chains = FALSE)
-  indiv.fixef <- extract(fit, type = "indiv.fixef", sample = "test", combine_chains = FALSE)
-  indiv.ranef <- extract(fit, type = "indiv.ranef", sample = "test", combine_chains = FALSE)
+  indiv.bart <- fit$callback[seq_len(20L),,]
+  indiv.fixef <- fit$callback[seq_len(20L) + 20L,,]
+  indiv.ranef <- fit$callback[seq_len(20L) + 40L,,]
 
-  expect_equal(unname(indiv.bart), unname(fit$callback[seq_len(20L),,]))
-  expect_equal(unname(indiv.fixef), unname(fit$callback[seq_len(20L) + 20L,,]))
-  expect_equal(unname(indiv.ranef), unname(fit$callback[seq_len(20L) + 40L,,]))
+  expect_equal(unname(indiv.bart),
+               unname(extract(fit, type = "indiv.bart",  sample = "test", combine_chains = FALSE)))
+  expect_equal(unname(indiv.fixef),
+               unname(extract(fit, type = "indiv.fixef", sample = "test", combine_chains = FALSE)))
+  expect_equal(unname(indiv.ranef),
+               unname(extract(fit, type = "indiv.ranef", sample = "test", combine_chains = FALSE)))
   
-  ev <- extract(fit, "ev", sample = "test", combine_chains = FALSE)
-  expect_equal(unname(indiv.fixef + indiv.ranef + indiv.bart), unname(ev))
+  ev <- indiv.fixef + indiv.ranef + indiv.bart
+  expect_equal(unname(ev),
+               unname(extract(fit, "ev", sample = "test", combine_chains = FALSE)))
 
   fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
                    data = df.train,
                    test = df.test,
-                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   cores = 1, verbose = -1L, chains = 2, warmup = 7, iter = 13,
                    bart_args = list(n.trees = 11),
                    seed = 0, keep_fits = FALSE,
                    callback = callback)
@@ -68,7 +72,8 @@ test_that("callback is passed sample correctly", {
   indiv.bart <- fit$callback[seq_len(20L),,]
   indiv.fixef <- fit$callback[seq_len(20L) + 20L,,]
   indiv.ranef <- fit$callback[seq_len(20L) + 40L,,]
-  expect_equal(unname(indiv.fixef + indiv.ranef + indiv.bart), unname(ev))
+  
+  expect_equal(unname(ev), unname(indiv.fixef + indiv.ranef + indiv.bart))
 })
 
 
@@ -81,18 +86,21 @@ test_that("callback works with multiple threads", {
                    seed = 0,
                    callback = callback)
   expect_is(fit, "stan4bartFit")
-  
-  expect_is(fit, "stan4bartFit")
 
-  indiv.bart  <- extract(fit, type = "indiv.bart",  sample = "test", combine_chains = FALSE)
-  indiv.fixef <- extract(fit, type = "indiv.fixef", sample = "test", combine_chains = FALSE)
-  indiv.ranef <- extract(fit, type = "indiv.ranef", sample = "test", combine_chains = FALSE)
-
-  expect_equal(unname(indiv.bart), unname(fit$callback[seq_len(20L),,]))
-  expect_equal(unname(indiv.fixef), unname(fit$callback[seq_len(20L) + 20L,,]))
-  expect_equal(unname(indiv.ranef), unname(fit$callback[seq_len(20L) + 40L,,]))
   
-  ev <- extract(fit, "ev", sample = "test", combine_chains = FALSE)
-  expect_equal(unname(indiv.fixef + indiv.ranef + indiv.bart), unname(ev))
+  indiv.bart <- fit$callback[seq_len(20L),,]
+  indiv.fixef <- fit$callback[seq_len(20L) + 20L,,]
+  indiv.ranef <- fit$callback[seq_len(20L) + 40L,,]
+
+  expect_equal(unname(indiv.bart),
+               unname(extract(fit, type = "indiv.bart",  sample = "test", combine_chains = FALSE)))
+  expect_equal(unname(indiv.fixef),
+               unname(extract(fit, type = "indiv.fixef", sample = "test", combine_chains = FALSE)))
+  expect_equal(unname(indiv.ranef),
+               unname(extract(fit, type = "indiv.ranef", sample = "test", combine_chains = FALSE)))
+  
+  ev <- indiv.fixef + indiv.ranef + indiv.bart
+  expect_equal(unname(ev),
+               unname(extract(fit, "ev", sample = "test", combine_chains = FALSE)))
 })
 

@@ -837,16 +837,18 @@ extern "C" {
           sampler.stanSampler->copyOutParameters(REAL(stan_pars), sampler.keepFits ? -1 : 0);
 
           SEXP callbackIterResult = PROTECT(Rf_eval(callbackClosure, sampler.callbackEnv));
-          
+          bool resultAllocated = false;
           if (callbackIterResult != R_NilValue && rc_getLength(callbackIterResult) > 0) {
             callbackResultLength = rc_getLength(callbackIterResult);
             if (callbackResults == R_NilValue) {
               callbackResults = PROTECT(rc_newReal(callbackResultLength * numIter));
+              resultAllocated = true;
               ++protectCount;
               rc_setDims(callbackResults, static_cast<int>(callbackResultLength), numIter, -1);
               if (rc_getNames(callbackIterResult) != R_NilValue) {
-                rc_setDimNames(callbackResults, rc_newList(2));
-                SEXP dimNames = rc_getDimNames(callbackResults);
+                SEXP dimNames = PROTECT(rc_newList(2));
+                rc_setDimNames(callbackResults, dimNames);
+                UNPROTECT(1);
                 SET_VECTOR_ELT(dimNames, 0, rc_getNames(callbackIterResult));
                 SET_VECTOR_ELT(dimNames, 1, R_NilValue);
               }
@@ -855,7 +857,12 @@ extern "C" {
                         const_cast<const double*>(REAL(callbackIterResult)),
                         callbackResultLength * sizeof(double));
           }
-          UNPROTECT(1);
+          // We aren't balanced if it is our first result, so we have to unprotect
+          // something that isn't the most recent on the stack.
+          if (resultAllocated)
+            UNPROTECT_PTR(callbackIterResult);
+          else
+            UNPROTECT(1);
         }
 
         // Rprintf("increment bart pointers\n");
