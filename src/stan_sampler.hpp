@@ -88,6 +88,7 @@ namespace stan4bart {
     void getParametricMean(const StanModel& model, double* result,
                            bool includeFixed, bool includeRandom) const;
     double getSigma(const StanModel& model) const;
+    void copyOutParameters(double* result, int offset) const;
     
     void setVerbose(int level);
     // bool isDivergentTransition() const;

@@ -544,6 +544,11 @@ double StanSampler::getSigma(const StanModel& model) const
   return model.get_aux(sample_writer.x_curr + sample_writer_offset);
 }
 
+void StanSampler::copyOutParameters(double* result, int offset) const
+{
+  std::memcpy(result, const_cast<const double*>(sample_writer.x_curr) + offset * num_pars, num_pars * sizeof(double));
+}
+
 void StanSampler::run(bool isWarmup)
 {
   sampler->run(isWarmup);

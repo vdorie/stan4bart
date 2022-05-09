@@ -18,6 +18,8 @@ stan4bart <-
            refresh = max(iter %/% 10L, 1L),
            offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
            seed = NA_integer_,
+           keep_fits = TRUE,
+           callback = NULL,
            stan_args = NULL,
            bart_args = NULL)
 {
@@ -200,35 +202,45 @@ stan4bart <-
   
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)
   
+  callbackEnv <- NULL
+  if (!is.null(callback))
+    callbackEnv <- list2env(result, parent = baseenv())
+  
+  
   chain_results <- stan4bart_fit(result,
-                                  family,
-                                  bart_offset_init,
-                                  sigma_init,
-                                  verbose,
-                                  iter,
-                                  warmup,
-                                  skip,
-                                  chains,
-                                  cores,
-                                  refresh,
-                                  seed,
-                                  stan_args,
-                                  bart_args)
+                                 family,
+                                 bart_offset_init,
+                                 sigma_init,
+                                 verbose,
+                                 iter,
+                                 warmup,
+                                 skip,
+                                 chains,
+                                 cores,
+                                 refresh,
+                                 seed,
+                                 keep_fits,
+                                 callback,
+                                 callbackEnv,
+                                 stan_args,
+                                 bart_args)
   
   samples <- package_samples(chain_results, colnames(bartData@x))
   for (name in names(samples)) 
     result[[name]] <- samples[[name]]
   
-  stan_par_names <- dimnames(result$stan)[[1L]]
-  diagnostic_names <- stan_par_names[endsWith(stan_par_names, "__")]
-  
-  upar_names <- stan_par_names[grepl("^(?:gamma|z_beta|global|local|caux|mix|one_over_lambda|z_b|z_T|rho|zeta|tau|aux_unscaled)\\.", stan_par_names, perl = TRUE)]
-  tpar_names <- setdiff(stan_par_names, c(diagnostic_names, upar_names))
-  
-  result$par_names <- list(diagnostic = diagnostic_names, upar = upar_names, tpar = tpar_names)
-  
-  if (as.integer(verbose) >= 0L)
-    check_sampler_diagnostics(result, stan_args, length(upar_names))
+  if (!is.null(result$stan)) {
+    stan_par_names <- dimnames(result$stan)[[1L]]
+    diagnostic_names <- stan_par_names[endsWith(stan_par_names, "__")]
+    
+    upar_names <- stan_par_names[grepl("^(?:gamma|z_beta|global|local|caux|mix|one_over_lambda|z_b|z_T|rho|zeta|tau|aux_unscaled)\\.", stan_par_names, perl = TRUE)]
+    tpar_names <- setdiff(stan_par_names, c(diagnostic_names, upar_names))
+    
+    result$par_names <- list(diagnostic = diagnostic_names, upar = upar_names, tpar = tpar_names)
+    
+    if (as.integer(verbose) >= 0L)
+      check_sampler_diagnostics(result, stan_args, length(upar_names))
+  }
   
   result
 }
@@ -279,89 +291,142 @@ check_sampler_diagnostics <- function(object, stan_args, n_upars)
 
 package_samples <- function(chain_results, bart_var_names) {
   result <- list()
+  warmup <- list()
   n_chains  <- length(chain_results)
   # must have a bart component, so we use that to determine the number of samples
   
    
-  n_warmup <- 0L
-  if (!is.null(chain_results[[1L]]$warmup) && !is.null(dim(chain_results[[1L]]$warmup$bart$train)))
-    n_warmup <- dim(chain_results[[1L]]$warmup$bart$train)[2L]
-  n_obs      <- dim(chain_results[[1L]]$sample$bart$train)[1L]
-  n_obs_test <- 0L
-  if (!is.null(chain_results[[1L]]$sample$bart$test))
-    n_obs_test <- dim(chain_results[[1L]]$sample$bart$test)[1L]
-  n_samples <- dim(chain_results[[1L]]$sample$bart$train)[2L]
-  
-  n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
+  n_warmup <- NA_integer_
+  n_obs <- NA_integer_
+  n_samples <- NA_integer_
+  n_obs_test <- NA_integer_
+  n_callback <- NA_integer_
+  # Currently, if one of warmup or sample exists, the other must as well. In addition
+  # if bart$test exists so much bart$train. However, we assume neither in case
+  # future options allow saving one selectively.
+  if (!is.null(chain_results[[1L]]$warmup)) {
+    if (!is.null(chain_results[[1L]]$warmup$bart$train)) {
+      n_warmup <- dim(chain_results[[1L]]$warmup$bart$train)[2L]
+    }
+    if (!is.null(chain_results[[1L]]$warmup$callback)) {
+      n_warmup <- dim(chain_results[[1L]]$warmup$callback)[2L]
+    }
+  }
+  if (!is.null(chain_results[[1L]]$sample)) {
+    if (!is.null(chain_results[[1L]]$sample$bart$train)) {
+      n_obs <- dim(chain_results[[1L]]$sample$bart$train)[1L]
+      n_samples <- dim(chain_results[[1L]]$sample$bart$train)[2L]
+    }
+    if (!is.null(chain_results[[1L]]$sample$bart$test)) {
+      n_obs_test <- dim(chain_results[[1L]]$sample$bart$test)[1L]
+      n_samples <- dim(chain_results[[1L]]$sample$bart$test)[2L]
+    }
+    if (!is.null(chain_results[[1L]]$sample$callback)) {
+      n_callback <- dim(chain_results[[1L]]$sample$callback)[1L]
+      n_samples <- dim(chain_results[[1L]]$sample$callback)[2L]
+    }
+    if (!is.null(dim(chain_results[[1L]]$sample$bart$varcount))) {
+      n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
+      n_samples <- dim(chain_results[[1L]]$sample$bart$varcount)[2L]
+    }
+  }
   
   chain_names <- paste0("chain:", seq_len(n_chains))
   
   # grab the bart bits
-  result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
-                               chain_results[[i_chains]]$sample$bart$train),
-                             dim = c(n_obs, n_samples, n_chains),
-                             dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
-  
-  if (n_obs_test > 0L) {
+  if (!is.null(chain_results[[1L]]$sample$bart$train)) {
+    n_obs <- dim(chain_results[[1L]]$sample$bart$train)[1L]
+    n_samples <- dim(chain_results[[1L]]$sample$bart$train)[2L]
+    result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
+                                 chain_results[[i_chains]]$sample$bart$train),
+                               dim = c(n_obs, n_samples, n_chains),
+                               dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+    if (!is.na(n_warmup) && n_warmup > 0L) {
+       warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
+                                   chain_results[[i_chains]]$warmup$bart$train),
+                                 dim = c(n_obs, n_warmup, n_chains),
+                                 dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+    }
+  }
+  if (!is.null(chain_results[[1L]]$sample$bart$test)) {
+    n_obs_test <- dim(chain_results[[1L]]$sample$bart$test)[1L]
+    n_samples <- dim(chain_results[[1L]]$sample$bart$test)[2L]
     result$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
                                 chain_results[[i_chains]]$sample$bart$test),
                               dim = c(n_obs_test, n_samples, n_chains),
                               dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
-  }
-  result$bart_varcount <- array(sapply(seq_len(n_chains), function(i_chains)
-                               chain_results[[i_chains]]$sample$bart$varcount),
-                             dim = c(n_bart_vars, n_samples, n_chains),
-                             dimnames = list(predictor = bart_var_names, iterations = NULL, chain = chain_names))
-  
-  if (!is.null(chain_results[[1L]]$sample$bart$k)) {
-    result$k <- matrix(sapply(seq_len(n_chains), function(i_chains)
-                              chain_results[[i_chains]]$sample$bart$k),
-                       n_samples, n_chains,
-                       dimnames = list(iterations = NULL, chain = chain_names))
-  }
-
-  # treat stan as a big array with no processing, until someone asks
-  stan_par_names <- dimnames(chain_results[[1L]]$sample$stan)[[1L]]
-  n_stan_pars <- length(stan_par_names)
-  
-  result$stan <- array(sapply(seq_len(n_chains), function(i_chains)
-                              chain_results[[i_chains]]$sample$stan),
-                       dim = c(n_stan_pars, n_samples, n_chains),
-                       dimnames = list(parameters = stan_par_names, iterations = NULL, chain = chain_names))
-  
-  # Do it all again if there are warmup samples
-  if (n_warmup > 0L) {
-    warmup <- list()
-    
-    warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
-                                 chain_results[[i_chains]]$warmup$bart$train),
-                               dim = c(n_obs, n_warmup, n_chains),
-                               dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
-    if (n_obs_test > 0L) {
+    if (!is.na(n_warmup) && n_warmup > 0L) {
       warmup$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
                                   chain_results[[i_chains]]$warmup$bart$test),
                                 dim = c(n_obs_test, n_warmup, n_chains),
                                 dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
     }
-    warmup$bart_varcount <- array(sapply(seq_len(n_chains), function(i_chains)
-                                    chain_results[[i_chains]]$warmup$bart$varcount),
-                                  dim = c(n_bart_vars, n_warmup, n_chains),
+  }
+  if (!is.null(chain_results[[1L]]$sample$bart$varcount)) {
+    n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
+    n_samples <- dim(chain_results[[1L]]$sample$bart$varcount)[2L]
+    result$bart_varcount <- array(sapply(seq_len(n_chains), function(i_chains)
+                                    chain_results[[i_chains]]$sample$bart$varcount),
+                                  dim = c(n_bart_vars, n_samples, n_chains),
                                   dimnames = list(predictor = bart_var_names, iterations = NULL, chain = chain_names))
-    
-    if (!is.null(chain_results[[1L]]$warmup$bart$k)) {
+    if (!is.na(n_warmup) && n_warmup > 0L) {
+      warmup$bart_varcount <- array(sapply(seq_len(n_chains), function(i_chains)
+                                      chain_results[[i_chains]]$warmup$bart$varcount),
+                                    dim = c(n_bart_vars, n_warmup, n_chains),
+                                    dimnames = list(predictor = bart_var_names, iterations = NULL, chain = chain_names))
+    }
+  }
+  
+  if (!is.null(chain_results[[1L]]$sample$bart$k)) {
+    n_samples <- length(chain_results[[1L]]$sample$bart$k)
+    result$k <- matrix(sapply(seq_len(n_chains), function(i_chains)
+                              chain_results[[i_chains]]$sample$bart$k),
+                       n_samples, n_chains,
+                       dimnames = list(iterations = NULL, chain = chain_names))
+    if (!is.na(n_warmup) && n_warmup > 0L) {
       warmup$k <- matrix(sapply(seq_len(n_chains), function(i_chains)
                            chain_results[[i_chains]]$warmup$bart$k),
                          n_warmup, n_chains,
                          dimnames = list(iterations = NULL, chain = chain_names))
     }
-    
-    warmup$stan <- array(sapply(seq_len(n_chains), function(i_chains)
-                          chain_results[[i_chains]]$warmup$stan),
-                        dim = c(n_stan_pars, n_warmup, n_chains),
-                        dimnames = list(parameters = stan_par_names, iterations = NULL, chain = chain_names))
-    
-    result$warmup <- warmup
   }
+
+  # treat stan as a big array with no processing, until someone asks
+  if (!is.null(chain_results[[1L]]$sample$stan)) {
+    stan_par_names <- dimnames(chain_results[[1L]]$sample$stan)[[1L]]
+    n_samples <- dim(chain_results[[1L]]$sample$stan)[2L]
+    n_stan_pars <- length(stan_par_names)
+  
+    result$stan <- array(sapply(seq_len(n_chains), function(i_chains)
+                                chain_results[[i_chains]]$sample$stan),
+                         dim = c(n_stan_pars, n_samples, n_chains),
+                         dimnames = list(parameters = stan_par_names, iterations = NULL, chain = chain_names))
+    if (!is.na(n_warmup) && n_warmup > 0L) {
+      warmup$stan <- array(sapply(seq_len(n_chains), function(i_chains)
+                            chain_results[[i_chains]]$warmup$stan),
+                          dim = c(n_stan_pars, n_warmup, n_chains),
+                          dimnames = list(parameters = stan_par_names, iterations = NULL, chain = chain_names))
+    }
+  }
+
+  if (!is.null(chain_results[[1L]]$sample$callback)) {
+    result$callback <- array(sapply(seq_len(n_chains), function(i_chains)
+                              chain_results[[i_chains]]$sample$callback),
+                             dim = c(n_callback, n_samples, n_chains),
+                             dimnames = list(callback = dimnames(chain_results[[1L]]$sample$callback)[[1L]],
+                                                                 iterations = NULL, chain = chain_names))
+
+    if (!is.na(n_warmup) && n_warmup > 0L) {
+      warmup$callback <- array(sapply(seq_len(n_chains), function(i_chains)
+                                chain_results[[i_chains]]$warmup$callback),
+                               dim = c(n_callback, n_warmup, n_chains),
+                               dimnames = list(callback = dimnames(chain_results[[1L]]$warmup$callback)[[1L]],
+                                                                   iterations = NULL, chain = chain_names))
+    }
+  }
+  
+  if (!is.na(n_warmup) && n_warmup > 0L)
+    result$warmup <- warmup
   
   if (!is.null(attr(chain_results, "sampler.bart"))) {
     result$sampler.bart <- attr(chain_results, "sampler.bart")

@@ -72,6 +72,9 @@ stan4bart_fit <-
            cores,
            refresh,
            seed,
+           keep_fits,
+           callback,
+           callbackEnv,
            stan_args,
            bart_args)
 {  
@@ -418,6 +421,13 @@ stan4bart_fit <-
   refresh <- as.integer(refresh)
   
   offset_type <- which(offset_type == c("default", "fixef", "ranef", "bart", "parametric")) - 1L
+
+  if (!is.logical(keep_fits) || length(keep_fits) != 1L || is.na(keep_fits))
+    stop("'keep_fits' must be TRUE or FALSE")
+  if (!is.null(callback)) {
+    if (!is.function(callback)) stop("callback must be a function")
+    if (length(formals(callback)) != 3L) stop("callback function must take exactly 3 arguments")
+  }
   
   # have to make sure that end node priors that are constructed as in chi(df, scale)
   # work correctly
@@ -476,8 +486,9 @@ stan4bart_fit <-
   )
   
   control.common <- nlist(iter, warmup, verbose, refresh, is_binary = is_bernoulli,
-                          offset = offset, offset_type = offset_type,
-                          bart_offset_init = bart_offset_init, sigma_init = sigma_init)
+                          offset, offset_type,
+                          bart_offset_init, sigma_init,
+                          keep_fits, callback, callbackEnv)
   
   chainResults <- vector("list", chains)
   runSingleThreaded <- cores <= 1L || chains <= 1L

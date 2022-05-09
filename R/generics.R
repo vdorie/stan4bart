@@ -170,7 +170,7 @@ extract.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
                     "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan",
-                    "trees"),
+                    "trees", "callback"),
            sample = c("train", "test"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
@@ -203,6 +203,17 @@ extract.stan4bartFit <-
     stop("'include_warmup' must be logical or \"only\"")
   } else {
     only_warmup <- FALSE
+  }
+
+  if (type == "callback") {
+    if ((include_warmup && is.null(object$warmup$callback)) ||
+        (!only_warmup && is.null(object$sample$callback)))
+      stop("cannot extract callback samples for model fit without callback function")
+    if (any(sapply(matchedCall()[c("sample", "sample_new_levels")], function(x) !is.null(x)))) {
+      warning("'sample' and 'sample_new_levels' arguments ignored when extracting callback samples")
+    }
+    result <- get_samples(object$callback, include_warmup, only_warmup)
+    return(if (combine_chains) combine_chains_f(result) else result)
   }
   
   is_bernoulli <- object$family$family == "binomial"
@@ -449,7 +460,8 @@ extract.stan4bartFit <-
 fitted.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
-                    "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan"),
+                    "indiv.bart", "sigma", "Sigma", "k", "varcount", "stan",
+                    "callback"),
            sample = c("train", "test"),
            sample_new_levels = TRUE,
            ...)
