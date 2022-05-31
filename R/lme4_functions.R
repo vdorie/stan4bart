@@ -19,7 +19,7 @@
 glFormula <- function(formula, data = NULL, subset, weights, 
     na.action, offset, contrasts = NULL,
     start, mustart, etastart, 
-    control = glmerControl(), ...) 
+    control = glmerControl(), verbose = FALSE, ...) 
 {
     control <- control$checkControl
     mf <- mc <- match.call()
@@ -191,10 +191,11 @@ glFormula <- function(formula, data = NULL, subset, weights,
     varnames.bart   <- attr(terms, "varnames.bart")
     
     varnames.mixed <- varnames.bart %in% varnames.random | varnames.bart %in% varnames.fixed
-    if (any(varnames.mixed))
+    if (any(varnames.mixed) && as.integer(verbose) > -1L) {
       warning("variable(s) '", paste0(varnames.bart[varnames.mixed], collapse = "', '"),
               "' that appear in both parametric and nonparametric are not identifiable; ",
               "model will fit but some results may be uninterpretable")
+    }
     
     if (length(varnames.random) == 0L && length(varnames.fixed) == 0L)
       stop("no parametric component detected in formula; consider using dbarts package instead")

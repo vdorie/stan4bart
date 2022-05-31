@@ -102,10 +102,12 @@ stan4bart <-
   }
   
   if (!is.null(test)) {
-    testDataFrames <- getTestDataFrames(result, test, na.action)
+    testDataFrames <- getTestDataFrames(result, test, na.action, weights)
     result$test <- testDataFrames
     
     if (!is.null(offset_test)) result$test$offset <- offset_test
+    if (!is.null(weights) && length(weights) > 0L)
+      result$test$frame[["(weights)"]] <- with(result$test$frame, eval(mc$weights))
     
     result$bartData@x.test <- testDataFrames$X.bart
     result$bartData@testUsesRegularOffset <- FALSE
@@ -197,8 +199,9 @@ stan4bart <-
   # to work. Since 'chi' is never defined, use a function that returns
   # a quoted version of the call.
   defn_env <- new.env(parent = parent.frame())
-  defn_env$chi <- function(degreesOfFreedom = 1.25, scale = Inf)
+  defn_env$chi <- function(degreesOfFreedom = 1.25, scale = Inf) {
     match.call()
+  }
   
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)
   

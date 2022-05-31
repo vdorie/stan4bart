@@ -294,7 +294,6 @@ extract.stan4bartFit <-
   }
   
   n_samples <- dim(object$bart_train)[2L]
-  n_obs     <- 0L
   n_chains  <- dim(object$bart_train)[3L]
   n_fixef <- sum(fixef_parameters)
   n_warmup <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
@@ -433,14 +432,28 @@ extract.stan4bartFit <-
   if (type %in% c("ev", "ppd") && is_bernoulli)
     result <- pnorm(result)
   if (type %in% "ppd") {
-    if (is_bernoulli) {
-      result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
+    weights <- if (sample == "test") object$test$frame[["(weights)"]] else object$frame[["(weights)"]]
+    if (is.null(weights) || length(weights) == 0L) {
+      if (is_bernoulli) {
+        result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
+      } else {
+        sigma <- extract(object, "sigma", combine_chains = TRUE)
+        result <- result + 
+          array(rnorm(dim(result)[1L] * n_samples * n_chains, 0, rep(as.vector(sigma),
+                                                                     each = dim(result)[1L])),
+               c(dim(result)[1L], n_samples, n_chains))
+      }
     } else {
-      sigma <- extract(object, "sigma", combine_chains = TRUE)
-      result <- result + 
-        array(rnorm(dim(result)[1L] * n_samples * n_chains, 0, rep(as.vector(sigma),
-                                                                   each = dim(result)[1L])),
-             c(dim(result)[1L], n_samples, n_chains))
+      if (is_bernoulli) {
+        result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
+        result <- weights * result
+      } else {
+        n_obs <- dim(result)[1L]
+        n_total_samples <- n_samples * n_chains
+        sigma <- extract(object, "sigma", combine_chains = TRUE)
+        sigma <- rep_len(sigma, n_obs * n_total_samples) * rep(sqrt(1 / weights), each = n_total_samples)
+        result <- aperm(aperm(result, c(2L, 3L, 1L)) + rnorm(n_obs * n_total_samples, 0, sigma), c(3L, 1L, 2L))
+      }
     }
   }
     

@@ -15,7 +15,7 @@ rm(testData)
 
 test_that("fit issues warning if overparameterized", {
   expect_warning(stan4bart(y ~ X1 + bart(X1), df,
-                           cores = 1L, verbose = -1L, chains = 1L, warmup = 0L, iter = 1L,
+                           cores = 1L, verbose = 0L, chains = 1L, warmup = 0L, iter = 1L,
                            bart_args = list(n.trees = 1L)))
 })
 

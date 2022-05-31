@@ -1,4 +1,4 @@
-getTestDataFrames <- function(object, newdata, na.action = na.pass,
+getTestDataFrames <- function(object, newdata, na.action = na.pass, weights = NULL,
                               type = c("all", "random", "fixed", "bart"))
 {
   type <- match.arg(type)
