@@ -1,10 +1,5 @@
-configure script for makevars (posix memalign detection, among others)
-initalize to lmer ranef?
 cleanup file names
 strip down stan model
-pass through more control options (e.g. n.cuts)
-
-binary model
 
 
 Notes: continuous.hpp compiled using

@@ -930,6 +930,8 @@ extern "C" {
     
     Rprintf("stan control:\n");
     printStanControl(sampler.stanControl);
+    Rprintf("stan model:\n");
+    stan4bart::printStanModel(sampler.stanModel);
     Rprintf("bart init:\n");
     bartFunctions.printInitialSummary(sampler.bartSampler);
     

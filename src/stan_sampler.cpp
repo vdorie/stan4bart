@@ -607,5 +607,12 @@ void printStanControl(const StanControl& control)
           control.stepsize_jitter, control.max_treedepth);
 }
 
+
+void printStanModel(const StanModel* model)
+{
+  model->print(rstan::io::rcout);
+}
+
+
 }
 

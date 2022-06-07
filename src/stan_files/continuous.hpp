@@ -2460,13 +2460,14 @@ class continuous_model final : public model_base_crtp<continuous_model> {
           lp_accum__.add(normal_lpdf<false>(y, eta, actual_aux));
         } else {
           current_statement__ = 76;
-          validate_non_negative_index("summands", "N", N);
-          Eigen::Matrix<local_scalar_t__, -1, 1> summands;
-          current_statement__ = 78;
-          assign(summands, pw_gauss(y, eta, actual_aux, pstream__),
-            "assigning variable summands");
-          current_statement__ = 79;
-          lp_accum__.add(dot_product(weights, summands));
+          lp_accum__.add(
+            (((-0.5 * N) *
+               stan::math::log(
+                 ((6.283185307179586232 * actual_aux) * actual_aux))) -
+              ((0.5 *
+                 stan::math::dot_product(weights,
+                   stan::math::square(stan::math::subtract(y, eta)))) /
+                (actual_aux * actual_aux))));
         }
         current_statement__ = 91;
         if ((primitive_value((primitive_value(logical_negation(is_binary)) &&
@@ -3580,7 +3581,44 @@ class continuous_model final : public model_base_crtp<continuous_model> {
         // len_theta_L; // theta_L
     }
   ~continuous_model() { }
-  
+    
+    void print(std::ostream& out) const {
+       out << "  prior for linear coefficients: " << prior_dist;
+       if (prior_dist > 0) {
+         out << "\n    mean: " << prior_mean__(0);
+         for (int i = 1; i < std::min(K, 4); ++i)
+           out << ", " << prior_mean__(i);
+         if (K > 4)
+           out << ", ...";
+
+         out << "\n    scale: " << prior_scale__(0);
+         for (int i = 1; i < std::min(K, 4); ++i)
+           out << ", " << prior_scale__(i);
+         if (K > 4)
+           out << ", ...";
+
+         out << "\n    df: " << prior_df__(0);
+         for (int i = 1; i < std::min(K, 4); ++i)
+           out << ", " << prior_df__(i);
+         if (K > 4)
+           out << ", ...";
+       }
+       out << "\n";
+
+       out << "  prior for intercept: " << prior_dist_for_intercept;
+       if (prior_dist_for_intercept > 0)
+         out << ", mean: " << prior_mean_for_intercept << ", scale: " << prior_scale_for_intercept << ", df: " << prior_df_for_intercept;
+       out << "\n";
+       
+       out << "  prior for error term: " << prior_dist_for_aux;
+       if (prior_dist_for_aux > 0)
+         out << ", mean: " << prior_mean_for_intercept << ", scale: " << prior_scale_for_aux << ", df: " << prior_df_for_aux;
+       out << "\n";
+
+       if (has_weights)
+         out << "fitting weighted model\n";
+    }
+
     void set_response(const double* new_response) {
       for (int i = 0; i < N; ++i)
         y[i] = new_response[i];

@@ -110,6 +110,7 @@ namespace stan4bart {
   
   SEXP createStanResultsExpr(const double_writer& sample_writer);
   void printStanControl(const StanControl& control);
+  void printStanModel(const StanModel* model);
 }
 
 #endif // STAN_SAMPLER_HPP

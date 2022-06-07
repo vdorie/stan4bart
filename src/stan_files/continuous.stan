@@ -161,7 +161,7 @@ functions {
                                   int[] v, int[] u, vector b);
   
   vector pw_gauss(vector y, vector eta, real sigma) {
-    return -0.5 * log(6.283185307179586232 * sigma) - 0.5 * square((y - eta)) / sigma;
+    return -0.5 * log(6.283185307179586232 * sigma * sigma) - 0.5 * square(y - eta) / (sigma * sigma);
   }
 }
 data {
@@ -358,9 +358,11 @@ model {
   if (has_weights == 0) {
     target += normal_lpdf(y | eta, actual_aux);
   } else {
-    vector[N] summands;
-    summands = pw_gauss(y, eta, actual_aux);
-    target += dot_product(weights, summands);
+    //vector[N] summands;
+    //summands = pw_gauss(y, eta, actual_aux);
+    //target += dot_product(weights, summands);
+    // ignores sum of log of weights, target += 0.5 * sum(log(weights))
+    target += -0.5 * N * log(6.283185307179586232 * actual_aux * actual_aux) - 0.5 * dot_product(weights, square((y - eta))) / (actual_aux * actual_aux);
   }
 
   if (!is_binary && prior_dist_for_aux > 0 && prior_scale_for_aux > 0) {
