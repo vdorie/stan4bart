@@ -446,6 +446,8 @@ stan4bart_fit <-
   if (!is.null(bart_args[["n.cuts"]]))
     attr(control.bart, "n.cuts") <- bart_args[["n.cuts"]]
   
+  if (length(weights) > 0L) data.bart@weights <- weights
+  
   data.bart@n.cuts <- rep_len(attr(control.bart, "n.cuts"), ncol(data.bart@x))
   control.bart@binary <- !is_continuous
   evalEnv <- sys.frame(sys.nframe())
