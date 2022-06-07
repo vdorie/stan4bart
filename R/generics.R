@@ -209,7 +209,7 @@ extract.stan4bartFit <-
     if ((include_warmup && is.null(object$warmup$callback)) ||
         (!only_warmup && is.null(object$sample$callback)))
       stop("cannot extract callback samples for model fit without callback function")
-    if (any(sapply(matchedCall()[c("sample", "sample_new_levels")], function(x) !is.null(x)))) {
+    if (any(sapply(matchedCall[c("sample", "sample_new_levels")], function(x) !is.null(x)))) {
       warning("'sample' and 'sample_new_levels' arguments ignored when extracting callback samples")
     }
     result <- get_samples(object$callback, include_warmup, only_warmup)
