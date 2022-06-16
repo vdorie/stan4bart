@@ -83,6 +83,30 @@ test_that("extract include_samples works correctly", {
   expect_equal(unname(rbind(warmup, sample)), unname(both))
 })
 
+test_that("verbose works with different model specifications", {
+  invisible(capture.output(capture.output(
+    fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                     cores = 1, verbose = TRUE, chains = 1, warmup = 7, iter = 13,
+                     bart_args = list(n.trees = 11)),
+    type = "message"
+  )))
+  expect_is(fit, "stan4bartFit")
+  invisible(capture.output(capture.output(
+    fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + (1 + X4 | g.1) + (1 | g.2), df,
+                     cores = 1, verbose = TRUE, chains = 1, warmup = 7, iter = 13,
+                     bart_args = list(n.trees = 11)),
+    type = "message"
+  )))
+  expect_is(fit, "stan4bartFit")
+  invisible(capture.output(capture.output(
+    fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z, df,
+                     cores = 1, verbose = TRUE, chains = 1, warmup = 7, iter = 13,
+                     bart_args = list(n.trees = 11)),
+    type = "message"
+  )))
+  expect_is(fit, "stan4bartFit")
+})
+
 test_that("nonlinearities are estimated well", {
   # Because this is not documented, to enable this test execute from R
   #   Sys.setenv(NOT_CRAN = "true")

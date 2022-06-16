@@ -3583,32 +3583,36 @@ class continuous_model final : public model_base_crtp<continuous_model> {
   ~continuous_model() { }
     
     void print(std::ostream& out) const {
-       out << "  prior for linear coefficients: " << prior_dist;
-       if (prior_dist > 0) {
-         out << "\n    mean: " << prior_mean__(0);
-         for (int i = 1; i < std::min(K, 4); ++i)
-           out << ", " << prior_mean__(i);
-         if (K > 4)
-           out << ", ...";
+       if (K > 0) {
+         out << "  prior for linear coefficients: " << prior_dist;
+         if (prior_dist > 0) {
+           out << "\n    mean: " << prior_mean(0);
+           for (int i = 1; i < std::min(K, 4); ++i)
+             out << ", " << prior_mean(i);
+           if (K > 4)
+             out << ", ...";
 
-         out << "\n    scale: " << prior_scale__(0);
-         for (int i = 1; i < std::min(K, 4); ++i)
-           out << ", " << prior_scale__(i);
-         if (K > 4)
-           out << ", ...";
+           out << "\n    scale: " << prior_scale(0);
+           for (int i = 1; i < std::min(K, 4); ++i)
+             out << ", " << prior_scale(i);
+           if (K > 4)
+             out << ", ...";
 
-         out << "\n    df: " << prior_df__(0);
-         for (int i = 1; i < std::min(K, 4); ++i)
-           out << ", " << prior_df__(i);
-         if (K > 4)
-           out << ", ...";
+           out << "\n    df: " << prior_df(0);
+           for (int i = 1; i < std::min(K, 4); ++i)
+             out << ", " << prior_df(i);
+           if (K > 4)
+             out << ", ...";
+         }
+         out << "\n";
        }
-       out << "\n";
-
-       out << "  prior for intercept: " << prior_dist_for_intercept;
-       if (prior_dist_for_intercept > 0)
-         out << ", mean: " << prior_mean_for_intercept << ", scale: " << prior_scale_for_intercept << ", df: " << prior_df_for_intercept;
-       out << "\n";
+       
+       if (has_intercept) {
+         out << "  prior for intercept: " << prior_dist_for_intercept;
+         if (prior_dist_for_intercept > 0)
+           out << ", mean: " << prior_mean_for_intercept << ", scale: " << prior_scale_for_intercept << ", df: " << prior_df_for_intercept;
+         out << "\n";
+       }
        
        out << "  prior for error term: " << prior_dist_for_aux;
        if (prior_dist_for_aux > 0)
