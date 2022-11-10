@@ -75,6 +75,16 @@ test_that("callback is passed sample correctly", {
   indiv.ranef <- fit$callback[seq_len(20L) + 40L,,]
   
   expect_equal(unname(ev), unname(indiv.fixef + indiv.ranef + indiv.bart))
+
+  expect_true(is.null(fit$bart_train))
+  expect_true(is.null(fit$bart_test))
+  expect_true(is.null(fit$bart_varcount))
+  expect_true(is.null(fit$stan))
+  expect_true(is.null(fit$par_names))
+  expect_true(is.null(fit$warmup$bart_train))
+  expect_true(is.null(fit$warmup$bart_test))
+  expect_true(is.null(fit$warmup$bart_varcount))
+  expect_true(is.null(fit$warmup$stan))
 })
 
 
