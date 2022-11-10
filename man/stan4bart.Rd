@@ -240,6 +240,11 @@ stan4bart(formula,
     each time. If not, invalid memory writes will likely result. If the
     result of the callback has names, they will be added to the result.
   }
+  \subsection{Serialization}{
+    At present, \code{stan4bart} models cannot be safely \code{\link{save}}d
+    and \code{\link{load}ed} in a way that the sampler can be restarted. This
+    feature may be added in the future.
+  }
 }
 \value{
   Returns a list assigned class \code{stan4bartFit}. Has components below, some
