@@ -286,6 +286,7 @@ stan4bart(formula,
   \item{\code{Sigma}}{samples of covariance of random effects; also a named list
   with one element for each grouping factor}
   \item{\code{fixef}}{samples of the fixed effects, or unmodeled coefficients}
+  \item{\code{callback}}{samples returned by an optional callback function}
   
   Other items:
   \item{\code{warmup}}{a list of warmup samples, containing the same objects in

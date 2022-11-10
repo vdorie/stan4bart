@@ -24,6 +24,7 @@ callback <- function(yhat.train, yhat.test, stan_pars) {
     
   intercept_delta <- sum(fixef[keep_cols] * x_means[keep_cols])
   
+  # training X is rho$X, training Zt is rho$reTrms$Zt
   fit.fixef <- as.vector(rho$test$X %*% fixef) - intercept_delta
   fit.ranef <- as.vector(Matrix::crossprod(rho$test$reTrms$Zt, ranef))
   yhat.test.full <- yhat.test + fit.fixef + fit.ranef
