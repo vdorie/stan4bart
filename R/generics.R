@@ -177,6 +177,7 @@ extract.stan4bartFit <-
            include_warmup = FALSE,
            ...)
 {
+  matchedCall <- match.call()
   type <- match.arg(type)
   
   if (type == "trees") {
@@ -549,6 +550,16 @@ fitted_fixed <- function(object, x, include_warmup)
 
 fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
 {
+  # quick version if the new data have the same form as that fitted in the model
+  if (identical(reTrms$cnms, object$reTrms$cnms) && all(row.names(reTrms$Zt) == row.names(object$reTrms$Zt))) {
+    b_rows <- grep("^b\\.", dimnames(object$stan)[[1L]])
+    b_mat <- matrix(object$stan[b_rows,,], length(b_rows), prod(dim(object$stan)[-1L]))
+    return(array(
+      Matrix::crossprod(reTrms$Zt, b_mat), c(ncol(reTrms$Zt), dim(object$stan)[2L:3L]),
+        dimnames = list(observation = NULL, iterations = NULL, chain = dimnames(object$stan)$chain)
+    ))
+  }
+
   n_obs <- ncol(reTrms$Zt)
   
   ns.re <- names(re <- extract(object, "ranef", include_warmup = include_warmup, combine_chains = FALSE))
