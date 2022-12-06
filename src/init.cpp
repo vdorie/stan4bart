@@ -844,13 +844,32 @@ extern "C" {
               callbackResults = PROTECT(rc_newReal(callbackResultLength * numIter));
               resultAllocated = true;
               ++protectCount;
-              rc_setDims(callbackResults, static_cast<int>(callbackResultLength), numIter, -1);
+              SEXP existingDims = rc_getDims(callbackIterResult);
+              if (existingDims != R_NilValue) {
+                SEXP dims = PROTECT(rc_newInteger(rc_getLength(existingDims) + 1));
+                for (size_t i = 0 ; i < rc_getLength(existingDims); ++i)
+                  INTEGER(dims)[i] = INTEGER(existingDims)[i];
+                INTEGER(dims)[rc_getLength(existingDims)] = numIter;
+                Rf_setAttrib(callbackResults, R_DimSymbol, dims);
+                UNPROTECT(1);
+              } else {
+                rc_setDims(callbackResults, static_cast<int>(callbackResultLength), numIter, -1);
+              }
               if (rc_getNames(callbackIterResult) != R_NilValue) {
-                SEXP dimNames = PROTECT(rc_newList(2));
+                SEXP dimNames = PROTECT(rc_newList(rc_getLength(rc_getDims(callbackResults))));
                 rc_setDimNames(callbackResults, dimNames);
                 UNPROTECT(1);
                 SET_VECTOR_ELT(dimNames, 0, rc_getNames(callbackIterResult));
                 SET_VECTOR_ELT(dimNames, 1, R_NilValue);
+              } else if (rc_getDimNames(callbackIterResult) != R_NilValue) {
+
+                SEXP dimNames = PROTECT(rc_newList(rc_getLength(rc_getDims(callbackResults))));
+                rc_setDimNames(callbackResults, dimNames);
+                UNPROTECT(1);
+                SEXP existingDimNames = rc_getDimNames(callbackIterResult);
+                for (size_t i = 0 ; i < rc_getLength(existingDimNames); ++i)
+                  SET_VECTOR_ELT(dimNames, i, VECTOR_ELT(existingDimNames, i));
+                SET_VECTOR_ELT(dimNames, rc_getLength(existingDimNames), R_NilValue);
               }
             }
             std::memcpy(REAL(callbackResults) + iter * callbackResultLength,

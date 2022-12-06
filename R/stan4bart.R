@@ -297,7 +297,6 @@ package_samples <- function(chain_results, bart_var_names) {
   warmup <- list()
   n_chains  <- length(chain_results)
   # must have a bart component, so we use that to determine the number of samples
-  
    
   n_warmup <- NA_integer_
   n_obs <- NA_integer_
@@ -307,12 +306,14 @@ package_samples <- function(chain_results, bart_var_names) {
   # Currently, if one of warmup or sample exists, the other must as well. In addition
   # if bart$test exists so much bart$train. However, we assume neither in case
   # future options allow saving one selectively.
+  
   if (!is.null(chain_results[[1L]]$warmup)) {
     if (!is.null(chain_results[[1L]]$warmup$bart$train)) {
       n_warmup <- dim(chain_results[[1L]]$warmup$bart$train)[2L]
     }
     if (!is.null(chain_results[[1L]]$warmup$callback)) {
-      n_warmup <- dim(chain_results[[1L]]$warmup$callback)[2L]
+      callback_dims <- dim(chain_results[[1L]]$warmup$callback)
+      n_warmup <- callback_dims[length(callback_dims)]
     }
   }
   if (!is.null(chain_results[[1L]]$sample)) {
@@ -325,8 +326,9 @@ package_samples <- function(chain_results, bart_var_names) {
       n_samples <- dim(chain_results[[1L]]$sample$bart$test)[2L]
     }
     if (!is.null(chain_results[[1L]]$sample$callback)) {
-      n_callback <- dim(chain_results[[1L]]$sample$callback)[1L]
-      n_samples <- dim(chain_results[[1L]]$sample$callback)[2L]
+      callback_dims <- dim(chain_results[[1L]]$sample$callback)
+      n_callback <- callback_dims[seq_len(length(callback_dims) - 1L)]
+      n_samples <- callback_dims[length(callback_dims)]
     }
     if (!is.null(dim(chain_results[[1L]]$sample$bart$varcount))) {
       n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
@@ -413,18 +415,24 @@ package_samples <- function(chain_results, bart_var_names) {
   }
 
   if (!is.null(chain_results[[1L]]$sample$callback)) {
+    if (!is.null(dimnames(chain_results[[1L]]$sample$callback))) {
+      callback_dimnames <- dimnames(chain_results[[1L]]$sample$callback)[seq_len(length(callback_dims) - 1L)]
+    } else {
+      callback_dimnames <- list(callback = NULL)
+    }
+    callback_dimnames <- append(callback_dimnames, list(iterations = NULL))
+    callback_dimnames[["chain"]] <- chain_names
+    
     result$callback <- array(sapply(seq_len(n_chains), function(i_chains)
                               chain_results[[i_chains]]$sample$callback),
                              dim = c(n_callback, n_samples, n_chains),
-                             dimnames = list(callback = dimnames(chain_results[[1L]]$sample$callback)[[1L]],
-                                                                 iterations = NULL, chain = chain_names))
+                             dimnames = callback_dimnames)
 
     if (!is.na(n_warmup) && n_warmup > 0L) {
       warmup$callback <- array(sapply(seq_len(n_chains), function(i_chains)
                                 chain_results[[i_chains]]$warmup$callback),
                                dim = c(n_callback, n_warmup, n_chains),
-                               dimnames = list(callback = dimnames(chain_results[[1L]]$warmup$callback)[[1L]],
-                                                                   iterations = NULL, chain = chain_names))
+                               dimnames = callback_dimnames)
     }
   }
   

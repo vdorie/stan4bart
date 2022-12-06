@@ -29,9 +29,13 @@ callback <- function(yhat.train, yhat.test, stan_pars) {
   fit.ranef <- as.vector(Matrix::crossprod(rho$test$reTrms$Zt, ranef))
   yhat.test.full <- yhat.test + fit.fixef + fit.ranef
   
-  c(yhat.test,
-    fit.fixef,
-    fit.ranef)
+  result <- c(yhat.test, fit.fixef, fit.ranef)
+  names(result) <- c(
+    paste0("yhat.test_", seq_along(yhat.test)),
+    paste0("fit.fixef_", seq_along(fit.fixef)),
+    paste0("fit.ranef_", seq_along(fit.ranef))
+  )
+  result
 }
 fn_env <- new.env(parent = baseenv())
 environment(callback) <- fn_env
@@ -60,6 +64,14 @@ test_that("callback is passed sample correctly", {
   ev <- indiv.fixef + indiv.ranef + indiv.bart
   expect_equal(unname(ev),
                unname(extract(fit, "ev", sample = "test", combine_chains = FALSE)))
+
+  expect_equal(
+    dimnames(fit$callback)[[1L]],
+    c(paste0("yhat.test_", seq_len(20L)),
+      paste0("fit.fixef_", seq_len(20L)),
+      paste0("fit.ranef_", seq_len(20L)))
+  )
+
 
   fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
                    data = df.train,
@@ -115,3 +127,49 @@ test_that("callback works with multiple threads", {
                unname(extract(fit, "ev", sample = "test", combine_chains = FALSE)))
 })
 
+callback <- function(yhat.train, yhat.test, stan_pars) {
+  rho <- parent.frame()
+  if (is.null(rho$fixef.ind)) {
+    rho$fixef.ind <- which(grepl("^beta|gamma", names(stan_pars)))
+    rho$ranef.ind <- which(startsWith(names(stan_pars), "b."))
+  }
+  y.test <- rho$frame$y
+  fixef <- stan_pars[rho$fixef.ind]
+  ranef <- stan_pars[rho$ranef.ind]
+
+  x_means <- rho$X_means
+  keep_cols <- names(x_means) != "(Intercept)"
+    
+  intercept_delta <- sum(fixef[keep_cols] * x_means[keep_cols])
+  
+  # training X is rho$X, training Zt is rho$reTrms$Zt
+  fit.fixef <- as.vector(rho$test$X %*% fixef) - intercept_delta
+  fit.ranef <- as.vector(Matrix::crossprod(rho$test$reTrms$Zt, ranef))
+  yhat.test.full <- yhat.test + fit.fixef + fit.ranef
+  
+  cbind(yhat.test, fit.fixef, fit.ranef)
+}
+environment(callback) <- fn_env
+
+
+
+test_that("callback works with multiple dimmed results", {
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                   data = df.train,
+                   test = df.test,
+                   cores = 1, verbose = -1L, chains = 2, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11),
+                   seed = 0,
+                   callback = callback)
+  expect_is(fit, "stan4bartFit")
+  
+  expect_equal(dim(fit$callback)[1L], nrow(df.test))
+  expect_equal(dim(fit$callback)[2L], 3L)
+  expect_equal(dim(fit$callback)[3L], 13L - 7L)
+  expect_equal(dim(fit$callback)[4L], 2L)
+
+  expect_null(dimnames(fit$callback)[[1L]])
+  expect_equal(dimnames(fit$callback)[[2]], c("yhat.test", "fit.fixef", "fit.ranef"))
+  expect_null(dimnames(fit$callback)[[3]])
+  expect_equal(dimnames(fit$callback)[[4]], paste0("chain:", seq_len(2L)))
+})
