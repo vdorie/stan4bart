@@ -562,9 +562,9 @@ extern "C" {
     SEXP resultExpr = PROTECT(rc_newList(numCols));
         
     SEXP classExpr = PROTECT(rc_newCharacter(1));
-    SET_STRING_ELT(classExpr, 0, Rf_mkChar("data.frame"));
+    SET_STRING_ELT(classExpr, 0, PROTECT(Rf_mkChar("data.frame")));
     Rf_setAttrib(resultExpr, R_ClassSymbol, classExpr);
-    UNPROTECT(1);
+    UNPROTECT(2);
     
     SEXP resultRowNamesExpr;
     rc_allocateInSlot2(resultRowNamesExpr, resultExpr, R_RowNamesSymbol, STRSXP, flattenedTrees.totalNumNodes);
@@ -862,7 +862,6 @@ extern "C" {
                 SET_VECTOR_ELT(dimNames, 0, rc_getNames(callbackIterResult));
                 SET_VECTOR_ELT(dimNames, 1, R_NilValue);
               } else if (rc_getDimNames(callbackIterResult) != R_NilValue) {
-
                 SEXP dimNames = PROTECT(rc_newList(rc_getLength(rc_getDims(callbackResults))));
                 rc_setDimNames(callbackResults, dimNames);
                 UNPROTECT(1);
@@ -870,6 +869,17 @@ extern "C" {
                 for (size_t i = 0 ; i < rc_getLength(existingDimNames); ++i)
                   SET_VECTOR_ELT(dimNames, i, VECTOR_ELT(existingDimNames, i));
                 SET_VECTOR_ELT(dimNames, rc_getLength(existingDimNames), R_NilValue);
+                
+                SEXP existingDimNamesNames = rc_getNames(existingDimNames);
+                if (existingDimNamesNames != R_NilValue) {
+                  SEXP dimNamesNames = PROTECT(rc_newCharacter(rc_getLength(rc_getDims(callbackResults))));
+                  for (size_t i = 0; i < rc_getLength(existingDimNamesNames); ++i) {
+                    SET_STRING_ELT(dimNamesNames, i, STRING_ELT(existingDimNamesNames, i));
+                  }
+                  SET_STRING_ELT(dimNamesNames, rc_getLength(existingDimNamesNames), PROTECT(Rf_mkChar("iterations")));
+                  rc_setNames(dimNames, dimNamesNames);
+                  UNPROTECT(2);
+                }
               }
             }
             std::memcpy(REAL(callbackResults) + iter * callbackResultLength,

@@ -147,7 +147,9 @@ callback <- function(yhat.train, yhat.test, stan_pars) {
   fit.ranef <- as.vector(Matrix::crossprod(rho$test$reTrms$Zt, ranef))
   yhat.test.full <- yhat.test + fit.fixef + fit.ranef
   
-  cbind(yhat.test, fit.fixef, fit.ranef)
+  result <- cbind(yhat.test, fit.fixef, fit.ranef)
+  dimnames(result) <- list(indiv = NULL, value = colnames(result))
+  result
 }
 environment(callback) <- fn_env
 
@@ -172,4 +174,7 @@ test_that("callback works with multiple dimmed results", {
   expect_equal(dimnames(fit$callback)[[2]], c("yhat.test", "fit.fixef", "fit.ranef"))
   expect_null(dimnames(fit$callback)[[3]])
   expect_equal(dimnames(fit$callback)[[4]], paste0("chain:", seq_len(2L)))
+
+  expect_equal(names(dimnames(fit$callback)), c("indiv", "value", "iterations", "chain"))
 })
+
