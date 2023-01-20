@@ -30,6 +30,9 @@
 #    if __has_warning("-Wimplicit-int-float-conversion")
 #      pragma clang diagnostic ignored "-Wimplicit-int-float-conversion"
 #    endif
+#    if __has_warning("-Wunused-but-set-variable")
+#      pragma clang diagnostic ignored "-Wunused-but-set-variable"
+#    endif
 #  else
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -48,7 +51,7 @@
 #      pragma GCC diagnostic ignored "-Wattributes"
 #    endif
 // This is for gcc under -Wpedantic, since some some warnings can't
-// be silenced. It is highly undesirably, as it can suppress other,
+// be silenced. It is highly undesirable, as it can suppress other,
 // useful warnings with later code.
 #    include <boost/math/tools/config.hpp>
 #    ifdef BOOST_MATH_USE_FLOAT128

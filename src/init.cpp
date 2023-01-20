@@ -2,6 +2,14 @@
 #include <R_ext/Rdynload.h>
 #include <R_ext/Visibility.h>
 
+#ifdef HAVE_STD_SNPRINTF
+// snprintf in c++11, before that have to use C version
+#  include <cstdio>
+using std::snprintf;
+#else
+#  include <stdio.h>
+#endif
+
 #include <exception>
 #include <memory> // unique_ptr
 #include <set> // external pointers set
@@ -628,12 +636,12 @@ extern "C" {
       value[i] = flattenedTrees.value[i];
 #if defined(__MINGW32__) && __cplusplus < 201112L
 #  ifdef _WIN64
-      std::sprintf(buffer, "%lu", static_cast<unsigned long>(i + 1));
+      snprintf(buffer, numDigits + 1, "%lu", static_cast<unsigned long>(i + 1));
 #  else
-      std::sprintf(buffer, "%u", i + 1);
+      snprintf(buffer, numDigits + 1, "%u", i + 1);
 #  endif
 #else
-      std::sprintf(buffer, "%zu", i + 1);
+      snprintf(buffer, numDigits + 1, "%zu", i + 1);
 #endif
       SET_STRING_ELT(resultRowNamesExpr, i, PROTECT(Rf_mkChar(buffer)));
       UNPROTECT(1);
