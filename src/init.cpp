@@ -1,4 +1,5 @@
 #include <ext/Rinternals.h>
+#include <R_ext/Arith.h> // R_NaReal
 #include <R_ext/Rdynload.h>
 #include <R_ext/Visibility.h>
 
@@ -680,10 +681,10 @@ extern "C" {
      RC_VALUE | RC_DEFAULT, static_cast<int>(RESULTS_BOTH),
      RC_END));
 
-    SEXP callbackClosure;
-    SEXP yhat_train;
+    SEXP callbackClosure = R_NilValue;
+    SEXP yhat_train = R_NilValue;
     SEXP yhat_test = R_NilValue;
-    SEXP stan_pars;
+    SEXP stan_pars = R_NilValue;
     SEXP callbackResults = R_NilValue;
     size_t callbackResultLength = 0;
     unsigned int protectCount = 0;
