@@ -3,7 +3,7 @@
  * Programmer(s): Cody J. Balos @ LLNL
  * ----------------------------------------------------------------------------
  * SUNDIALS Copyright Start
- * Copyright (c) 2002-2021, Lawrence Livermore National Security
+ * Copyright (c) 2002-2022, Lawrence Livermore National Security
  * and Southern Methodist University.
  * All rights reserved.
  *
@@ -40,7 +40,7 @@
 #include <sundials/sundials_nvector.h>
 #include <sunmatrix/sunmatrix_slunrloc.h>
 
-#if (SUPERLU_DIST_MAJOR_VERSION >= 6) && (SUPERLU_DIST_MINOR_VERSION >= 3)
+#if (SUPERLU_DIST_MAJOR_VERSION >= 7) || ((SUPERLU_DIST_MAJOR_VERSION == 6) && (SUPERLU_DIST_MINOR_VERSION >= 3))
 #define xLUstructInit dLUstructInit
 #define xScalePermstructInit dScalePermstructInit
 #define xScalePermstructFree dScalePermstructFree
@@ -100,7 +100,8 @@ SUNDIALS_EXPORT SUNLinearSolver SUNLinSol_SuperLUDIST(N_Vector y, SUNMatrix A,
                                                       xScalePermstruct_t *scaleperm,
                                                       xSOLVEstruct_t *solve,
                                                       SuperLUStat_t *stat,
-                                                      superlu_dist_options_t *options);
+                                                      superlu_dist_options_t *options,
+                                                      SUNContext sunctx);
 
 /*
  * ----------------------------------------------------------------------------

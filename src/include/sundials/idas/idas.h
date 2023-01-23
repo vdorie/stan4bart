@@ -2,7 +2,7 @@
  * Programmer(s): Radu Serban @ LLNL
  * -----------------------------------------------------------------
  * SUNDIALS Copyright Start
- * Copyright (c) 2002-2021, Lawrence Livermore National Security
+ * Copyright (c) 2002-2022, Lawrence Livermore National Security
  * and Southern Methodist University.
  * All rights reserved.
  *
@@ -18,6 +18,7 @@
 #define _IDAS_H
 
 #include <stdio.h>
+#include <sundials/sundials_context.h>
 #include <sundials/sundials_nvector.h>
 #include <sundials/sundials_nonlinearsolver.h>
 #include <idas/idas_ls.h>
@@ -87,6 +88,8 @@ extern "C" {
 #define IDA_BAD_T           -26
 #define IDA_BAD_DKY         -27
 #define IDA_VECTOROP_ERR    -28
+
+#define IDA_CONTEXT_ERR     -29
 
 #define IDA_NO_QUAD         -30
 #define IDA_QRHS_FAIL       -31
@@ -175,7 +178,7 @@ typedef int (*IDAQuadRhsFnBS)(realtype t,
  * --------------------------------------- */
 
 /* Initialization functions */
-SUNDIALS_EXPORT void *IDACreate(void);
+SUNDIALS_EXPORT void *IDACreate(SUNContext sunctx);
 
 SUNDIALS_EXPORT int IDAInit(void *ida_mem, IDAResFn res, realtype t0,
                             N_Vector yy0, N_Vector yp0);
@@ -221,6 +224,7 @@ SUNDIALS_EXPORT int IDASetConstraints(void *ida_mem, N_Vector constraints);
 
 SUNDIALS_EXPORT int IDASetNonlinearSolver(void *ida_mem,
                                           SUNNonlinearSolver NLS);
+SUNDIALS_EXPORT int IDASetNlsResFn(void *IDA_mem, IDAResFn res);
 
 /* Rootfinding initialization function */
 SUNDIALS_EXPORT int IDARootInit(void *ida_mem, int nrtfn, IDARootFn g);

@@ -2,7 +2,7 @@
  * Programmer(s): Cody J. Balos, Aaron Collier and Radu Serban @ LLNL
  * -----------------------------------------------------------------
  * SUNDIALS Copyright Start
- * Copyright (c) 2002-2021, Lawrence Livermore National Security
+ * Copyright (c) 2002-2022, Lawrence Livermore National Security
  * and Southern Methodist University.
  * All rights reserved.
  *
@@ -14,18 +14,34 @@
  * SUNDIALS configuration header file.
  * -----------------------------------------------------------------*/
 
-#include "sundials_export.h"
+#ifndef _SUNDIALS_CONFIG_H
+#define _SUNDIALS_CONFIG_H
+
+#include "sundials/sundials_export.h"
+
+#ifndef SUNDIALS_DEPRECATED_MSG
+#  define SUNDIALS_DEPRECATED_MSG(msg) __attribute__ ((__deprecated__(msg)))
+#endif
+
+#ifndef SUNDIALS_DEPRECATED_EXPORT_MSG
+#  define SUNDIALS_DEPRECATED_EXPORT_MSG(msg) SUNDIALS_EXPORT SUNDIALS_DEPRECATED_MSG(msg)
+#endif
+
+#ifndef SUNDIALS_DEPRECATED_NO_EXPORT_MSG
+#  define SUNDIALS_DEPRECATED_NO_EXPORT_MSG(msg) SUNDIALS_NO_EXPORT SUNDIALS_DEPRECATED_MSG(msg)
+#endif
 
 /* ------------------------------------------------------------------
  * Define SUNDIALS version numbers
  * -----------------------------------------------------------------*/
 
 
-#define SUNDIALS_VERSION "5.7.0"
-#define SUNDIALS_VERSION_MAJOR 5
-#define SUNDIALS_VERSION_MINOR 7
-#define SUNDIALS_VERSION_PATCH 0
+#define SUNDIALS_VERSION "6.1.1"
+#define SUNDIALS_VERSION_MAJOR 6
+#define SUNDIALS_VERSION_MINOR 1
+#define SUNDIALS_VERSION_PATCH 1
 #define SUNDIALS_VERSION_LABEL ""
+#define SUNDIALS_GIT_VERSION ""
 
 
 /* ------------------------------------------------------------------
@@ -64,29 +80,27 @@
 /* Use POSIX timers if available.
  *     #define SUNDIALS_HAVE_POSIX_TIMERS
  */
-/* #undef SUNDIALS_HAVE_POSIX_TIMERS */
+#define SUNDIALS_HAVE_POSIX_TIMERS
 
-/* CVODE should use fused kernels if utilizing
-  * the CUDA NVector.
-  */
+/* BUILD CVODE with fused kernel functionality */
 /* #undef SUNDIALS_BUILD_PACKAGE_FUSED_KERNELS */
 
-
-/* BUILD SUNDIALS with monitoring functionalities
-  * the CUDA NVector.
-  */
+/* BUILD SUNDIALS with monitoring functionalities */
 /* #undef SUNDIALS_BUILD_WITH_MONITORING */
+
+/* BUILD SUNDIALS with profiling functionalities */
+/* #undef SUNDIALS_BUILD_WITH_PROFILING */
 
 /* ------------------------------------------------------------------
  * SUNDIALS TPL macros
  * -----------------------------------------------------------------*/
 
-
-
+/* Caliper */
+/* #undef SUNDIALS_CALIPER_ENABLED */
 
 /* MAGMA backends */
-/* #undef SUNDIALS_MAGMA_BACKENDS_HIP */
 #define SUNDIALS_MAGMA_BACKENDS_CUDA
+/* #undef SUNDIALS_MAGMA_BACKENDS_HIP */
 
 /* Set if SUNDIALS is built with MPI support, then
  *     #define SUNDIALS_MPI_ENABLED 1
@@ -104,13 +118,13 @@
 /* #undef SUNDIALS_TRILINOS_HAVE_MPI */
 
 /* RAJA backends */
-/* #undef SUNDIALS_RAJA_BACKENDS_HIP */
 #define SUNDIALS_RAJA_BACKENDS_CUDA
+/* #undef SUNDIALS_RAJA_BACKENDS_HIP */
+/* #undef SUNDIALS_RAJA_BACKENDS_SYCL */
 
 /* ------------------------------------------------------------------
  * SUNDIALS modules enabled
  * -----------------------------------------------------------------*/
-
 
 #define SUNDIALS_ARKODE 1
 #define SUNDIALS_CVODE 1
@@ -140,7 +154,7 @@
  * -----------------------------------------------------------------*/
 
 
-/* FCMIX: Define Fortran name-mangling macro for C identifiers.
+/* Define Fortran name-mangling macro for C identifiers.
  * Depending on the inferred scheme, one of the following six
  * macros will be defined:
  *     #define SUNDIALS_F77_FUNC(name,NAME) name
@@ -152,18 +166,18 @@
  */
 
 
-/* FCMIX: Define Fortran name-mangling macro for C identifiers
- *        which contain underscores.
+/* Define Fortran name-mangling macro for C identifiers
+ * which contain underscores.
  */
 
 
-/* FNVECTOR: Allow user to specify different MPI communicator
+/* Allow user to specify different MPI communicator
  * If it was found that the MPI implementation supports MPI_Comm_f2c, then
  *      #define SUNDIALS_MPI_COMM_F2C 1
  * otherwise
  *      #define SUNDIALS_MPI_COMM_F2C 0
  */
-#define SUNDIALS_MPI_COMM_F2C 1
+
 
 
 /* ------------------------------------------------------------------
@@ -178,7 +192,11 @@
 #endif
 
 #ifndef SUNDIALS_C_INLINE
+#ifndef __STDC_VERSION__ /* must be c89 or c90 */
+#define SUNDIALS_C_INLINE
+#else
 #define SUNDIALS_C_INLINE inline
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -190,3 +208,5 @@
 /* Mark SUNDIALS function as static inline.
  */
 #define SUNDIALS_STATIC_INLINE static SUNDIALS_INLINE
+
+#endif /* _SUNDIALS_CONFIG_H */

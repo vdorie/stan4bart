@@ -2,7 +2,7 @@
  * Programmer(s): David J. Gardner @ LLNL
  * -----------------------------------------------------------------------------
  * SUNDIALS Copyright Start
- * Copyright (c) 2002-2021, Lawrence Livermore National Security
+ * Copyright (c) 2002-2022, Lawrence Livermore National Security
  * and Southern Methodist University.
  * All rights reserved.
  *
@@ -64,8 +64,12 @@ typedef struct _SUNNonlinearSolverContent_Newton *SUNNonlinearSolverContent_Newt
  * ---------------------------------------------------------------------------*/
 
 /* Constructor to create solver and allocates memory */
-SUNDIALS_EXPORT SUNNonlinearSolver SUNNonlinSol_Newton(N_Vector y);
-SUNDIALS_EXPORT SUNNonlinearSolver SUNNonlinSol_NewtonSens(int count, N_Vector y);
+SUNDIALS_EXPORT
+SUNNonlinearSolver SUNNonlinSol_Newton(N_Vector y, SUNContext sunctx);
+
+SUNDIALS_EXPORT
+SUNNonlinearSolver SUNNonlinSol_NewtonSens(int count, N_Vector y,
+                                           SUNContext sunctx);
 
 /* core functions */
 SUNDIALS_EXPORT SUNNonlinearSolver_Type SUNNonlinSolGetType_Newton(SUNNonlinearSolver NLS);

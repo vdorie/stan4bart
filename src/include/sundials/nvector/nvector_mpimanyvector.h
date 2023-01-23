@@ -2,7 +2,7 @@
  * Programmer(s): Daniel R. Reynolds @ SMU
  * -----------------------------------------------------------------
  * SUNDIALS Copyright Start
- * Copyright (c) 2002-2021, Lawrence Livermore National Security
+ * Copyright (c) 2002-2022, Lawrence Livermore National Security
  * and Southern Methodist University.
  * All rights reserved.
  *
@@ -66,10 +66,12 @@ typedef struct _N_VectorContent_MPIManyVector *N_VectorContent_MPIManyVector;
 
 SUNDIALS_EXPORT N_Vector N_VMake_MPIManyVector(MPI_Comm comm,
                                                sunindextype num_subvectors,
-                                               N_Vector *vec_array);
+                                               N_Vector *vec_array,
+                                               SUNContext sunctx);
 
 SUNDIALS_EXPORT N_Vector N_VNew_MPIManyVector(sunindextype num_subvectors,
-                                              N_Vector *vec_array);
+                                              N_Vector *vec_array,
+                                              SUNContext sunctx);
 
 SUNDIALS_EXPORT N_Vector N_VGetSubvector_MPIManyVector(N_Vector v,
                                                        sunindextype vec_num);
@@ -84,6 +86,8 @@ SUNDIALS_EXPORT sunindextype N_VGetNumSubvectors_MPIManyVector(N_Vector v);
 
 /* standard vector operations */
 SUNDIALS_EXPORT N_Vector_ID N_VGetVectorID_MPIManyVector(N_Vector v);
+SUNDIALS_EXPORT void N_VPrint_MPIManyVector(N_Vector v);
+SUNDIALS_EXPORT void N_VPrintFile_MPIManyVector(N_Vector v, FILE *outfile);
 SUNDIALS_EXPORT N_Vector N_VCloneEmpty_MPIManyVector(N_Vector w);
 SUNDIALS_EXPORT N_Vector N_VClone_MPIManyVector(N_Vector w);
 SUNDIALS_EXPORT void N_VDestroy_MPIManyVector(N_Vector v);
@@ -126,6 +130,14 @@ SUNDIALS_EXPORT int N_VScaleAddMulti_MPIManyVector(int nvec, realtype* a,
 SUNDIALS_EXPORT int N_VDotProdMulti_MPIManyVector(int nvec, N_Vector x,
                                                   N_Vector *Y,
                                                   realtype* dotprods);
+
+/* single buffer reduction operations */
+SUNDIALS_EXPORT int N_VDotProdMultiLocal_MPIManyVector(int nvec, N_Vector x,
+                                                       N_Vector *Y,
+                                                       realtype* dotprods);
+SUNDIALS_EXPORT int N_VDotProdMultiAllReduce_MPIManyVector(int nvec_total,
+                                                           N_Vector x,
+                                                           realtype* sum);
 
 /* vector array operations */
 SUNDIALS_EXPORT int N_VLinearSumVectorArray_MPIManyVector(int nvec,
@@ -178,6 +190,8 @@ SUNDIALS_EXPORT int N_VEnableScaleVectorArray_MPIManyVector(N_Vector v, booleant
 SUNDIALS_EXPORT int N_VEnableConstVectorArray_MPIManyVector(N_Vector v, booleantype tf);
 SUNDIALS_EXPORT int N_VEnableWrmsNormVectorArray_MPIManyVector(N_Vector v, booleantype tf);
 SUNDIALS_EXPORT int N_VEnableWrmsNormMaskVectorArray_MPIManyVector(N_Vector v, booleantype tf);
+
+SUNDIALS_EXPORT int N_VEnableDotProdMultiLocal_MPIManyVector(N_Vector v, booleantype tf);
 
 #ifdef __cplusplus
 }

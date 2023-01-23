@@ -3,7 +3,7 @@
  * Programmer(s): Cody J. Balos @ LLNL
  * -----------------------------------------------------------------
  * SUNDIALS Copyright Start
- * Copyright (c) 2002-2021, Lawrence Livermore National Security
+ * Copyright (c) 2002-2022, Lawrence Livermore National Security
  * and Southern Methodist University.
  * All rights reserved.
  *
@@ -51,7 +51,6 @@ struct _SUNMatrix_Content_cuSparse {
   int blocknnz;
   int sparse_type;
   booleantype own_matd;
-  booleantype own_exec;
   booleantype fixed_pattern;
   booleantype matvec_issetup;
   SUNMemory colind;
@@ -75,15 +74,17 @@ typedef struct _SUNMatrix_Content_cuSparse *SUNMatrix_Content_cuSparse;
  * Constructors.
  * ------------------------------------------------------------------ */
 
-SUNDIALS_EXPORT SUNMatrix SUNMatrix_cuSparse_NewCSR(int M, int N, int NNZ, cusparseHandle_t cusp);
+SUNDIALS_EXPORT SUNMatrix SUNMatrix_cuSparse_NewCSR(int M, int N, int NNZ, cusparseHandle_t cusp,
+                                                    SUNContext sunctx);
 SUNDIALS_EXPORT SUNMatrix SUNMatrix_cuSparse_MakeCSR(cusparseMatDescr_t mat_descr, int M, int N, int NNZ,
                                                      int *rowptrs , int *colind , realtype *data,
-                                                     cusparseHandle_t cusp);
+                                                     cusparseHandle_t cusp, SUNContext sunctx);
 
 /* Creates a CSR block-diagonal matrix where each block shares the same sparsity structure.
    Reduces memory usage by only storing the row pointers and column indices for one block. */
 SUNDIALS_EXPORT SUNMatrix SUNMatrix_cuSparse_NewBlockCSR(int nblocks, int blockrows, int blockcols,
-                                                         int blocknnz, cusparseHandle_t cusp);
+                                                         int blocknnz, cusparseHandle_t cusp,
+                                                         SUNContext sunctx);
 
 
 /* ------------------------------------------------------------------
