@@ -56,8 +56,22 @@ inline auto lub_free(T&& y, L&& lb, U&& ub) {
     auto&& y_ref = to_ref(std::forward<T>(y));
     check_bounded("lub_free", "Bounded variable", value_of(y_ref), value_of(lb),
                   value_of(ub));
-    return eval(logit(divide(subtract(std::forward<decltype(y_ref)>(y_ref), lb),
-                             subtract(ub, lb))));
+
+    auto&& temp = divide(subtract(std::forward<decltype(y_ref)>(y_ref), lb),
+                         subtract(ub, lb));
+    // there is a false positive on mismatched allocations in GCC due to inlining. See 
+    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=100485
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 11
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+    auto&& d = eval(logit(temp));
+    return d;
+#  pragma GCC diagnostic pop
+#else
+    return eval(logit(temp));
+#endif
+    // return eval(logit(divide(subtract(std::forward<decltype(y_ref)>(y_ref), lb),
+    //                          subtract(ub, lb))));
   }
 }
 
