@@ -237,6 +237,7 @@ test_that("predict matches supplied data", {
 })
 
 test_that("ppd has approximately right amount of noise", {
+  skip_if_not_installed("lme4")
   df.train <- df
   
   set.seed(15)

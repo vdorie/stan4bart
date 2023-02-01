@@ -1287,7 +1287,7 @@ rm(`%ORifNotInLme4%`)
 if (exists("lme4ns")) rm("lme4ns")
 
 make_glmerControl <- function(..., ignore_lhs = FALSE, ignore_x_scale = FALSE) {
-  lme4::glmerControl(check.nlev.gtreq.5 = "ignore",
+  glmerControl(check.nlev.gtreq.5 = "ignore",
                check.nlev.gtr.1 = "stop",
                check.nobs.vs.rankZ = "ignore",
                check.nobs.vs.nlev = "ignore",
