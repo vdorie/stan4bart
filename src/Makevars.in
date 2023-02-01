@@ -5,7 +5,7 @@ SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS)
 SHLIB_LD = $(SHLIB_CXXLD)
 PKG_LIBS = @PKG_LIBS@
 
-CXX_STD = CXX14
+CXX_STD = CXX17
 SOURCES = bart_util.cpp init.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c stan_sampler.cpp
 OBJECTS = bart_util.o init.o misc_adaptiveRadixTree.o misc_string.o rc_bounds.o rc_util.o stan_sampler.o
 

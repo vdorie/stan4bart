@@ -33,6 +33,9 @@
 #    if __has_warning("-Wunused-but-set-variable")
 #      pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #    endif
+#    if __has_warning("-Wdeprecated-declarations")
+#      pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#    endif
 #  else
 #    pragma GCC diagnostic push
 #    pragma GCC diagnostic ignored "-Wunknown-pragmas"
@@ -67,9 +70,16 @@
 #if defined(_WIN32)
 #  define BOOST_MATH_DISABLE_DEPRECATED_03_WARNING 1
 #endif
+
+#if __cplusplus >= 201703L
+#  define _HAS_AUTO_PTR_ETC 0
+#endif
+
 #include <stan/io/dump.hpp>
 #include <stan/io/empty_var_context.hpp>
 #include <stan/io/var_context.hpp>
+
+#undef _HAS_AUTO_PTR_ETC
 
 #ifdef SUPPRESS_DIAGNOSTIC
 #  ifdef __clang__

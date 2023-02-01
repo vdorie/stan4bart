@@ -565,7 +565,7 @@ make_theta_L(const int& len_theta_L, const std::vector<int>& p,
     current_statement__ = 247;
     theta_L_mark = 1;
     current_statement__ = 289;
-    for (int i = 1; i <= size(p); ++i) {
+    for (int i = 1; i <= stan::math::size(p); ++i) {
       int nc;
       current_statement__ = 248;
       nc = rvalue(p, "p", index_uni(i));
@@ -729,7 +729,7 @@ make_b(const T0__& z_b_arg__, const T1__& theta_L_arg__,
     current_statement__ = 295;
     theta_L_mark = 1;
     current_statement__ = 325;
-    for (int i = 1; i <= size(p); ++i) {
+    for (int i = 1; i <= stan::math::size(p); ++i) {
       int nc;
       current_statement__ = 296;
       nc = rvalue(p, "p", index_uni(i));

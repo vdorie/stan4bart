@@ -24,7 +24,7 @@ namespace internal {
  */
 template <typename U, typename V>
 inline complex_return_t<U, V> complex_pow(const U& x, const V& y) {
-  return exp(y * log(x));
+  return exp(stan::math::operator*(y, log(x)));
 }
 }  // namespace internal
 

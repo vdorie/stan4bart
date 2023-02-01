@@ -61,7 +61,7 @@ namespace internal {
 template <typename V>
 inline std::complex<V> complex_asinh(const std::complex<V>& z) {
   std::complex<double> y_d = asinh(value_of_rec(z));
-  auto y = log(z + sqrt(1 + z * z));
+  auto y = log(z + sqrt(1 + stan::math::operator*(z, z)));
   return copysign(y, y_d);
 }
 }  // namespace internal

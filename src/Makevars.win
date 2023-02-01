@@ -7,7 +7,7 @@ PKG_LIBS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppPa
 PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE); cat(paste0('-Wl,-rpath,', shQuote(TBB)), ' ')")
 PKG_LIBS += -Wl,--allow-multiple-definition
 
-CXX_STD = CXX14
+CXX_STD = CXX17
 SOURCES = bart_util.cpp init.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c stan_sampler.cpp
 OBJECTS = bart_util.o init.o misc_adaptiveRadixTree.o misc_string.o rc_bounds.o rc_util.o stan_sampler.o
 

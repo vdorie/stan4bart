@@ -102,7 +102,7 @@ namespace internal {
 template <typename V>
 inline std::complex<V> complex_acosh(const std::complex<V>& z) {
   std::complex<double> y_d = acosh(value_of_rec(z));
-  auto y = log(z + sqrt(z * z - 1));
+  auto y = log(z + sqrt(stan::math::operator*(z, z) - 1));
   return copysign(y, y_d);
 }
 
