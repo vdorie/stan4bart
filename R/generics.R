@@ -277,9 +277,11 @@ extract.stan4bartFit <-
     result <- get_samples(object$stan[sigma_parameters,,,drop = FALSE],
                           include_warmup, only_warmup)
     result <- matrix(result, dim(result)[2L], dim(result)[3L], dimnames = dimnames(result)[2L:3L])
-  } else if (type %in% c("bart_varcount", "k", "stan")) {
-    result <- get_samples(object[[type]],
-                          include_warmup, only_warmup)
+  } else if (type %in% c("varcount", "k", "stan")) {
+    if (type %in% "varcount")
+      result <- get_samples(object$bart_varcount, include_warmup, only_warmup)
+    else
+      result <- get_samples(object[[type]], include_warmup, only_warmup)
   }
   # return parametric components early, as they don't require building model matrices
   if (type %in% c("fixef", "ranef", "sigma", "Sigma", "k", "varcount", "stan")) {

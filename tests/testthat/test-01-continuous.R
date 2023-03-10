@@ -83,6 +83,15 @@ test_that("extract include_samples works correctly", {
   expect_equal(unname(rbind(warmup, sample)), unname(both))
 })
 
+test_that("extract varcount works", {
+  varcounts <- extract(fit, "varcount")
+  expect_true(!is.null(varcounts))
+  expect_equal(dim(varcounts), c(9L, (13L - 7L) * 3L))
+  varcounts <- extract(fit, "varcount", combine_chains = FALSE)
+  expect_true(!is.null(varcounts))
+  expect_equal(dim(varcounts), c(9L, (13L - 7L), 3L))
+})
+
 test_that("verbose works with different model specifications", {
   invisible(capture.output(capture.output(
     fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,

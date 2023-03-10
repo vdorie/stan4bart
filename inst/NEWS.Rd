@@ -1,6 +1,14 @@
 \name{NEWS}
 \title{stan4bart News}
 \encoding{UTF-8}
+\section{CHANGES IN VERSION 0.0-7}{
+  \subsection{BUG FIXES}{
+    \itemize{
+      \item \code{extract} argument now works correctly with varcount. Bug
+            report thanks to Joshua Bon.
+    }
+  }
+}
 \section{CHANGES IN VERSION 0.0-4}{
   \subsection{NEW FEATURES}{
     \itemize{
