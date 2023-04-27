@@ -8,16 +8,31 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass, weights = NU
   formula[[2L]] <- NULL
   environment(formula) <- environment()
   
+  delete_weights <- FALSE
+  weights_name <- NULL
   mf_call <- quote(stats::model.frame(formula = formula, data = newdata, na.action = "na.pass"))
+  if (!is.null(object$weights)) {
+    weights_name <- deparse(object$call$weights)
+    if (weights_name %in% names(object$frame) && weights_name %not_in% names(newdata)) {
+      delete_weights <- TRUE
+
+      formula <- strip_extra_terms_from_language(formula, weights_name)
+      environment(formula) <- environment()
+    }
+  }
   
   result <- list(frame = eval(mf_call))
   
   # define the sub-model frames as applicable
   if (type %in% c("all", "fixed") && !is.null(object$X)) {
     orig.fixed.levs <- get.orig.levs(object, type = "fixed")
+
+    terms <- delete.response(terms(object, type = "fixed"))
+    if (delete_weights)
+      terms <- delete.weights(terms, weights_name)
     
     mf.fixed <- suppressWarnings(
-      model.frame(delete.response(terms(object, type = "fixed")), newdata,
+      model.frame(terms, newdata,
                   na.action = na.action, xlev = orig.fixed.levs)
     )
         
@@ -27,9 +42,13 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass, weights = NU
   
   if (type %in% c("all", "bart")) {
     orig.bart.levs <- attr(terms(object), "levels.bart")
+
+    terms <- delete.response(terms(object, type = "bart"))
+    if (delete_weights)
+      terms <- delete.weights(terms, weights_name)
     
     mf.bart <- suppressWarnings(
-      model.frame(delete.response(terms(object, type = "bart")), newdata,
+      model.frame(terms, newdata,
                   na.action = na.action, xlev = orig.bart.levs)
     )
     
@@ -42,6 +61,9 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass, weights = NU
     form.random <- formula(object, type = "random")
     
     tt <- delete.response(terms.random)
+    if (delete_weights)
+      tt <- delete.weights(tt, weights_name)
+    
     frame.random <- model.frame(object, type = "random")
     orig.random.levs <- get.orig.levs(object, newdata = newdata, type = "random")
     sparse <- !is.null(orig.random.levs) && max(lengths(orig.random.levs)) > 100

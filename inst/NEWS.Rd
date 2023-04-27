@@ -6,6 +6,8 @@
     \itemize{
       \item \code{extract} argument now works correctly with varcount. Bug
             report thanks to Joshua Bon.
+      \item \code{predict} now works with single chains. Bug report thanks to
+            github user Pentaonia (Louis).
     }
   }
 }

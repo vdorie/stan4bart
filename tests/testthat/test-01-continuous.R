@@ -245,6 +245,21 @@ test_that("predict matches supplied data", {
   expect_equal(samples.pred, samples.ev)
 })
 
+test_that("predict works with one chain", {
+  df.train <- df[seq_len(floor(0.8 * nrow(df))),]
+  df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
+  
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                   df.train,
+                   test = df.test,
+                   cores = 1, verbose = -1L, chains = 1, warmup = 7L, iter = 13L,
+                   bart_args = list(n.trees = 11, keepTrees = TRUE))
+  expect_is(fit, "stan4bartFit")
+  predictions <- predict(fit, df.test)
+  expect_equal(dim(predictions), c(nrow(df.test), 13L - 7L))
+  expect_equal(names(dimnames(predictions)), c("observation", "iterations:chains"))
+})
+
 test_that("ppd has approximately right amount of noise", {
   skip_if_not_installed("lme4")
   df.train <- df

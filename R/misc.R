@@ -51,3 +51,27 @@ strip_extra_terms <- function(terms, extra_terms) {
   terms
 }
 
+delete.weights <- function(termobj, weights)
+{
+  a <- attributes(termobj)
+  termobj <- strip_extra_terms_from_language(termobj, weights)
+  
+  w <- which(sapply(a$variables, "==", weights)) - 1L
+  if (length(w) == 1L && w > 0L) {
+    a$variables <- a$variables[-(1 + w)]
+    a$predvars  <- a$predvars[-(1 + w)]
+    if (length(a$factors) > 0L)
+      a$factors <- a$factors[-w,,drop = FALSE]
+    if (length(a$offset) > 0L) 
+      a$offset <- ifelse(a$offset > w, a$offset - 1, a$offset)
+    if (length(a$specials) > 0L) {
+      for (i in seq_along(a$specials)) {
+        b <- a$specials[[i]]
+        a$specials[[i]] <- ifelse(b > w, b - 1, b)
+      }
+    }  
+    attributes(termobj) <- a
+  }
+  
+  termobj
+}

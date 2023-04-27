@@ -665,6 +665,8 @@ predict.stan4bartFit <-
     if (is.null(object$sampler.bart))
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
     indiv.bart <- .Call(C_stan4bart_predictBART, object$sampler.bart, testData$X.bart, NULL)
+    if (length(dim(indiv.bart)) == 2L)
+      dim(indiv.bart) <- c(dim(indiv.bart), 1L)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
     if (!is_bernoulli) for (i_chain in seq_len(n_chains)) {
       indiv.bart[,,i_chain] <- object$range.bart["min",i_chain] +

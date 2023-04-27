@@ -106,8 +106,12 @@ stan4bart <-
     result$test <- testDataFrames
     
     if (!is.null(offset_test)) result$test$offset <- offset_test
-    if (!is.null(weights) && length(weights) > 0L)
-      result$test$frame[["(weights)"]] <- with(result$test$frame, eval(mc$weights))
+    if (!is.null(weights) && length(weights) > 0L) {
+      try_result <- tryCatch(result$test$frame[["(weights)"]] <- with(result$test$frame, eval(mc$weights)),
+                             error = function(e) e)
+      if (inherits(try_result, "error"))
+        warning("weights specified but not found in test data - ignoring")
+    }
     
     result$bartData@x.test <- testDataFrames$X.bart
     result$bartData@testUsesRegularOffset <- FALSE
