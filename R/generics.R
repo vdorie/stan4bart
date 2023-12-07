@@ -709,6 +709,8 @@ predict.stan4bartFit <-
     }
   }
   
+  dimnames(result)[[3L]] <- paste0("chain:", seq_len(dim(result)[3L]))
+  
   if (combine_chains) {
     if (is.list(result)) {
       result <- lapply(result, combine_chains_f)

@@ -20,6 +20,16 @@
 #define TREE_DEPTH_OFFSET 1
 #define DIVERGENT_TRANSITION_OFFSET 3
 
+#if __cplusplus < 201112L
+#  if defined(_WIN64) || SIZEOF_SIZE_T == 8
+#    define SIZE_T_SPECIFIER "%lu"
+#  else
+#    define SIZE_T_SPECIFIER "%u"
+#  endif
+#else
+#  define SIZE_T_SPECIFIER "%zu"
+#endif
+
 namespace {
 
 std::vector<int> getIntVector(SEXP x) {
@@ -148,7 +158,7 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   for (size_t i = 0; i < rc_getLength(pExpr); ++i) {
     if (p_int[i] == R_NaInt || p_int[i] < 1) {
       misc_stackFree(matchPos);
-      Rf_error("p[%lu] NA or less than 1", i + 1);
+      Rf_error("p[" SIZE_T_SPECIFIER "] NA or less than 1", i + 1);
     }
     len_var_group += p_int[i];
   }
@@ -277,18 +287,18 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   }
   if (static_cast<size_t>(x_dims[0]) != n || static_cast<size_t>(x_dims[1]) != k) {
     delete result;
-    Rf_error("x dim mismatch: got [%d, %d], expected [%lu, %lu]", x_dims[0], x_dims[1], n, k);
+    Rf_error("x dim mismatch: got [%d, %d], expected [" SIZE_T_SPECIFIER ", " SIZE_T_SPECIFIER "]", x_dims[0], x_dims[1], n, k);
   }
   
   if (y_len != n) {
     delete result;
-    Rf_error("y length mismatch: got %lu, expected %lu", y_len, n);
+    Rf_error("y length mismatch: got " SIZE_T_SPECIFIER ", expected " SIZE_T_SPECIFIER, y_len, n);
   }
 
   for (size_t i = 0; i < n; ++i) {
     if (y[i] < lb || y[i] > ub) {
       delete result;
-      Rf_error("y[%lu] out of [%f, %f] range", i + 1, lb, ub);
+      Rf_error("y[" SIZE_T_SPECIFIER "] out of [%f, %f] range", i + 1, lb, ub);
     }
   }
   if (rc_getLength(uExpr) != n + 1) {
@@ -298,71 +308,71 @@ StanModel* createStanModelFromExpression(SEXP dataExpr)
   for (size_t i = 0; i < n + 1; ++i) {
     if (u[i] < 0 || u[i] > maxU) {
       delete result;
-      Rf_error("u[%lu] out of [0, %d] range", i + 1, maxU);
+      Rf_error("u[" SIZE_T_SPECIFIER "] out of [0, %d] range", i + 1, maxU);
     }
   }
   
   if (has_weights ? (weights_len != n) : (has_weights != 0)) {
     delete result;
-    Rf_error("weights length mismatch: got %lu, expected %lu", weights_len, has_weights ? n : 0);
+    Rf_error("weights length mismatch: got " SIZE_T_SPECIFIER ", expected " SIZE_T_SPECIFIER, weights_len, has_weights ? n : static_cast<size_t>(0));
   }
   
   if (offset_len != n) {
     delete result;
-    Rf_error("offset length mismatch: got %lu, expected %lu", offset_len, n);
+    Rf_error("offset length mismatch: got " SIZE_T_SPECIFIER ", expected " SIZE_T_SPECIFIER, offset_len, n);
   }
   
   if (rc_getLength(prior_scaleExpr) != k) {
     delete result;
-    Rf_error("prior_scale length mismatch: got %lu, expected %lu", rc_getLength(prior_scaleExpr), k);
+    Rf_error("prior_scale length mismatch: got " SIZE_T_SPECIFIER ", expected " SIZE_T_SPECIFIER, rc_getLength(prior_scaleExpr), k);
   }
   for (size_t i = 0; i < k; ++i) {
     if (REAL(prior_scaleExpr)[i] < 0.0) {
       delete result;
-      Rf_error("prior_scale[%lu] out of [0, Inf) range", i + 1);
+      Rf_error("prior_scale[" SIZE_T_SPECIFIER "] out of [0, Inf) range", i + 1);
     }
   }
   if (rc_getLength(prior_meanExpr) != k) {
     delete result;
-    Rf_error("prior_mean length mismatch: got %lu, expected %lu", rc_getLength(prior_meanExpr), k);
+    Rf_error("prior_mean length mismatch: got " SIZE_T_SPECIFIER ", expected " SIZE_T_SPECIFIER, rc_getLength(prior_meanExpr), k);
   }
   for (size_t i = 0; i < k; ++i) {
     if (REAL(prior_meanExpr)[i] < 0.0) {
       delete result;
-      Rf_error("prior_mean[%lu] out of [0, Inf) range", i + 1);
+      Rf_error("prior_mean[" SIZE_T_SPECIFIER "] out of [0, Inf) range", i + 1);
     }
   }
   if (rc_getLength(prior_dfExpr) != k) {
     delete result;
-    Rf_error("prior_df length mismatch: got %lu, expected %lu", rc_getLength(prior_dfExpr), k);
+    Rf_error("prior_df length mismatch: got " SIZE_T_SPECIFIER ", expected " SIZE_T_SPECIFIER, rc_getLength(prior_dfExpr), k);
   }
   for (size_t i = 0; i < k; ++i) {
     if (REAL(prior_dfExpr)[i] < 0.0) {
       delete result;
-      Rf_error("prior_df[%lu] out of [0, Inf) range", i + 1);
+      Rf_error("prior_df[" SIZE_T_SPECIFIER "] out of [0, Inf) range", i + 1);
     }
   }
   
   if (prior_dist == 7) {
     if (rc_getLength(num_normalsExpr) != k) {
       delete result;
-      Rf_error("num_normals length mismatch: got %lu, expected %lu", rc_getLength(num_normalsExpr), k);
+      Rf_error("num_normals length mismatch: got " SIZE_T_SPECIFIER ", expected " SIZE_T_SPECIFIER, rc_getLength(num_normalsExpr), k);
     }
     for (size_t i = 0; i < k; ++i) {
       if (INTEGER(num_normalsExpr)[i] < 2) {
         delete result;
-        Rf_error("num_normals[%lu] out of [2, Inf) range", i);
+        Rf_error("num_normals[" SIZE_T_SPECIFIER "] out of [2, Inf) range", i);
       }
     }
   } else if (rc_getLength(num_normalsExpr) != 0) {
     delete result;
-    Rf_error("prior_df length mismatch: got %lu, expected %lu", rc_getLength(num_normalsExpr), 0);
+    Rf_error("prior_df length mismatch: got " SIZE_T_SPECIFIER ", expected 0", rc_getLength(num_normalsExpr));
   }
   
   for (size_t i = 0; i < static_cast<size_t>(numNonZero); ++i) {
     if (v[i] < 0 || v[i] > q - 1) {
       delete result;
-      Rf_error("v[%lu] out of [0, %d] range", i + 1, q - 1);
+      Rf_error("v[" SIZE_T_SPECIFIER "] out of [0, %d] range", i + 1, q - 1);
     }
   }
   
