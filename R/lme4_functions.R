@@ -1206,15 +1206,16 @@ get.orig.levs <- function (object, FUN = levels, newdata = NULL, sparse = FALSE,
   orig_levs
 }
 
-formula.stan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
+formula.stan4bartFit <- function(x, ...)
 {
+  dots_list <- list(...)
+  type <- match.arg(dots_list$type, c("all", "fixed", "random", "bart"))
+
   if (is.null(formula <- x$formula)) {
     if (!grepl("stan4bart$", deparse(x$call[[1]]))) 
       stop("can't find formula stored in model frame or call")
     form <- as.formula(formula(x$call))
   }
-  
-  type <- match.arg(type)
   
   if (type == "fixed") {
     RHSForm(formula) <- nobart(nobars(RHSForm(formula)))
@@ -1227,9 +1228,10 @@ formula.stan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
   formula
 }
 
-terms.stan4bartFit <- function(x, type = c("all", "fixed", "random", "bart")) 
+terms.stan4bartFit <- function(x, ...)
 {
-  type <- match.arg(type)
+  dots_list <- list(...)
+  type <- match.arg(dots_list$type, c("all", "fixed", "random", "bart"))
   
   terms <- attr(x$frame, "terms")
   if (type == "all")
@@ -1266,9 +1268,10 @@ terms.stan4bartFit <- function(x, type = c("all", "fixed", "random", "bart"))
   tt
 }
 
-model.frame.stan4bartFit <- function (formula, type = c("all", "fixed", "random", "bart"))
+model.frame.stan4bartFit <- function(formula, ...)
 {
-  type <- match.arg(type)
+  dots_list <- list(...)
+  type <- match.arg(dots_list$type, c("all", "fixed", "random", "bart"))
   
   frame <- formula$frame
   
@@ -1280,6 +1283,7 @@ model.frame.stan4bartFit <- function (formula, type = c("all", "fixed", "random"
   } else if (type == "bart") {
     frame <- frame[attr(terms(formula), "varnames.bart")]
   }
+
   frame
 }
 
