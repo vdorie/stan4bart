@@ -4,7 +4,7 @@ PKG_CXXFLAGS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::Cx
 PKG_CXXFLAGS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('include', package = 'RcppParallel', mustWork = TRUE); cat(paste0('-I', shQuote(TBB), ' -D_REENTRANT -DSTAN_THREADS'), ' ')")
 
 PKG_LIBS = $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "RcppParallel::RcppParallelLibs()")
-PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE); cat(paste0('-Wl,-rpath,', shQuote(TBB)), ' ')")
+PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE); if (R.version[['arch']] != 'aarch64') cat(paste0('-Wl,-rpath,', shQuote(TBB)), ' ')")
 PKG_LIBS += -Wl,--allow-multiple-definition
 
 CXX_STD = CXX17
