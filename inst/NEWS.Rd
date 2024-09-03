@@ -1,6 +1,14 @@
 \name{NEWS}
 \title{stan4bart News}
 \encoding{UTF-8}
+\section{CHANGES IN VERSION 0.0-8}{
+  \subsection{BUG FIXES}{
+    \itemize{
+      \item No longer uses \code{rpath} on Window64 arm. PR thanks to
+            Andrew Johnson.
+    }
+  }
+}
 \section{CHANGES IN VERSION 0.0-7}{
   \subsection{BUG FIXES}{
     \itemize{
