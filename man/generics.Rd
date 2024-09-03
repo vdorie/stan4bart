@@ -96,7 +96,7 @@
       \item \code{"stan"} - raw matrix or array of Stan sampled transformed
       parameters.
       \item \code{"trees"} - a data frame of flatted trees; see the subsection
-      on extracted trees in \code{\link{bart}} and note that stan4bart variable
+      on extracted trees in \code{\link[dbarts]{bart}} and note that stan4bart variable
       names can be found in the \code{bartData@x} element of a fitted stan4bart
       model
       \item \code{"callback"} - if a callback function was provided while
