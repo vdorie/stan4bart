@@ -182,7 +182,7 @@ stan4bart(formula,
     The \code{stan_args} and \code{bart_args} arguments to \code{stan4bart} can
     be used to pass further arguments to \code{stan} and \code{bart}
     respectively. These are similar to the functions \code{stan} in the
-    \code{rstan} package and \code{\link{bart}}, but not identical as
+    \code{rstan} package and \code{\link[dbarts]{bart}}, but not identical as
     \code{stan4bart} constructs its own model internally.
     
     Stan arguments include:
@@ -302,7 +302,7 @@ stan4bart(formula,
   Vincent Dorie: \email{vdorie@gmail.com}.
 }
 \seealso{
-  \code{\link{bart}}, \code{\link[lme4]{lmer}}, and \code{stan_glmer} in the 
+  \code{\link[dbarts]{bart}}, \code{\link[lme4]{lmer}}, and \code{stan_glmer} in the 
   \code{rstanarm} package
 }
 \examples{
