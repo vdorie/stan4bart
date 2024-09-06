@@ -22,9 +22,12 @@ fi
 TBB_LIB=`"${R_HOME}/bin/Rscript" -e "
 cat(system.file('lib', .Platform[['r_arch']], package = 'RcppParallel', mustWork = TRUE))" | grep "RcppParallel"`
 
-PKG_CXXFLAGS=`"${R_HOME}/bin/Rscript" -e "RcppParallel::CxxFlags()" -e "
+RCPP_PARALLEL_FLAGS=`"${R_HOME}/bin/Rscript" -e "RcppParallel::CxxFlags()"`
+TBB_FLAGS=`"${R_HOME}/bin/Rscript" -e "
 TBB <- system.file('include', package = 'RcppParallel', mustWork = TRUE)
 cat(paste0('-I', shQuote(TBB), ' -D_REENTRANT -DSTAN_THREADS'), ' ')"`
+
+PKG_CXXFLAGS="${RCPP_PARALLEL_FLAGS} ${TBB_FLAGS}"
 
 RCPP_PKG_LIBS=`"${R_HOME}/bin/Rscript" -e "RcppParallel::RcppParallelLibs()"`
 TBB_PKG_LIBS="-L${TBB_LIB} -Wl,-rpath,'${TBB_LIB}' -ltbb -ltbbmalloc"
