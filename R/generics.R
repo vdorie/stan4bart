@@ -187,7 +187,7 @@ extract.stan4bartFit <-
     treeNums <- if ("treeNums" %in% names(dotsList)) as.integer(dotsList[["treeNums"]]) else NULL
     chainNums <- if ("chainNums" %in% names(dotsList)) as.integer(dotsList[["chainNums"]]) else NULL
     sampleNums <- if ("sampleNums" %in% names(dotsList)) as.integer(dotsList[["sampleNums"]]) else NULL
-    return(.Call(C_stan4bart_getTrees, object$sampler.bart, chainNums, sampleNums, treeNums))
+    return(.Call(C_stan4bart_getTrees, object$sampler.bart, chainNums, sampleNums, treeNums, FALSE))
   } else {
     if (length(list(...)) > 0) warning("unused arguments ignored")
   }
