@@ -39,11 +39,14 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   if (is.na(seed))
     orig_seed <- .Random.seed
   
-  sampler <- .Call(C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
   if (control.common$verbose > 0L) {
     cat("fitting chain ", chain.num, "\n", sep = "")
-    .Call(C_stan4bart_printInitialSummary, sampler)
+    # a verbose control prints the bart initial summary during creation
+    control.bart@verbose <- TRUE
   }
+  sampler <- .Call(C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
+  if (control.common$verbose > 0L)
+    .Call(C_stan4bart_printInitialSummary, sampler)
   results <- list()
   if (control.common$warmup > 0L)
     results$warmup  <- .Call(C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
@@ -51,10 +54,10 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   results$sample <- .Call(C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
                           FALSE, "both")
   
-  if (control.bart@keepTrees) {
+  # predictions from a restored sampler arrive on the original response
+  # scale (the state carries the fit's transform), so only the state exports
+  if (control.bart@keepTrees)
     results$state.bart <- .Call(C_stan4bart_exportBARTState, sampler)
-    results$range.bart <- .Call(C_stan4bart_getBARTDataRange, sampler)
-  }
   
   results
 }
@@ -574,7 +577,11 @@ stan4bart_fit <-
     if (chains > 1L) for (i in seq.int(2L, chains))
       all_state[[i]] <- chainResults[[i]]$state.bart[[1L]]
     
-    
+    # restoration needs the control shaped to the state: one entry per chain
+    # and tree storage sized to the saved sampling iterations
+    control.bart@n.chains <- chains
+    control.bart@keepTrees <- TRUE
+    control.bart@n.samples <- as.integer(iter - warmup)
     attr(chainResults, "sampler.bart") <- 
       .Call(C_stan4bart_createStoredBARTSampler, control.bart, data.bart, model.bart, all_state)
   }

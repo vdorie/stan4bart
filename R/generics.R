@@ -664,14 +664,12 @@ predict.stan4bartFit <-
   if (type %in% c("ev", "ppd", "indiv.bart")) {
     if (is.null(object$sampler.bart))
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
+    # predictions arrive on the original response scale: the restored
+    # sampler's state carries each chain's fit transform
     indiv.bart <- .Call(C_stan4bart_predictBART, object$sampler.bart, testData$X.bart, NULL)
     if (length(dim(indiv.bart)) == 2L)
       dim(indiv.bart) <- c(dim(indiv.bart), 1L)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
-    if (!is_bernoulli) for (i_chain in seq_len(n_chains)) {
-      indiv.bart[,,i_chain] <- object$range.bart["min",i_chain] +
-        (0.5 + indiv.bart[,,i_chain]) * (object$range.bart["max",i_chain] - object$range.bart["min",i_chain])
-    }
   }
   if (type %in% c("ev", "ppd", "indiv.ranef")) {
     

@@ -443,13 +443,8 @@ package_samples <- function(chain_results, bart_var_names) {
   if (!is.na(n_warmup) && n_warmup > 0L)
     result$warmup <- warmup
   
-  if (!is.null(attr(chain_results, "sampler.bart"))) {
+  if (!is.null(attr(chain_results, "sampler.bart")))
     result$sampler.bart <- attr(chain_results, "sampler.bart")
-    result$range.bart <- matrix(sapply(seq_len(n_chains), function(i_chains)
-                                       chain_results[[i_chains]]$range.bart),
-                                nrow = 2L, ncol = n_chains,
-                                dimnames = list(c("min", "max"), chain = chain_names))
-  }
   
   result
 }

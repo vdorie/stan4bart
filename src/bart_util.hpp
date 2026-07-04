@@ -1,67 +1,72 @@
 #ifndef BART_UTIL_HPP
 #define BART_UTIL_HPP
 
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
 #include <ext/Rinternals.h>
 
-#include <dbarts/bartFit.hpp>
-#include <dbarts/results.hpp>
+#include <dbarts/dbarts.h>
 
 namespace stan4bart {
 
-  SEXP createBartResultsExpr(const dbarts::BARTFit& fit, const dbarts::Results& results);
+  /// Per-iteration landing buffers for dbarts_sampler_run: sized for a full
+  /// run's draws, with the current-iteration pointers advanced by the
+  /// caller between single-draw runs. The flat-C-API replacement for the
+  /// retired dbarts::Results subclass; single chain.
+  struct IterableBartResults {
+    std::size_t numObservations, numPredictors, numTestObservations;
+    std::size_t numSamples;
+    bool kIsSampled;
 
-  
-  struct IterableBartResults : dbarts::Results {
-    double* base_sigmaSamples;
-    double* base_trainingSamples;
-    double* base_testSamples;
-    std::uint32_t* base_variableCountSamples;
-    double* base_kSamples;
-    
-    size_t base_numSamples;
-    
-    IterableBartResults(std::size_t numObservations, std::size_t numPredictors,
-                        std::size_t numTestObservations, std::size_t numSamples, std::size_t numChains,
-                        bool kIsModeled) :
-     Results(numObservations, numPredictors, numTestObservations, numSamples, numChains, kIsModeled),
-     base_sigmaSamples(sigmaSamples),
-     base_trainingSamples(trainingSamples),
-     base_testSamples(testSamples),
-     base_variableCountSamples(variableCountSamples),
-     base_kSamples(kSamples),
-     base_numSamples(numSamples)
-     {
-       this->numSamples = 1;
-     }
-    
-     void incrementPointers() {
-       sigmaSamples += 1;
-       trainingSamples += numObservations;
-       if (testSamples != NULL)
-         testSamples += numTestObservations;
-       variableCountSamples += numPredictors;
-       if (kSamples != NULL)
-         kSamples += 1;
-     }
-     
-     void resetPointers() {
-       kSamples = base_kSamples;
-       variableCountSamples = base_variableCountSamples;
-       testSamples = base_testSamples;
-       trainingSamples = base_trainingSamples;
-       sigmaSamples = base_sigmaSamples;
-       numSamples = base_numSamples;
-     }
-     
-     ~IterableBartResults() {
-       resetPointers();
-       base_kSamples = NULL;
-       base_variableCountSamples = NULL;
-       base_testSamples = NULL;
-       base_trainingSamples = NULL;
-       base_sigmaSamples = NULL;
-     }
+    std::vector<double> sigmaSamples, trainingSamples, testSamples, kSamples;
+    std::vector<std::uint32_t> variableCountSamples;
+
+    std::size_t position;
+    dbarts_results current;
+
+    IterableBartResults(std::size_t numObservations_,
+                        std::size_t numPredictors_,
+                        std::size_t numTestObservations_,
+                        std::size_t numSamples_, bool kIsSampled_)
+      : numObservations(numObservations_), numPredictors(numPredictors_),
+        numTestObservations(numTestObservations_), numSamples(numSamples_),
+        kIsSampled(kIsSampled_), sigmaSamples(numSamples_),
+        trainingSamples(numObservations_ * numSamples_),
+        testSamples(numTestObservations_ * numSamples_),
+        kSamples(kIsSampled_ ? numSamples_ : 0),
+        variableCountSamples(numPredictors_ * numSamples_), position(0)
+    {
+      setCurrentPointers();
+    }
+
+    /// Aims the run outputs at this iteration's slice.
+    void setCurrentPointers() {
+      current.sigma = sigmaSamples.data() + position;
+      current.train = trainingSamples.data() + position * numObservations;
+      current.test = numTestObservations > 0
+        ? testSamples.data() + position * numTestObservations : NULL;
+      current.varcount = variableCountSamples.data() +
+                         position * numPredictors;
+      current.k = kIsSampled ? kSamples.data() + position : NULL;
+      current.varprobs = NULL;
+    }
+
+    void incrementPointers() {
+      ++position;
+      setCurrentPointers();
+    }
+
+    void resetPointers() {
+      position = 0;
+      setCurrentPointers();
+    }
   };
+
+  /// A named list of (sigma, train, test, varcount[, k]) in single-chain
+  /// layout, as the retired dbarts::Results-based version produced.
+  SEXP createBartResultsExpr(const IterableBartResults& results);
 }
 
 #endif // BART_UTIL_HPP

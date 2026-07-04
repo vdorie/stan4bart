@@ -173,7 +173,9 @@ glFormula <- function(formula, data = NULL, subset, weights,
       attr(attr(fr, "terms"), "varnames.bart") <- getVariableNames(bartterms)
     }
     
-    bartData <- dbarts::dbartsData(bartform, bartfr)
+    # dbarts >= 1.0 defaults factors to single categorical columns; the
+    # prediction and factor-level machinery here is built around indicators
+    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "indicators")
     if (ncol(bartData@x) == 0L)
       stop("no bart component detected in formula; consider using rstanarm package instead")
     

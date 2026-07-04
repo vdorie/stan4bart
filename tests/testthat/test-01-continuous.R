@@ -266,9 +266,12 @@ test_that("ppd has approximately right amount of noise", {
   
   set.seed(15)
   
+  # the ev/ppd mean gap is sigma^2 / numSamples by construction, so the
+  # first check needs sigma near its converged value; run long enough that
+  # convergence is not trajectory luck for the pinned seed
   fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df.train,
-                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
-                   bart_args = list(n.trees = 11))
+                   cores = 1, verbose = -1L, chains = 2, warmup = 100, iter = 200,
+                   bart_args = list(n.trees = 25))
   
   
   samples.ev  <- extract(fit)
