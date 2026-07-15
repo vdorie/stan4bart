@@ -41,7 +41,8 @@ const char* const controlNames[] = {
   "adapt_t0",
   "stepsize",
   "stepsize_jitter",
-  "max_treedepth"
+  "max_treedepth",
+  "save_raw_parameters"
 };
 
 }  // anonymous namespace
@@ -120,6 +121,8 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
   control.max_treedepth = rc_getIntAt(controlExpr, matchPos[12], "max_treedepth",
     RC_VALUE | RC_GEQ, 0,
     RC_VALUE | RC_DEFAULT, 10, RC_END);
+  control.save_raw = rc_getIntAt(controlExpr, matchPos[13], "save_raw_parameters",
+    RC_VALUE | RC_DEFAULT, 0, RC_END) != 0;
 
   misc_stackFree(matchPos);
 }
@@ -164,12 +167,14 @@ void printStanControl(const StanControl& control)
           "  adapt_t0: %f\n"
           "  stepsize: %f\n"
           "  stepsize_jitter: %f\n"
-          "  max_treedepth: %d\n",
+          "  max_treedepth: %d\n"
+          "  save_raw_parameters: %d\n",
           control.random_seed, control.init_radius,
           control.skip, control.adapt_gamma, control.adapt_delta,
           control.adapt_kappa, control.adapt_init_buffer, control.adapt_term_buffer,
           control.adapt_window, control.adapt_t0, control.stepsize,
-          control.stepsize_jitter, control.max_treedepth);
+          control.stepsize_jitter, control.max_treedepth,
+          control.save_raw ? 1 : 0);
 }
 
 }  // namespace stan4bart

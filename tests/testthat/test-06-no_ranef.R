@@ -46,6 +46,12 @@ test_that("extract matches as.array for fixef only model", {
 })
 
 test_that("extract include_samples works correctly for fixef only model", {
+  # warmup draws are not stored by default; opt in with save_warmup = TRUE
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z, df,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 5, iter = 8,
+                   bart_args = list(n.trees = 2), save_warmup = TRUE,
+                   treatment = z)
+
   sample <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = FALSE)
   warmup <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = "only")
   both   <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = TRUE)

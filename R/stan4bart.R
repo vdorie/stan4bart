@@ -19,6 +19,7 @@ stan4bart <-
            offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
            seed = NA_integer_,
            keep_fits = TRUE,
+           save_warmup = FALSE,
            callback = NULL,
            stan_args = NULL,
            bart_args = NULL)
@@ -227,6 +228,7 @@ stan4bart <-
                                  refresh,
                                  seed,
                                  keep_fits,
+                                 save_warmup,
                                  callback,
                                  callbackEnv,
                                  stan_args,
@@ -263,7 +265,7 @@ check_sampler_diagnostics <- function(object, stan_args, n_upars)
   # names; they carry no signal to check. object$diagnostics (the field this
   # function historically read) was never actually populated even under
   # Stan, so every check below was already unreachable dead code. Dropped
-  # per docs/plans/walnuts.md Q(c); kept as a documented no-op call site
+  # (docs/design/walnuts.md); kept as a documented no-op call site
   # rather than removed, in case WALNUTS grows real diagnostics upstream.
   invisible(NULL)
 }
@@ -414,10 +416,46 @@ package_samples <- function(chain_results, bart_var_names) {
   
   if (!is.na(n_warmup) && n_warmup > 0L)
     result$warmup <- warmup
-  
+
+  # Adaptation summaries, captured per chain at the adaptation freeze: the
+  # frozen step size and diagonal inverse mass, a warmup-end snapshot, and a
+  # thinned trace of the monitored scalars (parametric rows + BART sigma).
+  # These replace full warmup storage as the sampler-tuning attribution
+  # record when save_warmup = FALSE. The single non-"warmup"-prefixed
+  # $adaptation slot avoids `$warmup` partial-matching. See
+  # docs/design/walnuts.md (storage policy).
+  if (!is.null(chain_results[[1L]]$adaptation)) {
+    step_size <- vapply(chain_results, function(cr) cr$adaptation$step_size, numeric(1L))
+    inv_mass  <- sapply(chain_results, function(cr) cr$adaptation$inv_mass)
+    dimnames(inv_mass) <- list(parameter = NULL, chain = chain_names)
+    adaptation <- list(step_size = setNames(step_size, chain_names), inv_mass = inv_mass)
+
+    if (!is.null(chain_results[[1L]]$snapshot)) {
+      snapshot <- sapply(chain_results, function(cr) cr$snapshot)
+      dimnames(snapshot) <- list(parameters = names(chain_results[[1L]]$snapshot),
+                                 chain = chain_names)
+      adaptation$snapshot <- snapshot
+    }
+
+    if (!is.null(chain_results[[1L]]$trace)) {
+      tr_stan <- chain_results[[1L]]$trace$stan
+      n_tr <- ncol(tr_stan)
+      adaptation$trace <- list(stan = array(
+        sapply(seq_len(n_chains), function(i_chains) chain_results[[i_chains]]$trace$stan),
+        dim = c(nrow(tr_stan), n_tr, n_chains),
+        dimnames = list(parameters = rownames(tr_stan), iterations = NULL, chain = chain_names)))
+      if (!is.null(chain_results[[1L]]$trace$sigma)) {
+        adaptation$trace$sigma <- matrix(
+          sapply(seq_len(n_chains), function(i_chains) chain_results[[i_chains]]$trace$sigma),
+          n_tr, n_chains, dimnames = list(iterations = NULL, chain = chain_names))
+      }
+    }
+    result$adaptation <- adaptation
+  }
+
   if (!is.null(attr(chain_results, "sampler.bart")))
     result$sampler.bart <- attr(chain_results, "sampler.bart")
-  
+
   result
 }
 

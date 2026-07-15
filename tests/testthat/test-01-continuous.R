@@ -65,22 +65,73 @@ test_that("extract matches as.array", {
   }
 })
 
-test_that("extract include_samples works correctly", {
+test_that("default fit stores no warmup draws but keeps tuning summaries", {
+  # slim parametric store: only the two LIVE diagnostics (lp__, stepsize__) and
+  # the transformed block (aux, beta, b, theta_L); no raw rows, no placeholders
+  stan_rows <- dimnames(fit$stan)$parameters
+  expect_equal(fit$par_names$diagnostic, c("lp__", "stepsize__"))
+  expect_length(fit$par_names$upar, 0L)
+  expect_false(any(grepl("^(z_beta|z_b|z_T|rho|zeta|tau|aux_unscaled)\\.", stan_rows)))
+  expect_false(any(c("accept_stat__", "treedepth__", "n_leapfrog__", "divergent__", "energy__") %in% stan_rows))
+  expect_true(all(c("lp__", "stepsize__", "aux.1") %in% stan_rows))
+  expect_true(any(startsWith(stan_rows, "beta.")) && any(startsWith(stan_rows, "b.")) &&
+              any(startsWith(stan_rows, "theta_L.")))
+
+  # no full warmup, but adaptation summaries + a thinned trace are present
+  expect_null(fit[["warmup"]])
+  expect_false(is.null(fit$adaptation))
+  n_chains <- dim(fit$stan)[3L]
+  expect_length(fit$adaptation$step_size, n_chains)
+  expect_equal(dim(fit$adaptation$inv_mass)[2L], n_chains)
+  expect_equal(dim(fit$adaptation$snapshot), c(length(stan_rows), n_chains))
+  expect_equal(dim(fit$adaptation$trace$stan), c(length(stan_rows), 7L, n_chains))
+  expect_equal(dim(fit$adaptation$trace$sigma), c(7L, n_chains))
+})
+
+test_that("include_warmup errors informatively when warmup was not saved", {
+  expect_error(extract(fit, "fixef", include_warmup = TRUE), "save_warmup = FALSE")
+  expect_error(extract(fit, "fixef", include_warmup = "only"), "save_warmup = FALSE")
+  expect_error(as.array(fit, include_warmup = TRUE), "save_warmup = FALSE")
+})
+
+test_that("extract include_samples works correctly with save_warmup = TRUE", {
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                   cores = 2, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11), save_warmup = TRUE,
+                   treatment = z)
+  expect_false(is.null(fit$warmup$stan))
+
   sample <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = FALSE)
   warmup <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = "only")
   both   <- extract(fit, "fixef", combine_chains = FALSE, include_warmup = TRUE)
-  
+
   expect_equal(dim(warmup)[2L] + dim(sample)[2L], dim(both)[2L])
   for (i in seq_len(dim(warmup)[1L])) {
     expect_equal(unname(rbind(warmup[i,,], sample[i,,])), unname(both[i,,]))
   }
-  
+
   sample <- extract(fit, "sigma", combine_chains = FALSE, include_warmup = FALSE)
   warmup <- extract(fit, "sigma", combine_chains = FALSE, include_warmup = "only")
   both   <- extract(fit, "sigma", combine_chains = FALSE, include_warmup = TRUE)
-  
+
   expect_equal(dim(warmup)[1L] + dim(sample)[1L], dim(both)[1L])
   expect_equal(unname(rbind(warmup, sample)), unname(both))
+})
+
+test_that("save_raw_parameters restores the raw unconstrained rows", {
+  fit_raw <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                       cores = 1, verbose = -1L, chains = 2, warmup = 7, iter = 13,
+                       bart_args = list(n.trees = 11), seed = 0,
+                       stan_args = list(save_raw_parameters = TRUE))
+  raw_rows <- dimnames(fit_raw$stan)$parameters
+  expect_true(any(startsWith(raw_rows, "z_beta.")))
+  expect_true(all(c("accept_stat__", "divergent__") %in% raw_rows))
+  expect_gt(length(fit_raw$par_names$upar), 0L)
+  # extract(fit, "stan") surfaces the raw rows behind the opt-in
+  expect_true(any(startsWith(rownames(extract(fit_raw, "stan")), "z_beta.")))
+  # the transformed draws are identical to the slim store (storage is neutral)
+  expect_equal(unname(extract(fit_raw, "fixef", combine_chains = FALSE)),
+               unname(extract(fit_raw, "stan", combine_chains = FALSE)[startsWith(raw_rows, "beta."),,,drop=FALSE]))
 })
 
 test_that("extract varcount works", {

@@ -15,7 +15,21 @@ combine_chains_f <- function(x) {
   }
 }
 
-as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...) 
+# Guard the include_warmup accessors against a fit that did not store warmup
+# (the save_warmup = FALSE default): error informatively rather than let the
+# NULL $warmup surface as a cryptic subsetting failure.
+check_warmup_stored <- function(object, include_warmup) {
+  wants_warmup <- isTRUE(include_warmup) ||
+    (is.character(include_warmup) && length(include_warmup) == 1L && include_warmup == "only")
+  if (wants_warmup && is.null(object$warmup))
+    stop("this fit was created with save_warmup = FALSE, so full warmup draws were not ",
+         "stored; refit with save_warmup = TRUE to inspect them. A thinned warmup trace is ",
+         "in 'fit$warmup_trace' and the frozen tuning summaries in 'fit$adaptation'.",
+         call. = FALSE)
+  invisible(NULL)
+}
+
+as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...)
 {
   include_warmup_orig <- include_warmup
   if (is.character(include_warmup)) {
@@ -28,6 +42,7 @@ as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...)
   } else {
     only_warmup <- FALSE
   }
+  check_warmup_stored(x, include_warmup_orig)
 
   result <- get_samples(x$stan[grep("^(?:gamma|beta|b|aux)\\.", dimnames(x$stan)[[1L]], perl = TRUE),,,drop = FALSE], include_warmup, only_warmup)
   
@@ -205,6 +220,7 @@ extract.stan4bartFit <-
   } else {
     only_warmup <- FALSE
   }
+  check_warmup_stored(object, include_warmup_orig)
 
   if (type == "callback") {
     if ((include_warmup && is.null(object$warmup$callback)) ||

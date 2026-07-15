@@ -65,6 +65,15 @@ struct ParametricModel {
   bool is_binary = false;
   bool has_weights = false;
 
+  /// \brief When false (the storage default), eval() emits and
+  ///        constrainedParamNames() names ONLY the transformed block consumers
+  ///        read (aux, beta, b, theta_L); the raw unconstrained rows
+  ///        (z_beta/z_b/z_T/rho/zeta/tau/aux_unscaled) are dropped. When true
+  ///        (save_raw_parameters opt-in, funnel forensics) the full Stan
+  ///        write_array block is emitted exactly as historically. See
+  ///        docs/design/walnuts.md, storage policy.
+  bool save_raw = false;
+
   // --- data (y_ and offset_ mutable for the per-sweep Gibbs refresh) ---
   Eigen::MatrixXd X;        // N x K, centered fixed-effect design
   Eigen::VectorXd y_;       // N
@@ -147,23 +156,34 @@ struct ParametricModel {
 
   int dim() const { return dim_; }
 
-  /// \brief Length of the constrained parameter array Stan's write_array emits
-  ///        for the reachable scope (has_intercept == 0, no shrinkage latents):
-  ///   z_beta, z_b, z_T, rho, zeta, tau, [aux_unscaled, aux], beta, b, theta_L.
+  /// \brief The raw/unconstrained prefix (z_beta, z_b, z_T, rho, zeta, tau,
+  ///        [aux_unscaled]) that precedes the transformed block; stored only
+  ///        under save_raw.
+  int rawConstrainedDim() const {
+    return K + q + len_z_T + len_rho + len_concentration + t + (is_binary ? 0 : 1);
+  }
+  /// \brief The transformed block every consumer reads: [aux], beta, b, theta_L.
+  int transformedConstrainedDim() const {
+    return (is_binary ? 0 : 1) + K + q + len_theta_L;
+  }
+
+  /// \brief Length of the constrained parameter array emitted per stored draw.
+  ///        Under save_raw this is the full Stan write_array block
+  ///        (z_beta, z_b, z_T, rho, zeta, tau, [aux_unscaled, aux], beta, b,
+  ///        theta_L); by default only the transformed block ([aux], beta, b,
+  ///        theta_L) is stored.
   int constrainedDim() const {
-    return K + q + len_z_T + len_rho + len_concentration + t
-         + (is_binary ? 0 : 2)   // aux_unscaled + aux
-         + K + q + len_theta_L;   // beta + b + theta_L
+    return (save_raw ? rawConstrainedDim() : 0) + transformedConstrainedDim();
   }
 
   /// \brief Index of beta.1 within the constrained array (b follows at +K).
   int betaConstrainedOffset() const {
-    return K + q + len_z_T + len_rho + len_concentration + t + (is_binary ? 0 : 2);
+    return (save_raw ? rawConstrainedDim() : 0) + (is_binary ? 0 : 1);
   }
   /// \brief Index of aux.1 (the residual sd) within the constrained array;
-  ///        valid only when !is_binary.
+  ///        valid only when !is_binary. aux leads the transformed block.
   int auxConstrainedOffset() const {
-    return K + q + len_z_T + len_rho + len_concentration + t + 1;
+    return save_raw ? rawConstrainedDim() : 0;
   }
 
   /// \brief The Stan-identical constrained parameter names, in write_array
@@ -177,13 +197,16 @@ struct ParametricModel {
       for (int i = 1; i <= n; ++i)
         names.emplace_back(std::string(base) + "." + std::to_string(i));
     };
-    emit("z_beta", K);
-    emit("z_b", q);
-    emit("z_T", len_z_T);
-    emit("rho", len_rho);
-    emit("zeta", len_concentration);
-    emit("tau", t);
-    if (!is_binary) { emit("aux_unscaled", 1); emit("aux", 1); }
+    if (save_raw) {
+      emit("z_beta", K);
+      emit("z_b", q);
+      emit("z_T", len_z_T);
+      emit("rho", len_rho);
+      emit("zeta", len_concentration);
+      emit("tau", t);
+      if (!is_binary) emit("aux_unscaled", 1);
+    }
+    if (!is_binary) emit("aux", 1);
     emit("beta", K);
     emit("b", q);
     emit("theta_L", len_theta_L);
@@ -354,15 +377,18 @@ struct ParametricModel {
     //     (continuous.stan:51-55), so make_b reconstructs the same T. ---
     if (constrained != nullptr) {
       int o = 0;
-      for (int k = 0; k < K; ++k)                  constrained[o++] = z_beta_p[k];
-      for (int s = 0; s < q; ++s)                  constrained[o++] = z_b_p[s];
-      for (int e = 0; e < len_z_T; ++e)            constrained[o++] = z_T_p[e];
-      for (int j = 0; j < len_rho; ++j)            constrained[o++] = rho[j];
-      for (int j = 0; j < len_concentration; ++j)  constrained[o++] = zeta[j];
-      for (int i = 0; i < t; ++i)                  constrained[o++] = tau[i];
-      if (!is_binary) { constrained[o++] = au; constrained[o++] = aux; }
-      for (int k = 0; k < K; ++k)                  constrained[o++] = beta[k];
-      for (int s = 0; s < q; ++s)                  constrained[o++] = b[s];
+      if (save_raw) {
+        for (int k = 0; k < K; ++k)                  constrained[o++] = z_beta_p[k];
+        for (int s = 0; s < q; ++s)                  constrained[o++] = z_b_p[s];
+        for (int e = 0; e < len_z_T; ++e)            constrained[o++] = z_T_p[e];
+        for (int j = 0; j < len_rho; ++j)            constrained[o++] = rho[j];
+        for (int j = 0; j < len_concentration; ++j)  constrained[o++] = zeta[j];
+        for (int i = 0; i < t; ++i)                  constrained[o++] = tau[i];
+        if (!is_binary)                              constrained[o++] = au;  // aux_unscaled
+      }
+      if (!is_binary)                                constrained[o++] = aux; // residual sd
+      for (int k = 0; k < K; ++k)                    constrained[o++] = beta[k];
+      for (int s = 0; s < q; ++s)                    constrained[o++] = b[s];
       for (const Block& bl : blocks) {
         const int nc = bl.nc;
         for (int c = 0; c < nc; ++c)

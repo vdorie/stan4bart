@@ -28,6 +28,35 @@
   imported. C++20 is now required (`SystemRequirements: C++20`). WALNUTS
   (MIT license, Bob Carpenter) is vendored under `inst/include/walnuts`.
 
+## Storage
+
+* Warmup draws are no longer stored by default (`save_warmup = FALSE`), and the
+  returned parametric ("stan") store keeps only the transformed rows every
+  consumer reads (`beta`, `b`, `theta_L`, `aux`) plus the two live diagnostics
+  (`lp__`, `stepsize__`). The raw unconstrained rows (`z_beta`, `z_b`, `z_T`,
+  `rho`, `zeta`, `tau`, `aux_unscaled`) and the five constant-zero placeholder
+  diagnostic rows (`accept_stat__`, `treedepth__`, `n_leapfrog__`,
+  `divergent__`, `energy__`) - none of which is read by any computed surface -
+  are dropped from default storage. Not storing warmup roughly halves the fit
+  object at scale (`bart_train` is ~50% of the object and its warmup copy is the
+  same again); every quantitative convergence diagnostic in the 2026 toolchain
+  is defined on post-warmup draws only, matching cmdstanr/rstanarm/brms
+  defaults. In place of full warmup the fit gains an `adaptation` component: per
+  chain the frozen step size and diagonal inverse mass (which WALNUTS tuned and
+  the previous build discarded), a warmup-end position snapshot, and a thinned
+  warmup trace of the monitored scalars. Recomputing `bart_train` from stored
+  trees was considered and left out of scope; `bart_train` and the derivable
+  `f` functionals are unchanged. See `docs/plans/sample-storage.md` for the
+  measurements and rationale.
+
+* Two opt-ins restore the old behavior: `save_warmup = TRUE` stores the full
+  per-draw warmup under `warmup` (and re-enables the `include_warmup = TRUE`
+  accessors; on a default fit they now error informatively), and
+  `stan_args = list(save_raw_parameters = TRUE)` restores the raw unconstrained
+  rows (funnel forensics). The stored draws themselves are unchanged - the
+  sampler path is untouched - so posterior summaries are identical to prior
+  releases regardless of the storage flags.
+
 ## Deprecated
 
 * The NUTS-specific `stan_args` controls - `adapt_delta`, `adapt_gamma`,

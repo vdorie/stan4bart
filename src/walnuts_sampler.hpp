@@ -27,8 +27,9 @@ struct WalnutsSampler : public ParametricSampler {
   /// \param random_seed the per-chain seed (threaded exactly as Stan's was).
   /// \param init_radius unconstrained init half-width (Stan's init_r).
   /// \param num_warmup the outer loop's warmup sweep count.
+  /// \param save_raw keep the raw unconstrained rows in the stored draw.
   WalnutsSampler(SEXP dataExpr, unsigned int random_seed, double init_radius,
-                 int num_warmup);
+                 int num_warmup, bool save_raw);
   ~WalnutsSampler() override;
 
   void run(bool isWarmup) override;
@@ -38,6 +39,10 @@ struct WalnutsSampler : public ParametricSampler {
   void getParametricMean(double* result, bool includeFixed,
                          bool includeRandom) const override;
   double getSigma() const override;
+
+  double getStepSize() const override;
+  int getAdaptDim() const override;
+  void getInvMass(double* out) const override;
 
   void setOffset(const double* offset) override;
   void setResponse(const double* y) override;

@@ -233,8 +233,13 @@ chain_health <- function(fit, tail_frac = 0.2, accept_floor = 0.3, divergent_cei
   nms <- dimnames(fit$stan)[[1L]]
   accept_idx <- match("accept_stat__", nms)
   div_idx <- match("divergent__", nms)
-  n_iter <- dim(fit$stan)[2L]
   n_chains <- dim(fit$stan)[3L]
+  # The WALNUTS default storage policy drops the constant-zero accept_stat__ /
+  # divergent__ placeholder rows (docs/plans/sample-storage.md); with no
+  # divergence signal to read, every chain is healthy by construction.
+  if (is.na(accept_idx) || is.na(div_idx))
+    return(rep(TRUE, n_chains))
+  n_iter <- dim(fit$stan)[2L]
   tail_idx <- seq.int(max(1L, floor(n_iter * (1 - tail_frac)) + 1L), n_iter)
   vapply(seq_len(n_chains), function(cc) {
     accept_tail <- fit$stan[accept_idx, tail_idx, cc]

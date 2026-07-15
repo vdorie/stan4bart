@@ -215,7 +215,8 @@ extern "C" {
     // same per-chain seed Stan used (control.stan$seed), so reproducibility
     // (test-05-rng) is preserved.
     sampler.paramSampler = new stan4bart::WalnutsSampler(stanDataExpr, sampler.stanControl.random_seed,
-                                                         sampler.stanControl.init_radius, sampler.defaultWarmup);
+                                                         sampler.stanControl.init_radius, sampler.defaultWarmup,
+                                                         sampler.stanControl.save_raw);
     sampler.paramSampler->setVerbose(sampler.verbose);
     
     // a verbose control prints the initial summary during creation; tree
@@ -857,10 +858,37 @@ extern "C" {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
     if (samplerPtr == NULL) Rf_error("disengageAdaptation called on NULL external pointer");
     Sampler& sampler(*samplerPtr);
-    
+
     sampler.paramSampler->freeze();
 
     return R_NilValue;
+  }
+
+  // The frozen adaptation summaries (tuned step size + diagonal inverse mass),
+  // captured by WALNUTS at freeze(); the R warmup-off storage policy surfaces
+  // these in place of full per-draw warmup. Valid only after
+  // disengageAdaptation has run.
+  static SEXP getAdaptationInfo(SEXP samplerExpr)
+  {
+    Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
+    if (samplerPtr == NULL) Rf_error("getAdaptationInfo called on NULL external pointer");
+    Sampler& sampler(*samplerPtr);
+
+    int n = sampler.paramSampler->getAdaptDim();
+    SEXP stepSizeExpr = PROTECT(Rf_ScalarReal(sampler.paramSampler->getStepSize()));
+    SEXP invMassExpr = PROTECT(rc_newReal(n));
+    sampler.paramSampler->getInvMass(REAL(invMassExpr));
+
+    SEXP result = PROTECT(rc_newList(2));
+    SET_VECTOR_ELT(result, 0, stepSizeExpr);
+    SET_VECTOR_ELT(result, 1, invMassExpr);
+    SEXP namesExpr = PROTECT(rc_newCharacter(2));
+    SET_STRING_ELT(namesExpr, 0, Rf_mkChar("step_size"));
+    SET_STRING_ELT(namesExpr, 1, Rf_mkChar("inv_mass"));
+    rc_setNames(result, namesExpr);
+
+    UNPROTECT(4);
+    return result;
   }
 
 } // extern "C"
@@ -1071,6 +1099,7 @@ static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_run", run, 4),
   DEF_FUNC("stan4bart_printInitialSummary", printInitialSummary, 1),
   DEF_FUNC("stan4bart_disengageAdaptation", disengageAdaptation, 1),
+  DEF_FUNC("stan4bart_getAdaptationInfo", getAdaptationInfo, 1),
   DEF_FUNC("stan4bart_finalize", finalize, 0),
   DEF_FUNC("stan4bart_exportBARTState", exportBARTState, 1),
   DEF_FUNC("stan4bart_createStoredBARTSampler", createStoredBARTSampler, 4),

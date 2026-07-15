@@ -268,6 +268,27 @@ throughout - the win is elsewhere. The deletion (pre-deletion -> after) bought
 and compile-time hog, not the runtime. Both numbers were MEASURED, per the
 plan's charter, not asserted.
 
+## Sample storage policy
+
+Landed after the sampler swap: a diagnostics-driven storage policy that stops
+storing what no computed surface reads. By default `save_warmup = FALSE` (warmup
+draws are not kept) and the parametric store holds only the transformed block
+(`beta`, `b`, `theta_L`, `aux`) plus the two live diagnostics (`lp__`,
+`stepsize__`); the raw unconstrained rows and the five constant-zero placeholder
+diagnostic rows are dropped. In place of full warmup the fit carries an
+`adaptation` component - the frozen step size and diagonal inverse mass (which
+WALNUTS tuned and the prior build discarded, captured at `freeze()` via the
+`on_warmup_complete` handler hook), a warmup-end snapshot, and a thinned warmup
+trace of the monitored scalars. Two opt-ins restore prior behavior:
+`save_warmup = TRUE` and `stan_args = list(save_raw_parameters = TRUE)`. The
+sampler path is untouched, so the stored draws are bit-for-bit what a
+full-storage build would have produced (verified by the distributional-
+equivalence gate, which passes unchanged). The full research record - the
+ecosystem survey, the statistician's monitored-set analysis, the per-scale
+byte measurements, and the resolved open questions (raw rows opt-in, warmup off,
+`bart_train` recompute-from-trees out of scope) - is in
+`docs/plans/sample-storage.md`.
+
 ## Recorded follow-ups
 
 - **The probit-path door stays closed.** stan4bart requires `family$link ==

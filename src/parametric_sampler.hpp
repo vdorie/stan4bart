@@ -44,6 +44,7 @@ struct StanControl {
   double stepsize;
   double stepsize_jitter;
   int max_treedepth;
+  bool save_raw;   // save_raw_parameters: keep the raw unconstrained rows
 };
 
 void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr);
@@ -75,6 +76,14 @@ struct ParametricSampler {
                                  bool includeRandom) const = 0;
   /// \brief The residual sd of the current draw (continuous only).
   virtual double getSigma() const = 0;
+
+  /// \brief The frozen adaptation summaries, valid after freeze(): the tuned
+  ///        step size, the unconstrained dimension, and the diagonal inverse
+  ///        mass (getInvMass writes getAdaptDim() doubles). Captured for the
+  ///        warmup-off storage policy, which surfaces them in $adaptation.
+  virtual double getStepSize() const = 0;
+  virtual int getAdaptDim() const = 0;
+  virtual void getInvMass(double* out) const = 0;
 
   /// \brief Refresh the conditioning data between Gibbs transitions.
   virtual void setOffset(const double* offset) = 0;

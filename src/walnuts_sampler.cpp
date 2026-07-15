@@ -222,9 +222,10 @@ struct WalnutsSampler::Impl {
 };
 
 WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
-                               double init_radius, int num_warmup) {
+                               double init_radius, int num_warmup, bool save_raw) {
   impl_ = new Impl();
   impl_->model = buildParametricModel(dataExpr);
+  impl_->model.save_raw = save_raw;
   const int dim = impl_->model.dim();
 
   // Seed the WALNUTS rng from the per-chain seed exactly as Stan's was threaded
@@ -246,9 +247,17 @@ WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
                           .build();
   impl_->sampling_cfg = walnuts::SamplingConfigBuilder().build();
 
-  // Stan-identical row layout + names, so the R side consumes by name unchanged.
-  sample_names = {"lp__", "accept_stat__"};
-  sampler_names = {"stepsize__", "treedepth__", "n_leapfrog__", "divergent__", "energy__"};
+  // Row layout + names. By default only the two LIVE diagnostics (lp__ and
+  // stepsize__) lead each row; save_raw restores the full Stan-identical
+  // header (lp__, accept_stat__, then the five constant-zero placeholder
+  // sampler rows) alongside the raw constrained block.
+  if (save_raw) {
+    sample_names = {"lp__", "accept_stat__"};
+    sampler_names = {"stepsize__", "treedepth__", "n_leapfrog__", "divergent__", "energy__"};
+  } else {
+    sample_names = {"lp__"};
+    sampler_names = {"stepsize__"};
+  }
   constrained_param_names = impl_->model.constrainedParamNames();
   sample_writer_offset = sample_names.size() + sampler_names.size();
   num_pars = static_cast<int>(sample_writer_offset + constrained_param_names.size());
@@ -280,17 +289,22 @@ void WalnutsSampler::run(bool isWarmup) {
     (*impl_->sampler)();   // one fixed-tuning transition
   impl_->position = impl_->handler.position;
 
-  // Re-emit the constrained draw into the current writer row, Stan layout.
+  // Re-emit the constrained draw into the current writer row.
   double* row = sample_writer.x_curr;
   double logp = 0.0;
   impl_->model.eval(impl_->position, logp, impl_->grad, row + sample_writer_offset);
-  row[0] = logp;                      // lp__
-  row[1] = 1.0;                       // accept_stat__ (WALNUTS reports no analog)
-  row[2] = impl_->handler.step_size;  // stepsize__
-  row[3] = 0.0;                       // treedepth__
-  row[4] = 0.0;                       // n_leapfrog__
-  row[5] = 0.0;                       // divergent__ (WALNUTS delivers no divergences)
-  row[6] = 0.0;                       // energy__
+  if (impl_->model.save_raw) {
+    row[0] = logp;                      // lp__
+    row[1] = 1.0;                       // accept_stat__ (WALNUTS reports no analog)
+    row[2] = impl_->handler.step_size;  // stepsize__
+    row[3] = 0.0;                       // treedepth__
+    row[4] = 0.0;                       // n_leapfrog__
+    row[5] = 0.0;                       // divergent__ (WALNUTS delivers no divergences)
+    row[6] = 0.0;                       // energy__
+  } else {
+    row[0] = logp;                      // lp__
+    row[1] = impl_->handler.step_size;  // stepsize__
+  }
 }
 
 void WalnutsSampler::freeze() {
@@ -310,6 +324,21 @@ void WalnutsSampler::getParametricMean(double* result, bool includeFixed,
 
 double WalnutsSampler::getSigma() const {
   return impl_->model.getAux(sample_writer.x_curr + sample_writer_offset);
+}
+
+// The handler captured these at freeze() (AdaptiveWalnuts::sampler() fires
+// on_warmup_complete with the frozen step size + diagonal inverse mass); valid
+// only once disengageAdaptation has run.
+double WalnutsSampler::getStepSize() const { return impl_->handler.step_size; }
+
+int WalnutsSampler::getAdaptDim() const { return impl_->model.dim(); }
+
+void WalnutsSampler::getInvMass(double* out) const {
+  const Eigen::VectorXd& m = impl_->handler.inv_mass;
+  const int n = impl_->model.dim();
+  // m.size() == n after freeze(); the guard is purely defensive.
+  for (int i = 0; i < n; ++i)
+    out[i] = i < m.size() ? m[i] : 0.0;
 }
 
 void WalnutsSampler::setOffset(const double* offset) {

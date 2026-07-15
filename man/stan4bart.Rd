@@ -40,6 +40,7 @@ stan4bart(formula,
           offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
           seed = NA_integer_,
           keep_fits = TRUE,
+          save_warmup = FALSE,
           callback = NULL,
           stan_args = NULL,
           bart_args = NULL)
@@ -102,6 +103,16 @@ stan4bart(formula,
   below.}
   \item{keep_fits}{Logical that, when false, prevents the sampler from
   storing each draw. Intended to be used with \code{callback}.}
+  \item{save_warmup}{Logical; when \code{FALSE} (the default) the warmup draws
+  are not stored. In their place, per chain, the frozen sampler tuning (step
+  size and diagonal inverse mass), a warmup-end position snapshot, and a
+  thinned trace of the monitored scalars are recorded in the \code{adaptation}
+  component of the fit; this is what the 2026 Stan/mixed-model toolchain does
+  and cuts the fit object roughly in half at scale (see the storage-policy
+  note in \code{docs/design/walnuts.md}). When \code{TRUE}, the full per-draw
+  warmup is stored under \code{warmup} as before, and
+  \code{include_warmup = TRUE} accessors work; on a default fit those
+  accessors raise an informative error.}
   \item{callback}{A function that will be called at each iteration, accepting
   three arguments: \code{yhat.train}, \code{yhat.test}, \code{stan_pars}.
   See details for more information.}
@@ -208,6 +219,15 @@ stan4bart(formula,
       design matrix; sampler-agnostic.
       \item \code{init_r} - half-width of the uniform interval the sampler's
       initial unconstrained position is drawn from.
+      \item \code{save_raw_parameters} - logical, default \code{FALSE}. When
+      \code{FALSE} the stored parametric draw is only the transformed block
+      every consumer reads (\code{beta}, \code{b}, \code{theta_L}, and
+      \code{aux}) plus the two live diagnostics (\code{lp__}, \code{stepsize__});
+      the raw unconstrained rows (\code{z_beta}, \code{z_b}, \code{z_T},
+      \code{rho}, \code{zeta}, \code{tau}, \code{aux_unscaled}) and the five
+      constant-zero placeholder diagnostic rows are dropped. Set \code{TRUE} to
+      restore the full historical Stan-layout rows, e.g. as funnel coordinates
+      for forensics on the decov covariance prior.
     }
     See the help page for \code{stan_glmer} in the \code{rstanarm} package for
     the prior constructors (\code{normal}, \code{student_t}, \code{cauchy},
@@ -314,7 +334,13 @@ stan4bart(formula,
   
   Other items:
   \item{\code{warmup}}{a list of warmup samples, containing the same objects in
-  the results subsection}
+  the results subsection; present only when \code{save_warmup = TRUE}}
+  \item{\code{adaptation}}{present when warmup was run and \code{save_warmup} is
+  \code{FALSE}. A list with, per chain, the frozen \code{step_size}, the diagonal
+  \code{inv_mass}, a warmup-end \code{snapshot} of the parametric draw, and a
+  \code{trace} (a thinned warmup trace of the monitored scalars: the parametric
+  \code{stan} rows and the BART \code{sigma}) for a qualitative
+  where-did-it-stabilize plot}
   \item{\code{sampler.bart}}{external points to BART samplers; used only for
   \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
   \item{\code{range.bart}}{internal scale used by BART samplers, used by 
