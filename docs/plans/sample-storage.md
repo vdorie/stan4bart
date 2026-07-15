@@ -213,23 +213,82 @@ component itself. Neither requires a dbarts.h change.
 Sequence: land (a)+(b) (cheap, correct, removes the author's specific concern),
 then decide (c)-warmup as the real lever.
 
+## Diagnostics-driven storage policy (research round, 2026-07-16)
+
+The author reframed the decision: warmup was stored for sampler convergence
+diagnostics, so the policy must follow from what consumers need to assess
+convergence. Two independent research passes (an ecosystem survey of the
+Stan/mixed-model/BART toolchains; a statistician's first-principles analysis
+of this sampler) converged:
+
+ECOSYSTEM (survey, citations in the research record). The 2026 toolchain
+does not store warmup by default: cmdstanr save_warmup = FALSE, rstanarm
+hardcodes it off, brms accessors default inc_warmup = FALSE; rstan's TRUE is
+the legacy outlier. Every quantitative diagnostic in use - posterior's
+rank-normalized rhat and bulk/tail ESS, coda's geweke/heidel/raftery for
+MCMCglmm workflows - is DEFINED on post-warmup draws; none accepts warmup.
+dbarts and BART store no burn-in at all; bartMachine alone keeps burn-in
+sigma draws, for one qualitative traceplot. Where packages keep anything
+from warmup it is adaptation METADATA (final step size, mass matrix), never
+per-draw state. stan4bart's own suite exercises its $warmup store only as an
+API round-trip; no doc or test computes a diagnostic from it.
+
+THE MONITORED SET (statistician). Diagnostics should run on interpretable
+scalars: each beta, sigma, group-level SDs and correlations derived from
+Sigma (never raw theta_L/rho/zeta/tau - rotation-dependent), and f through
+scalar functionals (training-fit mean level, total fit variance, a few fixed
+points), plus varcount as tree health and lp__ as the global trace. The
+honest slow-mixing canaries in this two-block Gibbs sampler: the
+level/centering ridge (parametric level vs f's implicit mean), sigma, and
+boundary group SDs on the log scale - IACT/ESS on these is the signal (the
+n^(2/3) batch-means finding at C0 was this mechanism). All of it needs
+post-warmup draws of a SMALL scalar set, across chains. Nothing quantitative
+needs per-draw warmup.
+
+WARMUP'S RESIDUAL VALUE is attribution, served by summaries: per chain, the
+frozen step size, the frozen diagonal inverse mass, a warmup-end position
+snapshot, and a THINNED warmup trace of the monitored subset for the
+qualitative where-did-it-stabilize plot. Storing full-resolution warmup
+bart_train (the n x warmup block) has no diagnostic content. The current
+build is exactly backwards: it discards WALNUTS' tuned inv_mass while
+keeping that block.
+
+TWO SAMPLER-SPECIFIC RISKS the policy should serve: (1) tuning freezes
+against warmup-era f and then f keeps moving, and WALNUTS exposes no
+divergence/E-BFMI hooks to flag a geometry mismatch - the frozen tuning
+summaries plus lp__ are the attribution tools, so store them; (2) the decov
+onion near zero-variance components can funnel without divergences - monitor
+log-scale group SDs with tail ESS, and keep the raw unconstrained rows
+available OPT-IN as funnel coordinates (this resolves Q1 below: the raw rows
+have a legitimate forensic use, as an opt-in, not as default storage).
+
+RESULTING POLICY (the proposal):
+- DEFAULT: post-warmup draws of beta, b, theta_L (Sigma-derivables), aux,
+  lp__; sigma/varcount and the f functionals BART-side; per chain the frozen
+  step size, mass diagonal, warmup-end snapshot, and a thinned warmup trace
+  of the monitored scalars. Drop the raw block and the five constant-zero
+  placeholder rows from storage entirely.
+- OPT-IN: full per-draw warmup (all components, the current behavior);
+  raw unconstrained rows (funnel forensics); bart_train
+  recompute-from-trees stays a separate decision (Q3).
+- extract(fit, "stan") narrows to the transformed rows by default with the
+  raw rows behind the opt-in; include_warmup = TRUE errors informatively
+  unless the fit stored warmup.
+
 ## Open questions for the author
 
-1. extract(fit,"stan") is the one surface that would change under (a): it would no
-   longer return z_beta/z_b/z_T/rho/zeta/tau/aux_unscaled. Is that dump a supported
-   contract anyone relies on (raw MCMC diagnostics, external tooling), or an
-   internal escape hatch we can narrow to the transformed rows? If it must keep raw
-   rows, (a) is off the table and the parametric store cannot be slimmed at all.
+1. RESOLVED BY THE RESEARCH unless you object: the raw-row dump becomes
+   opt-in (funnel forensics), not default - no surveyed workflow and no
+   computed surface reads it by default.
 
-2. Given raw-param slimming buys only ~2% while default-kept warmup is ~50%: is the
-   real ask "stop storing untransformed params" (do (a), small) or "make the fit
-   object smaller" (do (c)-warmup, large but changes include_warmup's default
-   availability and any workflow that inspects warmup draws)? These are different
-   projects; (a) does not move the needle on total footprint.
+2. The warmup default: the proposal stores tuning summaries + a thinned
+   monitored-subset trace instead of full per-draw warmup, matching the
+   ecosystem and cutting the object ~50% at scale. Any workflow of yours
+   that inspects full warmup draws keeps working behind the opt-in. Sign
+   off, or name what you inspect in warmup that the thin misses.
 
-3. Would you accept keepTrees becoming the default so bart_train can be recomputed
-   on demand rather than stored? That is the only option that touches the 96-99%
-   component without a precision change, but it trades ~all of bart_train's memory
-   for stored-tree memory + recompute latency on every fitted/extract call, and
-   changes when predict is available. Worth it, or is stored bart_train the
-   intended fast-access design?
+3. bart_train (96-99% of the object) is an inferential fit surface, not a
+   diagnostic; the f FUNCTIONALS proposed above carry its diagnostic
+   content at ~zero size. Recompute-from-trees under keepTrees remains the
+   only lever on the component itself - a separate arc if fits at large n
+   need to stop costing GBs. Priority call is yours.
