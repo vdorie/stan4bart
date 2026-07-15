@@ -275,20 +275,22 @@ RESULTING POLICY (the proposal):
   raw rows behind the opt-in; include_warmup = TRUE errors informatively
   unless the fit stored warmup.
 
-## Open questions for the author
+## Resolutions and landing (2026-07-16) - CLOSED
 
-1. RESOLVED BY THE RESEARCH unless you object: the raw-row dump becomes
-   opt-in (funnel forensics), not default - no surveyed workflow and no
-   computed surface reads it by default.
+All three questions resolved by the author: (1) raw rows opt-in, unopposed;
+(2) warmup default flip signed off ("I don't personally use the warmup
+samples" - the BayesTree residual-variance eyeball check survives in the
+thinned trace, which carries sigma); (3) bart-train recompute-from-trees
+approved in principle, queued in the TODO under the general
+speed/flexibility objective, no fixed priority.
 
-2. The warmup default: the proposal stores tuning summaries + a thinned
-   monitored-subset trace instead of full per-draw warmup, matching the
-   ecosystem and cutting the object ~50% at scale. Any workflow of yours
-   that inspects full warmup draws keeps working behind the opt-in. Sign
-   off, or name what you inspect in warmup that the thin misses.
-
-3. bart_train (96-99% of the object) is an inferential fit surface, not a
-   diagnostic; the f FUNCTIONALS proposed above carry its diagnostic
-   content at ~zero size. Recompute-from-trees under keepTrees remains the
-   only lever on the component itself - a separate arc if fits at large n
-   need to stop costing GBs. Priority call is yours.
+Landed as 275853e: save_warmup = FALSE and save_raw_parameters = FALSE
+defaults, the adaptation slot (frozen step size + inverse mass captured at
+the freeze - previously discarded - a warmup-end snapshot, and the thinned
+monitored trace), informative errors on unsaved-warmup requests, the five
+constant-zero placeholder rows dropped. Measured at the reference scale:
+81.4 -> 42.7 MB default (0.524), save_warmup = TRUE matches the old
+footprint (0.994). Sampler path untouched - both distributional tiers pass
+on the slim default. The f functionals stay derivable, not stored, while
+bart_train itself remains stored; they earn storage only if
+bart-train-recompute lands.
