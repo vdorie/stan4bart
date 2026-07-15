@@ -522,6 +522,38 @@ C4. DELETE STAN. Remove src/include/{stan,sundials,rstan}, src/stan_files/ (incl
    breaks the retained misc/rc/ext libs - the SIMD/size probes are shared, do not
    over-delete.
 
+### C4 landing (2026-07-16)
+
+C4 = 174b369. 2135 files, 7.07 MB, 210k line-deletions; double_writer
+de-Stanned rather than deleted, the control parsing and results assembly
+moved verbatim to parametric_control.cpp with their R-visible contracts
+unchanged, configure surgery kept the SIMD/size probes the retained support
+libs consume, and the author surgery landed per VD's sign-off (21
+StanHeaders ctb + 3 CVODES cph out, Bob Carpenter in, rstanarm/lme4
+lineages kept). The Stan log_prob cross-check retired with the model; its
+verdict stands in the C1 landing note and the FD gate remains.
+
+THE MOTIVATION, MEASURED (one quiet window, three recordings in
+benchmarks/baselines/ per the MANIFEST): the sampler swap bought 12-39x on
+whole-fit per-iteration wall time (15.5/8.1/13.5 ms down to 0.4-0.7 ms on
+the reference fits - the parametric step itself roughly two orders); the
+deletion bought R CMD INSTALL 42.1s -> 15.1s and COMPILE peak RSS 2.21 GB
+-> 0.47 GB (the stanc TU was the memory hog; peak SAMPLING RSS at these
+reference sizes was never Stan-dominated and is unchanged at ~273 MB).
+
+Gates: install clean, suite green (twice at landing; one run showed the
+known marginally-flaky statistical expectation, absent on rerun), nc1
+distributional spot-check PASS, ihdp causal smoke sane (CATT ~ 4.03 vs
+truth 4, finite), R CMD check on the C4 tarball Status: OK with 0
+WARNING/0 NOTE at the orchestrator's run. The implementer's check run had
+hit an intermittent test-07 extraction-consistency ERROR: investigated at
+landing - the Stan-era control tree ALSO checks OK, the C4 tarball checks
+OK on re-run, and the mechanism (extract("trees") allTrees vs
+individualSamples disagreeing on a node-count column, value varying across
+runs) is a data-dependent dbarts-side inconsistency, sampler-agnostic,
+FILED on the dbarts backlog. stan4bart cannot fix it and the test is not
+regenerated.
+
 C5. DOCS + NEWS. A landing note (docs/design/ or this plan's landing section) with
    the target's log-density, the adjoint derivation and its FD gate, the Stan->WALNUTS
    control-arg + diagnostics map (Q(c) resolution), and the prior-scope decision
