@@ -435,6 +435,44 @@ C2. WIRE WALNUTS for the CONTINUOUS path behind the existing Gibbs loop (Stan st
    means the target or the constrain/output mapping is wrong - fall back to the
    target cross-check + FD gates and the write_array re-emission to localize.
 
+### Landings through C2 (2026-07-15/16)
+
+C0 = 75d7970 + 9a4f906. The structSize fix first: the dbarts 1.0 port had
+never set dbarts_results.structSize, so the versioned-struct field gate
+skipped every run output - the train buffers stayed zero and the Gibbs
+coupling decohered; stack garbage usually masked it. Then the five-tier
+posterior baselines with mean/sd/MCSE per gated summary; sqrt(n) batch-means
+MCSEs read 3-8x small under the slow BART-vs-parametric tradeoff, so the
+recorded MCSE is max(n^(2/3) batch means, between-chain), and the cross-seed
+stability gate passed on that basis (nc3 94/98, binary 53/55 within 2x).
+Perf baselines: script committed, the recording run awaits a quiet machine.
+
+C1 = cb809b1. The functor and hand adjoint proven two ways per the amended
+gate design: FD worst relative error 2.4e-8 across ten tiers (including a
+continuous mixed-block tier added at review - the aux -> dispersion adjoint
+must ACCUMULATE across heterogeneous blocks), and the Stan log_prob
+constant-difference target oracle at 9.1e-13 worst spread (the weighted
+normalizer and binary reduction both confirmed at machine precision).
+WALNUTS vendored fresh at upstream 5854be8; its API exposes no treedepth,
+divergence, or energy - Q(c)'s diagnostics fork resolves to drop-all plus
+r_hat.
+
+C2 = 3929581. Continuous through WALNUTS behind a runtime family switch;
+binary stays on Stan (bitwise-untouched, suite-proven). One integration
+lesson worth keeping: WALNUTS assumes Stan's throw-on-non-finite log_prob
+contract, and a silently returned inf at extreme leapfrog positions poisons
+Adam step-size adaptation into a crash at freeze - eval now throws, treated
+as divergence. Equivalence vs the C0 baselines at the pre-registered bands:
+nc1 23/23, nc2 45/45, nc3 98/98 (independently re-run at landing -
+identical), weighted 44/45 at the pre-registered seed. The weighted
+excursion (ranef g:Xr1:14, mean ratio 4.22 vs k = 4) is ADJUDICATED SEED
+NOISE with the gate unloosened: it scatters 0.598/0.118/0.309 across seeds
+where a wiring bug would reproduce, an independent-seed refit passes 45/45,
+the recording's own Stan-vs-Stan rerun hit 2.85 on these summaries (ranef
+MCSEs still ~1.4x under even after the n^(2/3) correction), and the
+weighted-specific normalizer is pinned to 1e-13 by the target oracle. Full
+suite 239/0; no snapshots regenerated.
+
 C3. BINARY path to WALNUTS (Stan now unused at runtime, still compiled). The binary
    functor is the continuous one with is_binary -> actual_aux==1, the aux dimension
    removed, and the dispersion->RE-scale coupling dropped; response is the probit
