@@ -27,6 +27,11 @@ using std::snprintf;
 #include "bart_util.hpp"
 #include "stan_sampler.hpp"
 
+// Gradient/target gate surface (src/logdensity_export.cpp); internal .Call
+// entries used by tests/testthat/test-12-gradient.R.
+extern "C" SEXP stan4bart_logdensity_grad(SEXP dataExpr, SEXP parExpr);
+extern "C" SEXP stan4bart_stan_logdensity(SEXP dataExpr, SEXP parExpr);
+
 #if __cplusplus < 201112L
 #  if defined(_WIN64) || SIZEOF_SIZE_T == 8
 #    define SIZE_T_SPECIFIER "%lu"
@@ -1073,6 +1078,8 @@ static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_getParametricMean", getParametricMean, 1),
   DEF_FUNC("stan4bart_printTrees", printTrees, 4),
   DEF_FUNC("stan4bart_getTrees", getTrees, 5),
+  DEF_FUNC("stan4bart_logdensity_grad", stan4bart_logdensity_grad, 2),
+  DEF_FUNC("stan4bart_stan_logdensity", stan4bart_stan_logdensity, 2),
   {NULL, NULL, 0}
 };
 

@@ -381,6 +381,30 @@ C1. VENDOR WALNUTS + the CONTINUOUS logp/grad functor + the TARGET + FD GATES (S
    mismatch that is not a fixture/tol artifact - the target or adjoint is wrong; do
    not proceed to wire a wrong gradient.
 
+   VENDORED-VERSION (landed at C1). WALNUTS pulled FRESH from
+   https://github.com/flatironinstitute/walnuts at commit
+   5854be888e5432a103275466d7d0be95c7c5c67a (upstream date 2026-07-13, vendored
+   2026-07-15) into inst/include/{walnuts/*, walnuts.hpp, WALNUTS_LICENSE} +
+   WALNUTS_VERSION; upstream layout (include/walnuts/* + umbrella) matches
+   bairrtt's, so no layout adaptation was needed. API drift vs the bairrtt-era
+   snapshot is MINOR and does not reach C1: adaptive_walnuts.hpp / handlers.hpp /
+   concepts.hpp / walnuts.hpp are byte-identical; the AdaptiveWalnuts -> freeze
+   (sampler()) -> WalnutsSampler lifecycle, the diagonal MassEstimator, and the
+   InitChainConfig(step_size, position, mass) ctor are unchanged. The only drift
+   (a C2 concern for WarmupConfig sizing, not C1): WarmupConfig gained a
+   step-size convergence tolerance (step_size_converge_tol_, from upstream's
+   "init-stepsize" work) and api.hpp's internal detail::sample() was refactored
+   to take the SamplingConfig directly. DIAGNOSTICS re-verified against the fresh
+   headers: the ChainHandler concept (concepts.hpp) still surfaces ONLY
+   position / lp / step_size / diag_inv_mass, and GlobalHandler adds on_r_hat -
+   there are NO treedepth, divergent, n_leapfrog, or energy hooks, so the plan's
+   Q(c) claim (all three NUTS diagnostic checks are lost, not conditionally)
+   HOLDS. CXX_STD flipped to CXX20 (Makevars.in/.win): the Stan translation unit
+   and continuous.hpp compile clean under C++20, clearing that risk early.
+   Gate outcome: FD worst relative error 2.35e-08 across all nine tiers
+   (tol 1e-6), and value(mine) - Stan log_prob<false, true> constant to
+   <= ~1e-12 spread per tier (tol 1e-6) - the target and adjoint are correct.
+
 C2. WIRE WALNUTS for the CONTINUOUS path behind the existing Gibbs loop (Stan still
    compiled, still serving binary). Add src/walnuts_sampler.{hpp,cpp}: a
    WalnutsSampler holding the parametric_model functor + AdaptiveWalnuts/WalnutsSampler

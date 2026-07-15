@@ -1,0 +1,29 @@
+WALNUTS (vendored)
+==================
+
+Upstream:  https://github.com/flatironinstitute/walnuts
+Commit:    5854be888e5432a103275466d7d0be95c7c5c67a
+Date:      2026-07-13 (upstream commit date)
+Vendored:  2026-07-15
+License:   MIT, (c) 2025 Bob Carpenter (see WALNUTS_LICENSE)
+
+Layout mirrors upstream include/: the per-component headers live in
+walnuts/, with walnuts.hpp the umbrella that includes them all.
+
+Integration reference: bairrtt (inst/include/{walnuts,walnuts.hpp,
+WALNUTS_LICENSE}). These headers were pulled FRESH from upstream, not
+copied from bairrtt.
+
+API drift vs the bairrtt-era snapshot (re-verified at C1):
+  - The AdaptiveWalnuts -> freeze (sampler()) -> WalnutsSampler
+    lifecycle, the diagonal MassEstimator, and the
+    InitChainConfig(step_size, position, mass) ctor are UNCHANGED.
+  - WarmupConfig gained a step-size convergence tolerance
+    (step_size_converge_tol_, from upstream's "init-stepsize" work);
+    api.hpp's internal detail::sample() signature was refactored to take
+    the SamplingConfig directly. Neither touches the per-chain path this
+    package uses; both are C2 concerns (WarmupConfig sizing), not C1.
+  - Diagnostics: the ChainHandler concept (concepts.hpp) still surfaces
+    only position / lp / step_size / diag_inv_mass; GlobalHandler adds
+    on_r_hat. There are NO treedepth, divergent, n_leapfrog, or energy
+    hooks, confirming the plan's Q(c) claim against fresh upstream.
