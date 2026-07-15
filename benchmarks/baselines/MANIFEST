@@ -1,0 +1,8 @@
+# Provenance for the files in this directory (mirrors dbarts's convention).
+#
+# role:
+#   current - the baseline the C2/C3 distributional-equivalence gates
+#             compare the WALNUTS fits against.
+#
+# file                                 role     commit   build state                                    machine/arch   contents
+posterior-baselines-75d7970.rds        current  75d7970  75d7970 (includes the structSize fix)         arm64 (macOS)  5 tiers (continuous nc=1/nc=2/nc=3, weighted continuous, binary two-block) x fixef/ranef/sigma/Sigma summaries; mean/sd/mcse (max of n^(2/3) batch means and between-chain) per summary; 8 chains x 3000 kept draws each, default stan_args, recorded 2026-07-15. Stability gate: nc3 rerun seed 4242 94/98 within 2x mcse (max 2.85), binary rerun seed 5151 53/55 (max 2.33) - both consistent with calibrated MCSEs. Data regenerate from seeds in the script's TIERS; per-tier data frames also embedded in the .rds.
