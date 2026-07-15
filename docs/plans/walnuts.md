@@ -599,6 +599,31 @@ a separate commit.
   copyOutParameters mid-sweep) is the one most sensitive to the write_array
   re-emission - watch it.
 
+### C5 landing (2026-07-16) - ARC CLOSED
+
+C5 = 45219e6. Design record docs/design/walnuts.md, NEWS.md 0.0-14, readme
+and man updates, codoc clean. Two surface edges found and closed with
+tests: shrinkage priors previously reached an uncaught C++ exception that
+ABORTED the R process - now an informative R error at setup; the ignored
+NUTS adaptation args now warn once as deprecated. check_sampler_diagnostics
+was dead code predating this arc (object$diagnostics was never populated) -
+now a documented no-op, so the WALNUTS diagnostics loss changed nothing
+observable. Suite 241/0 (twice); R CMD check 0 WARNING / 0 NOTE, with the
+known intermittent test-07 dbarts extraction flake firing on the
+implementer's two check runs but not the orchestrator's (observed rate
+roughly half across the arc's seven check runs; filed on the dbarts
+backlog as extract-trees-consistency).
+
+Arc summary: six working commits (structSize fix, baselines, target +
+adjoint, continuous wiring, binary wiring, deletion) plus records. Every
+posterior-defining step was proven against two oracles or a pre-registered
+distributional gate, and the motivation landed measured: 12-39x whole-fit
+per-iteration speed from the swap, install 42.1s -> 15.1s and compile peak
+RSS 2.21 GB -> 0.47 GB from the deletion, sampling RSS unchanged. Open
+doors recorded in the design note: probit stays unbuilt behind the same
+functor seam, shrinkage families behind an informative error, the count of
+ignored NUTS args drops to zero at their removal release.
+
 ## Open questions for VD
 
 Q(a) GRADIENT DERIVATION - self-derived vs VD's R prototype as oracle. FORK: who
