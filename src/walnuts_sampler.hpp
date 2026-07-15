@@ -7,8 +7,8 @@
 /// Presents exactly the surface init.cpp's Gibbs bridge consumes (via the
 /// ParametricSampler base), driving a WALNUTS AdaptiveWalnuts/WalnutsSampler
 /// over the hand-derived ParametricModel target instead of Stan's NUTS. The
-/// walnuts + Eigen machinery is hidden behind a PIMPL so init.cpp (which also
-/// pulls in the Stan headers for the binary path) never sees them.
+/// walnuts + Eigen machinery is hidden behind a PIMPL so init.cpp never sees
+/// them and stays a plain R-API translation unit.
 ///
 /// Lifecycle mirrors bairrtt's IrtSampler: construct in the adapting phase,
 /// drive one adapting transition per warmup sweep (run(true)), freeze() at

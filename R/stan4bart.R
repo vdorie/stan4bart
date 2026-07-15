@@ -254,46 +254,18 @@ stan4bart <-
 
 check_sampler_diagnostics <- function(object, stan_args, n_upars)
 {
-  n_d <- if ("divergent__" %in% dimnames(object$diagnostics)$diagnostic)
-    sum(object$diagnostics["divergent__",,])
-  else
-    0L
-  if (n_d > 0) {
-    ad <- stan_args$adapt_delta %ORifNULL% 0.8
-    
-    warning("There were ", n_d, " divergent transitions after warmup. See\n",
-            "http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup\n", 
-            "to find out why this is a problem and how to eliminate them.", call. = FALSE)
-  }
-  
-  max_td <- stan_args$max_treedepth %ORifNULL% 10
-  n_m <- if ("treedepth__" %in% dimnames(object$diagnostics)$diagnostic)
-    sum(object$diagnostics["treedepth__",,] >= max_td)
-  else
-    0
-  
-  if (n_m > 0)
-    warning("There were ", n_m,
-            " transitions after warmup that exceeded the maximum treedepth.",
-            " Increase max_treedepth above ", max_td, ". See\n",
-            "http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded", call. = FALSE)
-  
-  
-  n_e <- 0L
-  if ("energy__" %in% dimnames(object$diagnostics)$diagnostic) {
-    E <- as.matrix(object$diagnostics["energy__",,,drop = TRUE])
-    threshold <- 0.2
-    if (nrow(E) > 1) {
-      EBFMI <- n_upars / apply(E, 2, var)
-      n_e <- sum(EBFMI < threshold, na.rm = TRUE)
-    }
-    else n_e <- 0L
-    if (n_e > 0)
-      warning("There were ", n_e, 
-              " chains where the estimated Bayesian Fraction of Missing Information",
-              " was low. See\n", 
-              "http://mc-stan.org/misc/warnings.html#bfmi-low", call. = FALSE)
-  }
+  # NUTS diagnostics (divergent transitions, max-treedepth transitions, low
+  # E-BFMI) have no WALNUTS analog: the vendored ChainHandler concept
+  # (inst/include/walnuts/concepts.hpp) surfaces only position/lp/step_size/
+  # diag_inv_mass, so divergent__/treedepth__/energy__ are written as
+  # constant-zero Stan-layout placeholders by WalnutsSampler::run
+  # (src/walnuts_sampler.cpp) purely so result$stan keeps its Stan-era row
+  # names; they carry no signal to check. object$diagnostics (the field this
+  # function historically read) was never actually populated even under
+  # Stan, so every check below was already unreachable dead code. Dropped
+  # per docs/plans/walnuts.md Q(c); kept as a documented no-op call site
+  # rather than removed, in case WALNUTS grows real diagnostics upstream.
+  invisible(NULL)
 }
 
 package_samples <- function(chain_results, bart_var_names) {

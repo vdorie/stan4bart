@@ -93,8 +93,10 @@
       error
       \item \code{"Sigma"} - when applicable, the covariance matrices of the
       random effects
-      \item \code{"stan"} - raw matrix or array of Stan sampled transformed
-      parameters.
+      \item \code{"stan"} - raw matrix or array of the parametric component's
+      sampled transformed parameters (named \code{"stan"} for historical
+      reasons; the parametric component is now sampled with a gradient-based
+      WALNUTS sampler rather than Stan's NUTS).
       \item \code{"trees"} - a data frame of flatted trees; see the subsection
       on extracted trees in \code{\link[dbarts]{bart}} and note that stan4bart variable
       names can be found in the \code{bartData@x} element of a fitted stan4bart

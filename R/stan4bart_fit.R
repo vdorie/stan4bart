@@ -62,7 +62,42 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   results
 }
 
-stan4bart_fit <- 
+# The NUTS control vocabulary that the WALNUTS sampler accepts-but-ignores
+# (Q(c) of docs/plans/walnuts.md): parsed into StanControl at the C++ level
+# (src/parametric_control.cpp) for accept-but-ignore source compatibility,
+# but never consumed by WalnutsSampler. init_r IS still consumed (it sizes
+# WALNUTS' uniform initial-position radius) and is deliberately excluded
+# here; skip/seed are loop-level and excluded as well.
+ignored_nuts_args <- c("adapt_delta", "adapt_gamma", "adapt_kappa", "adapt_t0",
+                       "adapt_init_buffer", "adapt_term_buffer", "adapt_window",
+                       "stepsize", "stepsize_jitter", "max_treedepth")
+
+warn_ignored_nuts_args <- function(stan_args) {
+  ignored <- intersect(names(stan_args), ignored_nuts_args)
+  if (length(ignored) > 0L) {
+    warning(paste0(sprintf(
+      "'%s' is ignored by the gradient-based sampler and is deprecated; it will be removed in a future release",
+      ignored), collapse = "\n"), call. = FALSE)
+  }
+}
+
+# The shrinkage coefficient priors (Q(b) of docs/plans/walnuts.md) carry
+# global/local/caux/mix/one_over_lambda latents that the WALNUTS target
+# (src/parametric_model.hpp) never implements; ParametricModel::finalize()
+# throws a raw C++ exception (uncaught across the .Call boundary - a hard
+# process abort, not a catchable R error) if one of their prior_dist codes
+# reaches it. Refuse them here, at the R level, before any C++ is invoked.
+unsupported_shrinkage_dists <- c("hs", "hs_plus", "lasso", "laplace", "product_normal")
+
+refuse_shrinkage_prior <- function(prior) {
+  if (is.list(prior) && isTRUE(prior$dist %in% unsupported_shrinkage_dists)) {
+    stop("prior families hs, hs_plus, lasso, laplace, and product_normal are not ",
+        "supported by the gradient-based sampler; use normal, student_t, or cauchy",
+        call. = FALSE)
+  }
+}
+
+stan4bart_fit <-
   function(object,
            family,
            bart_offset_init,
@@ -101,6 +136,7 @@ stan4bart_fit <-
   
   if (is.null(stan_args))
     stan_args <- list()
+  warn_ignored_nuts_args(stan_args)
   if (is.null(stan_args[["prior_covariance"]]))
     stan_args$prior_covariance <- decov()
   decov <- stan_args[["prior_covariance"]]
@@ -129,11 +165,13 @@ stan4bart_fit <-
     assign(i, x_stuff[[i]])
   nvars.fixef <- ncol(xtemp)
   
-  ok_dists <- nlist("normal", student_t = "t", "cauchy", "hs", "hs_plus", 
+  ok_dists <- nlist("normal", student_t = "t", "cauchy", "hs", "hs_plus",
                     "laplace", "lasso", "product_normal")
   ok_intercept_dists <- ok_dists[1:3]
   ok_aux_dists <- c(ok_dists[1:3], exponential = "exponential")
-  
+
+  refuse_shrinkage_prior(stan_args$prior)
+
   prior_stuff <- handle_glm_prior(
     stan_args$prior,
     nvars = nvars.fixef,

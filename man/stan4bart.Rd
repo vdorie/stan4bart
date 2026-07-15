@@ -2,7 +2,7 @@
 
 \alias{stan4bart}
 
-\title{Semiparametric Models Using Stan and BART}
+\title{Semiparametric Models Using a Gradient-Based Sampler and BART}
 \description{
   This function fits semi-parametric linear and probit models that have a
   non-parametric, BART component and one or more of a parametric fixed
@@ -105,8 +105,8 @@ stan4bart(formula,
   \item{callback}{A function that will be called at each iteration, accepting
   three arguments: \code{yhat.train}, \code{yhat.test}, \code{stan_pars}.
   See details for more information.}
-  \item{stan_args}{optional list, specifying further arguments to Stan. See
-  details below.}
+  \item{stan_args}{optional list, specifying further arguments to the
+  parametric (gradient-sampled) component. See details below.}
   \item{bart_args}{optional list, specifying further arguments to BART. See
   details below.}
 }
@@ -180,24 +180,48 @@ stan4bart(formula,
   }
   \subsection{Additional Arguments}{
     The \code{stan_args} and \code{bart_args} arguments to \code{stan4bart} can
-    be used to pass further arguments to \code{stan} and \code{bart}
-    respectively. These are similar to the functions \code{stan} in the
-    \code{rstan} package and \code{\link[dbarts]{bart}}, but not identical as
-    \code{stan4bart} constructs its own model internally.
-    
-    Stan arguments include:
+    be used to pass further arguments to the parametric and BART components
+    respectively. \code{stan_args} is named for historical reasons - the
+    parametric component was originally sampled with Stan's NUTS; it is now
+    sampled with a gradient-based WALNUTS sampler driven by a hand-derived
+    analytic log-posterior gradient, and \code{stan_args} configures that
+    sampler and its priors. \code{bart_args} is similar to
+    \code{\link[dbarts]{bart}}, but not identical, as \code{stan4bart}
+    constructs its own model internally.
+
+    Prior- and model-related \code{stan_args} include:
     \itemize{
-      \item \code{prior_covariance}
-      \item \code{prior}, \code{prior_intercept}, \code{prior_aux}, \code{QR}
-      \item \code{init_r}, \code{adapt_gamma}, \code{adapt_delta},
-      \code{adapt_kappa} - see the help page for \code{stan} in the \code{rstan}
-      package.
+      \item \code{prior_covariance} - always a \code{decov()} prior on the
+      random effect covariance.
+      \item \code{prior} - the fixed effect coefficient prior; supports
+      \code{normal}, \code{student_t}, and \code{cauchy}. The shrinkage
+      families (\code{hs}, \code{hs_plus}, \code{lasso}, \code{laplace},
+      \code{product_normal}) are not supported by the gradient-based sampler
+      and raise an error if supplied.
+      \item \code{prior_aux} - the residual sd prior (continuous responses
+      only); supports \code{normal}, \code{student_t}, \code{cauchy}, and
+      \code{exponential}.
+      \item \code{prior_intercept} - accepted for backwards compatibility, but
+      a warning is raised and it is dropped; BART already carries the
+      intercept.
+      \item \code{QR} - whether to use a QR decomposition of the fixed effect
+      design matrix; sampler-agnostic.
+      \item \code{init_r} - half-width of the uniform interval the sampler's
+      initial unconstrained position is drawn from.
     }
-    For reference on the first two sets of options, see the help page for
-    \code{stan_glmer} in the \code{rstanarm} package; for reference on
-    the third set, see the help page for \code{stan} in the \code{rstan}
-    package.
-    
+    See the help page for \code{stan_glmer} in the \code{rstanarm} package for
+    the prior constructors (\code{normal}, \code{student_t}, \code{cauchy},
+    \code{exponential}, \code{decov}).
+
+    The remaining \code{stan_args} - \code{adapt_gamma}, \code{adapt_delta},
+    \code{adapt_kappa}, \code{adapt_t0}, \code{adapt_init_buffer},
+    \code{adapt_term_buffer}, \code{adapt_window}, \code{stepsize},
+    \code{stepsize_jitter}, and \code{max_treedepth} - configured Stan's NUTS
+    adaptation and have no analog under WALNUTS. They are still accepted so
+    that existing scripts do not error, but are ignored, and a warning naming
+    each supplied argument is raised at fit time; they are deprecated and will
+    be removed in a future release.
+
     BART arguments include:
     \itemize{
       \item further arguments to \code{\link[dbarts]{dbartsControl}} that are not
@@ -233,8 +257,8 @@ stan4bart(formula,
       training data, conditioned on the Stan parameters
       \item \code{yhat.test} - when applicable, the same values as above but
       for the test data; \code{NULL} otherwise
-      \item \code{stan_pars} - named vector of Stan samples, including fixed
-      and random effects and variance parameters
+      \item \code{stan_pars} - named vector of parametric-component samples,
+      including fixed and random effects and variance parameters
     }
     It is expected that the callback will return a vector of the same length
     each time. If not, invalid memory writes will likely result. If the
@@ -291,8 +315,6 @@ stan4bart(formula,
   Other items:
   \item{\code{warmup}}{a list of warmup samples, containing the same objects in
   the results subsection}
-  \item{\code{diagnostics}}{Stan sampler produced diagnostic information,
-  include tree depth and divergent transitions}
   \item{\code{sampler.bart}}{external points to BART samplers; used only for
   \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
   \item{\code{range.bart}}{internal scale used by BART samplers, used by 
