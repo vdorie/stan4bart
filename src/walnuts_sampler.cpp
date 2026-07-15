@@ -1,5 +1,5 @@
 /// \file walnuts_sampler.cpp
-/// \brief WALNUTS wiring for the continuous parametric conditional (C2), plus
+/// \brief WALNUTS wiring for the parametric conditional, plus
 ///        the shared ParametricModel builder consumed by the gradient gate.
 
 #include "walnuts_sampler.hpp"

@@ -139,8 +139,8 @@ namespace {
     
     continuous_model_namespace::continuous_model* stanModel;
     stan4bart::StanControl stanControl;
-    // the parametric conditional's sampler: StanSampler for binary, the
-    // WALNUTS-backed WalnutsSampler for continuous (C2 family switch).
+    // the parametric conditional's sampler: the WALNUTS-backed WalnutsSampler
+    // for both families (the Stan machinery is compiled but unused at runtime).
     stan4bart::ParametricSampler* paramSampler;
     
     dbarts_sampler* bartSampler;
@@ -215,18 +215,15 @@ extern "C" {
       if (sampler.stanControl.skip < 1) sampler.stanControl.skip = 1;
     }
     
-    // Family switch (runtime, by response type): the continuous conditional is
-    // drawn by WALNUTS over the hand-derived target; binary stays on Stan's
-    // NUTS. Both present the ParametricSampler surface. The WALNUTS rng is
-    // seeded from the same per-chain seed Stan used (control.stan$seed), so
-    // reproducibility (test-05-rng) is preserved.
-    int chain_id = 1;
-    if (sampler.responseIsBinary) {
-      sampler.paramSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanControl, chain_id, sampler.defaultWarmup, -1);
-    } else {
-      sampler.paramSampler = new stan4bart::WalnutsSampler(stanDataExpr, sampler.stanControl.random_seed,
-                                                          sampler.stanControl.init_radius, sampler.defaultWarmup);
-    }
+    // Both families draw the parametric conditional with WALNUTS over the
+    // hand-derived target: binary is the same model with actual_aux == 1
+    // and the aux dimension absent, conditioned on the probit latents that
+    // setResponse refreshes each sweep. Stan remains compiled but unused at
+    // runtime. The WALNUTS rng is seeded from the same
+    // per-chain seed Stan used (control.stan$seed), so reproducibility
+    // (test-05-rng) is preserved.
+    sampler.paramSampler = new stan4bart::WalnutsSampler(stanDataExpr, sampler.stanControl.random_seed,
+                                                         sampler.stanControl.init_radius, sampler.defaultWarmup);
     sampler.paramSampler->setVerbose(sampler.verbose);
     
     // a verbose control prints the initial summary during creation; tree

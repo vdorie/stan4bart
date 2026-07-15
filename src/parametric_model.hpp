@@ -55,8 +55,8 @@ inline double dCFt(double z, double df) {
 }
 
 /// \brief The parametric target. Conditioning data (X, y, weights, offset_,
-///        CSR Z, prior constants, block geometry) are held by value so C2 can
-///        refresh y_ / offset_ in place between Gibbs transitions. Matches the
+///        CSR Z, prior constants, block geometry) are held by value so the
+///        sampler can refresh y_ / offset_ in place between Gibbs transitions. Matches the
 ///        walnuts::LogpGrad concept: void operator()(const VectorXd&, double&,
 ///        VectorXd&) const.
 struct ParametricModel {
@@ -65,7 +65,7 @@ struct ParametricModel {
   bool is_binary = false;
   bool has_weights = false;
 
-  // --- data (y_ and offset_ mutable for the Gibbs refresh in C2) ---
+  // --- data (y_ and offset_ mutable for the per-sweep Gibbs refresh) ---
   Eigen::MatrixXd X;        // N x K, centered fixed-effect design
   Eigen::VectorXd y_;       // N
   Eigen::VectorXd offset_;  // N

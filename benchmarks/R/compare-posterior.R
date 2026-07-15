@@ -6,14 +6,16 @@
 # and gates every gated summary against the PRE-REGISTERED tolerance:
 #   means:  |mean_walnuts - mean_stan| < k * sqrt(mcse_stan^2 + mcse_walnuts^2), k = 4
 #   sds:    sd_walnuts / sd_stan in [0.8, 1.25]
-# The binary tier is NOT compared (still Stan; proven bitwise-unchanged by the
-# full suite). Reuses fit_tier / summarize_fit / chain_health / batch_means_summary
-# from record-posterior-baselines.R (sourced; its CLI is guarded, so sourcing is inert).
+# As of C3 the binary tier is gated too (binary routed through WALNUTS; its
+# gated set has no sigma row). Reuses fit_tier / summarize_fit / chain_health /
+# batch_means_summary from record-posterior-baselines.R (sourced; its CLI is
+# guarded, so sourcing is inert).
 #
 # Usage (one tier per invocation to stay inside the foreground time budget):
 #   Rscript benchmarks/R/compare-posterior.R compare <tier> [baseline.rds]
 #   Rscript benchmarks/R/compare-posterior.R compare-all [baseline.rds]
 # tiers: continuous_nc1 continuous_nc2 continuous_nc3 weighted_continuous
+#        binary_multilevel
 
 suppressMessages(library(stan4bart))
 
@@ -23,8 +25,8 @@ if (!file.exists(.rpb)) .rpb <- "benchmarks/R/record-posterior-baselines.R"
 source(.rpb, local = FALSE)   # fit_tier, summarize_fit, chain_health, batch_means_summary
 
 .default_baseline <- "benchmarks/baselines/posterior-baselines-75d7970.rds"
-CONTINUOUS_TIERS <- c("continuous_nc1", "continuous_nc2", "continuous_nc3",
-                      "weighted_continuous")
+GATED_TIERS <- c("continuous_nc1", "continuous_nc2", "continuous_nc3",
+                 "weighted_continuous", "binary_multilevel")
 
 K_MEAN <- 4          # pre-registered mean-tolerance multiplier
 SD_LO  <- 0.80       # pre-registered sd-ratio band
@@ -33,13 +35,14 @@ SD_HI  <- 1.25
 # Refit one tier's stored data on the WALNUTS build and summarize, reusing the
 # baseline's control + mcmc_seed so the comparison is like-for-like.
 walnuts_fit_summary <- function(base_tier) {
+  is_binary <- identical(base_tier$shape, "binary")
   tier_data <- list(df = base_tier$data, shape = base_tier$shape,
-                    weights_col = base_tier$weights_col, is_binary = FALSE)
+                    weights_col = base_tier$weights_col, is_binary = is_binary)
   fit <- fit_tier(tier_data, base_tier$control, base_tier$mcmc_seed)
   healthy <- chain_health(fit)
   cat(sprintf("[%s] WALNUTS healthy chains: %d/%d\n",
               base_tier$tier, sum(healthy), length(healthy)))
-  summarize_fit(fit, is_binary = FALSE, keep_chains = healthy)
+  summarize_fit(fit, is_binary = is_binary, keep_chains = healthy)
 }
 
 gate_tier <- function(tier_name, baseline_file) {
@@ -92,7 +95,7 @@ if (length(.args) >= 1L) {
   } else if (mode == "compare-all") {
     baseline_file <- if (length(.args) >= 2L) .args[[2L]] else .default_baseline
     ok <- TRUE
-    for (tn in CONTINUOUS_TIERS) ok <- gate_tier(tn, baseline_file)$pass && ok
+    for (tn in GATED_TIERS) ok <- gate_tier(tn, baseline_file)$pass && ok
     cat(sprintf("\n==== OVERALL: %s ====\n", if (ok) "ALL TIERS PASS" else "SOME TIERS FAIL"))
     if (!ok) quit(status = 1L)
   } else {

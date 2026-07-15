@@ -2,7 +2,7 @@
 #define WALNUTS_SAMPLER_HPP
 
 /// \file walnuts_sampler.hpp
-/// \brief The WALNUTS-backed parametric sampler for the CONTINUOUS family (C2).
+/// \brief The WALNUTS-backed parametric sampler for both response families.
 ///
 /// Presents exactly the surface init.cpp's Gibbs bridge consumes (via the
 /// ParametricSampler base), driving a WALNUTS AdaptiveWalnuts/WalnutsSampler
