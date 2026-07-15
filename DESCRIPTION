@@ -1,39 +1,16 @@
 Package: stan4bart
 Version: 0.0-13
 Date: 2026-07-02
-Title: Bayesian Additive Regression Trees with Stan-Sampled Parametric Extensions
+Title: Bayesian Additive Regression Trees with Gradient-Sampled Parametric Extensions
 Authors@R: c(
   person("Vincent", "Dorie", role = c("aut", "cre"), email = "vdorie@gmail.com", comment = c(ORCID = "0000-0002-9576-3064")),
-  person("Ben", "Goodrich", role = "ctb", email = "benjamin.goodrich@columbia.edu", comment = "rstanarm_functions.R, StanHeaders"),
-  person("Jonah", "Gabry", role = "ctb", email = "jsg2201@columbia.edu", comment = "rstanarm_functions.R, StanHeaders"),
+  person("Ben", "Goodrich", role = "ctb", email = "benjamin.goodrich@columbia.edu", comment = "rstanarm_functions.R"),
+  person("Jonah", "Gabry", role = "ctb", email = "jsg2201@columbia.edu", comment = "rstanarm_functions.R"),
   person("Imad", "Ali", role = "ctb", comment = "rstanarm_functions.R"),
   person("Sam", "Brilleman", role = "ctb", comment = "rstanarm_functions.R"),
   person("Paul-Christian", "Burkner", role = "ctb", email = "paul.buerkner@gmail.com", comment = c("rstanarm_functions.R", ORCID = "0000-0001-5765-8995")),
-  person("Joshua", "Pritikin", role = "ctb", comment = c("StanHeaders", ORCID = "0000-0002-9862-5484")),
-  person("Andrew", "Gelman", role = "ctb", comment = c("StanHeaders", ORCID = "0000-0002-6975-2601")),
-  person("Bob", "Carpenter", role = "ctb", comment = "StanHeaders"),
-  person("Matt", "Hoffman", role = "ctb", comment = "StanHeaders"),
-  person("Daniel", "Lee", role = "ctb", comment = "StanHeaders"),
-  person("Michael", "Betancourt", role = "ctb", comment = c("StanHeaders", ORCID = "0000-0002-2900-0931")),
-  person("Marcus", "Brubaker", role = "ctb", comment = c("StanHeaders", ORCID = "0000-0002-7892-9026")),
-  person("Jiqiang", "Guo", role = "ctb", comment = "StanHeaders"),
-  person("Peter", "Li", role = "ctb", comment = "StanHeaders"),
-  person("Allen", "Riddell", role = "ctb", comment = "StanHeaders"),
-  person("Marco", "Inacio", role = "ctb", comment = c("StanHeaders", ORCID = "0000-0002-6865-5404")),
-  person("Mitzi", "Morris", role = "ctb", comment = "StanHeaders"),
-  person("Jeffrey", "Arnold", role = "ctb", comment = c("StanHeaders", ORCID = "0000-0001-9953-3904")),
-  person("Rob", "Goedman", role = "ctb", comment = "StanHeaders"),
-  person("Brian", "Lau", role = "ctb", comment = "StanHeaders"),
-  person("Rob", "Trangucci", role = "ctb", comment = "StanHeaders"),
-  person("Alp", "Kucukelbir", role = "ctb", comment = "StanHeaders"),
-  person("Robert", "Grant", role = "ctb", comment = "StanHeaders"),
-  person("Dustin", "Tran", role = "ctb", comment = "StanHeaders"),
-  person("Michael", "Malecki", role = "ctb", comment = "StanHeaders"),
-  person("Yuanjun", "Gao", role = "ctb", comment = "StanHeaders"),
-  person("Trustees of", "Columbia University", role = "cph", comment = "rstanarm_functions.R, StanHeaders"),
-  person("Lawrence Livermore", "National Security", role = "cph", comment = "CVODES"),
-  person("The Regents of the", "University of California", role = "cph", comment = "CVODES"),
-  person("Southern Methodist", "University", role = "cph", comment = "CVODES"),
+  person("Bob", "Carpenter", role = c("ctb", "cph"), comment = "WALNUTS sampler, MIT license"),
+  person("Trustees of", "Columbia University", role = "cph", comment = "rstanarm_functions.R"),
   person("Douglas", "Bates", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0001-8316-9503")),
   person("Martin", "Maechler", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0002-8685-9910")),
   person("Ben", "Bolker", role = "ctb", comment = c("lme4_functions.R", ORCID = "0000-0002-2127-0443")),
@@ -57,19 +34,16 @@ Depends:
 Imports:
   stats,
   Matrix,
-  parallel,
-  RcppParallel (>= 5.1.1)
+  parallel
 LinkingTo:
-  BH (>= 1.72.0.3),
   Rcpp (>= 1.0.5),
   RcppEigen (>= 0.3.3.7.0),
-  RcppParallel (>= 5.1.1),
   dbarts (>= 1.0-0)
 Suggests:
   testthat (>= 2.0-0),
   lme4,
   reformulas
-Description: Fits semiparametric linear and multilevel models with non-parametric additive Bayesian additive regression tree (BART; Chipman, George, and McCulloch (2010) <doi:10.1214/09-AOAS285>) components and Stan (Stan Development Team (2021) <https://mc-stan.org/>) sampled parametric ones. Multilevel models can be expressed using 'lme4' syntax (Bates, Maechler, Bolker, and Walker (2015) <doi:10.18637/jss.v067.i01>).
+Description: Fits semiparametric linear and multilevel models with non-parametric additive Bayesian additive regression tree (BART; Chipman, George, and McCulloch (2010) <doi:10.1214/09-AOAS285>) components and gradient-sampled parametric ones. The parametric conditional is drawn with a hand-derived analytic log-posterior gradient and the WALNUTS sampler (vendored from <https://github.com/flatironinstitute/walnuts>, commit 5854be8; MIT licensed, (c) 2025 Bob Carpenter). Multilevel models can be expressed using 'lme4' syntax (Bates, Maechler, Bolker, and Walker (2015) <doi:10.18637/jss.v067.i01>).
 License: GPL (>= 3)
 NeedsCompilation: true
 SystemRequirements: C++20

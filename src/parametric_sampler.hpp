@@ -20,9 +20,35 @@
 #include <string>
 #include <vector>
 
+#include <ext/Rinternals.h>  // SEXP
+
 #include "double_writer.hpp"
 
 namespace stan4bart {
+
+/// \brief The parametric sampler's control knobs. Only random_seed, init_radius,
+///        and skip reach WALNUTS; the NUTS-specific fields are accepted-but-
+///        ignored (parsed from the R control list, never consumed) so scripts
+///        that set the old Stan args still run. The struct name is historical.
+struct StanControl {
+  unsigned int random_seed;
+  double init_radius;
+  int skip;
+  double adapt_gamma;
+  double adapt_delta;
+  double adapt_kappa;
+  unsigned int adapt_init_buffer;
+  unsigned int adapt_term_buffer;
+  unsigned int adapt_window;
+  double adapt_t0;
+  double stepsize;
+  double stepsize_jitter;
+  int max_treedepth;
+};
+
+void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr);
+void printStanControl(const StanControl& control);
+SEXP createStanResultsExpr(const double_writer& sample_writer);
 
 struct ParametricSampler {
   // shared draw storage + naming (Stan-identical layout for both backends)

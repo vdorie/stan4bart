@@ -22,16 +22,13 @@ using std::snprintf;
 
 #include <dbarts/dbarts.h>
 
-#include "rstan/io/r_ostream.hpp"
-
 #include "bart_util.hpp"
-#include "stan_sampler.hpp"
+#include "parametric_sampler.hpp"
 #include "walnuts_sampler.hpp"
 
-// Gradient/target gate surface (src/logdensity_export.cpp); internal .Call
-// entries used by tests/testthat/test-12-gradient.R.
+// Gradient gate surface (src/logdensity_export.cpp); internal .Call entry used
+// by tests/testthat/test-12-gradient.R.
 extern "C" SEXP stan4bart_logdensity_grad(SEXP dataExpr, SEXP parExpr);
-extern "C" SEXP stan4bart_stan_logdensity(SEXP dataExpr, SEXP parExpr);
 
 #if __cplusplus < 201112L
 #  if defined(_WIN64) || SIZEOF_SIZE_T == 8
@@ -137,10 +134,9 @@ namespace {
     const double* userOffset;
     UserOffsetType offsetType;
     
-    continuous_model_namespace::continuous_model* stanModel;
     stan4bart::StanControl stanControl;
     // the parametric conditional's sampler: the WALNUTS-backed WalnutsSampler
-    // for both families (the Stan machinery is compiled but unused at runtime).
+    // for both response families.
     stan4bart::ParametricSampler* paramSampler;
     
     dbarts_sampler* bartSampler;
@@ -158,7 +154,7 @@ namespace {
     SEXP callbackEnv;
     
     Sampler() :
-      stanModel(NULL), paramSampler(NULL), bartSampler(NULL),
+      paramSampler(NULL), bartSampler(NULL),
       numObservations(0), numTestObservations(0), kIsSampled(false),
       keepTrees(false), bartOffset(NULL), stanOffset(NULL), bartLatents(NULL)
     {
@@ -174,8 +170,6 @@ namespace {
       }
 
       delete paramSampler;
-      stan4bart::deleteStanModel(stanModel);
-      stanModel = NULL;
     }
   };
   
@@ -208,7 +202,6 @@ extern "C" {
       RC_VALUE | RC_GT, 0.0, RC_VALUE | RC_DEFAULT, 1.0,
       RC_END);
 
-    sampler.stanModel = stan4bart::createStanModelFromExpression(stanDataExpr);
     stan4bart::initializeStanControlFromExpression(sampler.stanControl, stanControlExpr);
     if (sampler.stanControl.skip == R_NaInt) {
       sampler.stanControl.skip = (2000 - sampler.defaultWarmup) / 1000;
@@ -218,9 +211,8 @@ extern "C" {
     // Both families draw the parametric conditional with WALNUTS over the
     // hand-derived target: binary is the same model with actual_aux == 1
     // and the aux dimension absent, conditioned on the probit latents that
-    // setResponse refreshes each sweep. Stan remains compiled but unused at
-    // runtime. The WALNUTS rng is seeded from the same
-    // per-chain seed Stan used (control.stan$seed), so reproducibility
+    // setResponse refreshes each sweep. The WALNUTS rng is seeded from the
+    // same per-chain seed Stan used (control.stan$seed), so reproducibility
     // (test-05-rng) is preserved.
     sampler.paramSampler = new stan4bart::WalnutsSampler(stanDataExpr, sampler.stanControl.random_seed,
                                                          sampler.stanControl.init_radius, sampler.defaultWarmup);
@@ -844,12 +836,10 @@ extern "C" {
     Sampler& sampler(*samplerPtr);
     
     // the bart initial summary prints during creation under a verbose
-    // control; only the stan side and the user offset remain here
+    // control; only the parametric control and the user offset remain here
     Rprintf("stan control:\n");
     printStanControl(sampler.stanControl);
-    Rprintf("stan model:\n");
-    stan4bart::printStanModel(sampler.stanModel);
-    
+
     if (sampler.userOffset != NULL) {
       Rprintf("\nuser offset: %f", sampler.userOffset[0]);
       for (size_t i = 1; i < (sampler.numObservations < 5 ? sampler.numObservations : 5); ++i)
@@ -1089,7 +1079,6 @@ static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_printTrees", printTrees, 4),
   DEF_FUNC("stan4bart_getTrees", getTrees, 5),
   DEF_FUNC("stan4bart_logdensity_grad", stan4bart_logdensity_grad, 2),
-  DEF_FUNC("stan4bart_stan_logdensity", stan4bart_stan_logdensity, 2),
   {NULL, NULL, 0}
 };
 

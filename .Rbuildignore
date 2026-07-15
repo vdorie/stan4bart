@@ -1,6 +1,12 @@
 ^ihdp
+^benchmarks$
+^docs$
 ^.git$
 ^.github$
 ^.gitignore$
 ^readme.md$
+^autom4te\.cache$
+^config\.log$
+^config\.status$
+.*~$
 TODO

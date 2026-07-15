@@ -1,19 +1,21 @@
-context("WALNUTS parametric target: gradient FD + Stan log_prob cross-check")
+context("WALNUTS parametric target: gradient finite-difference gate")
 
-# Correctness gates for src/parametric_model.hpp. Two proofs on
-# self-contained fixtures spanning every gradient tier:
-#   (a) FD GATE: the hand-written gradient vs central finite differences of the
-#       hand-written value, at fixed-seed random unconstrained points.
-#   (b) TARGET CROSS-CHECK: value(mine) - Stan's log_prob<false, true> must be
-#       CONSTANT across points within each fixture (targets differ only by the
-#       constants the hand target drops).
+# Correctness gate for src/parametric_model.hpp on self-contained fixtures
+# spanning every gradient tier:
+#   FD GATE: the hand-written gradient vs central finite differences of the
+#            hand-written value, at fixed-seed random unconstrained points.
 #
-# The Stan data lists are hand-built (not from the full pipeline) so the gate
-# tests the target math directly; the SAME list and point feed both the hand
-# functor and Stan's own log_prob, so any valid list is a fair oracle.
+# A second proof used to live here - a cross-check of value(mine) against
+# Stan's own log_prob<false, true> at the same points (constant-difference
+# oracle for the target itself). It was removed with the Stan machinery at C4
+# (docs/plans/walnuts.md); the target was validated against that oracle while
+# Stan still compiled (see the C1 landing note, worst spread 9.1e-13), and the
+# FD gate below continues to guard the gradient-vs-coded-target agreement.
+#
+# The data lists are hand-built (not from the full pipeline) so the gate tests
+# the target math directly.
 
 C_grad <- function(d, par) .Call(stan4bart:::C_stan4bart_logdensity_grad, d, par)
-C_stan <- function(d, par) .Call(stan4bart:::C_stan4bart_stan_logdensity, d, par)
 
 # ---- build a marshaled Stan data list -------------------------------------
 #
@@ -190,25 +192,5 @@ test_that("gradient matches central finite differences on every tier", {
   cat(sprintf("  FD worst across all tiers = %.2e (tol %.0e)\n", worst_overall, fd_tol))
 })
 
-# ---- (b) TARGET CROSS-CHECK ------------------------------------------------
-# value(mine) - Stan log_prob<false, true> must be constant across points.
-xc_tol <- 1e-6
-
-test_that("hand target minus Stan log_prob is constant within each tier", {
-  worst_spread <- 0
-  for (nm in names(fixtures)) {
-    d <- fixtures[[nm]]$data
-    diffs <- numeric(n_points)
-    for (pt in seq_len(n_points)) {
-      par <- gen_point(d, 424242L + pt * 97L + which(names(fixtures) == nm))
-      mine <- C_grad(d, par)$value
-      stan <- C_stan(d, par)
-      diffs[pt] <- mine - stan
-    }
-    spread <- diff(range(diffs))
-    cat(sprintf("  XC [%-13s] const=%+.6f spread=%.2e\n", nm, mean(diffs), spread))
-    expect_lt(spread, xc_tol)
-    worst_spread <- max(worst_spread, spread)
-  }
-  cat(sprintf("  XC worst spread across all tiers = %.2e (tol %.0e)\n", worst_spread, xc_tol))
-})
+# The Stan log_prob cross-check that formerly ran here was removed with the
+# Stan machinery (C4); see the header comment above.
