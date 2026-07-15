@@ -8,8 +8,8 @@ PKG_LIBS += $(shell "${R_HOME}/bin$(R_ARCH_BIN)/Rscript" -e "TBB <- system.file(
 PKG_LIBS += -Wl,--allow-multiple-definition
 
 CXX_STD = CXX20
-SOURCES = bart_util.cpp init.cpp logdensity_export.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c stan_sampler.cpp
-OBJECTS = bart_util.o init.o logdensity_export.o misc_adaptiveRadixTree.o misc_string.o rc_bounds.o rc_util.o stan_sampler.o
+SOURCES = bart_util.cpp init.cpp logdensity_export.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c stan_sampler.cpp walnuts_sampler.cpp
+OBJECTS = bart_util.o init.o logdensity_export.o misc_adaptiveRadixTree.o misc_string.o rc_bounds.o rc_util.o stan_sampler.o walnuts_sampler.o
 
 AR = gcc-ar -m$(WIN)
 NM = gcc-nm -m$(WIN)

@@ -462,13 +462,13 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
 #endif
 
 StanSampler::StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup, int verbose) :
+  model(stanModel),
   c_out(verbose >  0 ? &rstan::io::rcout : &nullout),
   c_err(verbose >= 0 ? &rstan::io::rcerr : &nullout),
   logger(*c_out, *c_out, *c_out, *c_err, *c_err),
   diagnostic_writer(diagnostic_stream, "# "),
   init_context_ptr(new stan::io::empty_var_context()),
   init_writer("init"),
-  sample_writer("sample"),
   dmp(stan::services::util::create_unit_e_diag_inv_metric(stanModel.num_params_r())),
   unit_e_metric(dmp),
   sampler(NULL)
@@ -537,31 +537,41 @@ void setResponse(StanModel& model, const double* response)
   model.set_response(response);
 }
 
-void StanSampler::getParametricMean(const StanModel& model, double* result) const
+void StanSampler::getParametricMean(double* result) const
 {
   model.get_parametric_mean(sample_writer.x_curr + sample_writer_offset, result);
 }
 
-void StanSampler::getParametricMean(const StanModel& model, double* result,
+void StanSampler::getParametricMean(double* result,
                                     bool includeFixed, bool includeRandom) const
 {
   model.get_parametric_mean(sample_writer.x_curr + sample_writer_offset, result,
                             includeFixed, includeRandom);
 }
 
-double StanSampler::getSigma(const StanModel& model) const
+double StanSampler::getSigma() const
 {
   return model.get_aux(sample_writer.x_curr + sample_writer_offset);
 }
 
-void StanSampler::copyOutParameters(double* result, int offset) const
+void StanSampler::setOffset(const double* offset)
 {
-  std::memcpy(result, const_cast<const double*>(sample_writer.x_curr) + offset * num_pars, num_pars * sizeof(double));
+  model.set_offset(offset);
+}
+
+void StanSampler::setResponse(const double* y)
+{
+  model.set_response(y);
 }
 
 void StanSampler::run(bool isWarmup)
 {
   sampler->run(isWarmup);
+}
+
+void StanSampler::freeze()
+{
+  sampler->disengage_adaptation();
 }
 
 /* 

@@ -15,6 +15,7 @@
 #include "stan_sampler_includes.hpp"
 
 #include "double_writer.hpp"
+#include "parametric_sampler.hpp"
 #include "interruptable_sampler.hpp"
 
 // #include "stan_files/continuous.hpp"
@@ -49,48 +50,44 @@ namespace stan4bart {
   
   typedef continuous_model_namespace::continuous_model StanModel;
   
-  struct StanSampler {
+  // sample_writer, sample_names, sampler_names, constrained_param_names,
+  // sample_writer_offset, num_pars, and copyOutParameters live in the
+  // ParametricSampler base (shared with the WALNUTS backend).
+  struct StanSampler : public ParametricSampler {
+    StanModel& model;
+
     std::ostream* c_out;
     std::ostream* c_err;
     stan::callbacks::stream_logger logger;
     R_CheckUserInterrupt_Functor interrupt;
-    
+
     std::fstream sample_stream;
     std::fstream diagnostic_stream;
     std::stringstream comment_stream;
-    
+
     stan::callbacks::stream_writer diagnostic_writer;
-    
+
     std::unique_ptr<stan::io::var_context> init_context_ptr;
-    
-    std::vector<std::string> constrained_param_names;
-    
-    
-    std::vector<std::string> sample_names;
-    std::vector<std::string> sampler_names;
-    
-    size_t sample_writer_offset; 
-    
+
     stan4bart::double_writer init_writer;
-    stan4bart::double_writer sample_writer;
-  
+
     stan::io::dump dmp;
     stan::io::var_context& unit_e_metric;
-    
-    int num_pars;
-    
+
     stan4bart::interruptable_sampler<StanModel>* sampler;
-    
+
     StanSampler(StanModel& stanModel, const StanControl& stanControl, int chain_id, int num_warmup, int verbose);
-    void run(bool isWarmup);
-    
-    void getParametricMean(const StanModel& model, double* result) const;
-    void getParametricMean(const StanModel& model, double* result,
-                           bool includeFixed, bool includeRandom) const;
-    double getSigma(const StanModel& model) const;
-    void copyOutParameters(double* result, int offset) const;
-    
-    void setVerbose(int level);
+    void run(bool isWarmup) override;
+    void freeze() override;
+
+    void getParametricMean(double* result) const override;
+    void getParametricMean(double* result,
+                           bool includeFixed, bool includeRandom) const override;
+    double getSigma() const override;
+
+    void setOffset(const double* offset) override;
+    void setResponse(const double* y) override;
+    void setVerbose(int level) override;
     // bool isDivergentTransition() const;
     // int getTreeDepth() const;
   };

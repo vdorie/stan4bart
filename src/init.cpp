@@ -26,6 +26,7 @@ using std::snprintf;
 
 #include "bart_util.hpp"
 #include "stan_sampler.hpp"
+#include "walnuts_sampler.hpp"
 
 // Gradient/target gate surface (src/logdensity_export.cpp); internal .Call
 // entries used by tests/testthat/test-12-gradient.R.
@@ -138,7 +139,9 @@ namespace {
     
     continuous_model_namespace::continuous_model* stanModel;
     stan4bart::StanControl stanControl;
-    stan4bart::StanSampler* stanSampler;
+    // the parametric conditional's sampler: StanSampler for binary, the
+    // WALNUTS-backed WalnutsSampler for continuous (C2 family switch).
+    stan4bart::ParametricSampler* paramSampler;
     
     dbarts_sampler* bartSampler;
     std::size_t numObservations;
@@ -155,7 +158,7 @@ namespace {
     SEXP callbackEnv;
     
     Sampler() :
-      stanModel(NULL), stanSampler(NULL), bartSampler(NULL),
+      stanModel(NULL), paramSampler(NULL), bartSampler(NULL),
       numObservations(0), numTestObservations(0), kIsSampled(false),
       keepTrees(false), bartOffset(NULL), stanOffset(NULL), bartLatents(NULL)
     {
@@ -164,13 +167,13 @@ namespace {
       delete [] bartLatents;
       delete [] stanOffset;
       delete [] bartOffset;
-      
+
       if (bartSampler != NULL) {
         bartFunctions.destroy(bartSampler);
         bartSampler = NULL;
       }
-      
-      delete stanSampler;
+
+      delete paramSampler;
       stan4bart::deleteStanModel(stanModel);
       stanModel = NULL;
     }
@@ -212,9 +215,19 @@ extern "C" {
       if (sampler.stanControl.skip < 1) sampler.stanControl.skip = 1;
     }
     
+    // Family switch (runtime, by response type): the continuous conditional is
+    // drawn by WALNUTS over the hand-derived target; binary stays on Stan's
+    // NUTS. Both present the ParametricSampler surface. The WALNUTS rng is
+    // seeded from the same per-chain seed Stan used (control.stan$seed), so
+    // reproducibility (test-05-rng) is preserved.
     int chain_id = 1;
-    sampler.stanSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanControl, chain_id, sampler.defaultWarmup, -1);
-    sampler.stanSampler->setVerbose(sampler.verbose);
+    if (sampler.responseIsBinary) {
+      sampler.paramSampler = new stan4bart::StanSampler(*sampler.stanModel, sampler.stanControl, chain_id, sampler.defaultWarmup, -1);
+    } else {
+      sampler.paramSampler = new stan4bart::WalnutsSampler(stanDataExpr, sampler.stanControl.random_seed,
+                                                          sampler.stanControl.init_radius, sampler.defaultWarmup);
+    }
+    sampler.paramSampler->setVerbose(sampler.verbose);
     
     // a verbose control prints the initial summary during creation; tree
     // storage is turned on only for the recorded sampling run
@@ -282,12 +295,12 @@ extern "C" {
           sampler.stanOffset[j] += sampler.userOffset[j];
     }
     
-    stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
+    sampler.paramSampler->setOffset(sampler.stanOffset);
     if (sampler.responseIsBinary) {
       bartFunctions.getLatents(sampler.bartSampler, sampler.bartLatents);
-      stan4bart::setResponse(*sampler.stanModel, sampler.bartLatents);
+      sampler.paramSampler->setResponse(sampler.bartLatents);
     }
-    
+
     SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, R_NilValue));
     samplerPtr.release();
     R_RegisterCFinalizerEx(result, samplerFinalizer, static_cast<Rboolean>(FALSE));
@@ -310,11 +323,11 @@ extern "C" {
     if (samplerPtr == NULL) Rf_error("getParametricMean called on NULL external pointer");
     Sampler& sampler(*samplerPtr);
     
-    sampler.stanSampler->sample_writer.decrement();
+    sampler.paramSampler->sample_writer.decrement();
     SEXP result = PROTECT(rc_newReal(sampler.numObservations));
-    
-    sampler.stanSampler->getParametricMean(*sampler.stanModel, REAL(result));
-    sampler.stanSampler->sample_writer.increment();
+
+    sampler.paramSampler->getParametricMean(REAL(result));
+    sampler.paramSampler->sample_writer.increment();
     
     UNPROTECT(1);
     
@@ -570,17 +583,17 @@ extern "C" {
         yhat_test = PROTECT(rc_newReal(sampler.numTestObservations));
         ++protectCount;
       }
-      stan_pars = PROTECT(rc_newReal(sampler.stanSampler->num_pars));
+      stan_pars = PROTECT(rc_newReal(sampler.paramSampler->num_pars));
       ++protectCount;
-      SEXP stan_par_names = PROTECT(rc_newCharacter(sampler.stanSampler->num_pars));
+      SEXP stan_par_names = PROTECT(rc_newCharacter(sampler.paramSampler->num_pars));
       ++protectCount;
       size_t pos = 0;
-      for (size_t i = 0; i < sampler.stanSampler->sample_names.size(); ++i)
-        SET_STRING_ELT(stan_par_names, pos++, Rf_mkChar(sampler.stanSampler->sample_names[i].c_str()));
-      for (size_t i = 0; i < sampler.stanSampler->sampler_names.size(); ++i)
-        SET_STRING_ELT(stan_par_names, pos++, Rf_mkChar(sampler.stanSampler->sampler_names[i].c_str()));
-      for (size_t i = 0; i < sampler.stanSampler->constrained_param_names.size(); ++i)
-        SET_STRING_ELT(stan_par_names, pos++, Rf_mkChar(sampler.stanSampler->constrained_param_names[i].c_str()));
+      for (size_t i = 0; i < sampler.paramSampler->sample_names.size(); ++i)
+        SET_STRING_ELT(stan_par_names, pos++, Rf_mkChar(sampler.paramSampler->sample_names[i].c_str()));
+      for (size_t i = 0; i < sampler.paramSampler->sampler_names.size(); ++i)
+        SET_STRING_ELT(stan_par_names, pos++, Rf_mkChar(sampler.paramSampler->sampler_names[i].c_str()));
+      for (size_t i = 0; i < sampler.paramSampler->constrained_param_names.size(); ++i)
+        SET_STRING_ELT(stan_par_names, pos++, Rf_mkChar(sampler.paramSampler->constrained_param_names[i].c_str()));
       rc_setNames(stan_pars, stan_par_names);
         
       callbackClosure = PROTECT(Rf_lang4(sampler.callback, yhat_train, yhat_test, stan_pars));
@@ -598,7 +611,7 @@ extern "C" {
         bartFunctions.numPredictors(sampler.bartSampler),
         sampler.numTestObservations, numStorageSamples, sampler.kIsSampled);
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
-      sampler.stanSampler->sample_writer.resize(sampler.stanSampler->num_pars, numStorageSamples);
+      sampler.paramSampler->sample_writer.resize(sampler.paramSampler->num_pars, numStorageSamples);
     
     size_t n = sampler.numObservations;
     
@@ -618,36 +631,36 @@ extern "C" {
       // or else when they're added together they won't be consistent with `predict`
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN) {
         // Rprintf("running stan\n");
-        sampler.stanSampler->run(isWarmup);
-        
+        sampler.paramSampler->run(isWarmup);
+
         if (sampler.userOffset == NULL) {
           // Rprintf("getting stan para mean\n");
-          sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset);
+          sampler.paramSampler->getParametricMean(sampler.bartOffset);
         } else {
           // The user offset can be used to replace parts of the model for debugging purposes.
           // We only add in the remaining parts.
           switch (sampler.offsetType) {
             case OFFSET_DEFAULT:
-            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset);
+            sampler.paramSampler->getParametricMean(sampler.bartOffset);
             for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
             break;
-            
+
             case OFFSET_BART:
-            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset);
+            sampler.paramSampler->getParametricMean(sampler.bartOffset);
             break;
-            
+
             case OFFSET_RANEF:
-            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset,
-                                                   true, false);
+            sampler.paramSampler->getParametricMean(sampler.bartOffset,
+                                                    true, false);
             for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
             break;
-            
+
             case OFFSET_FIXEF:
-            sampler.stanSampler->getParametricMean(*sampler.stanModel, sampler.bartOffset,
-                                                   false, true);
+            sampler.paramSampler->getParametricMean(sampler.bartOffset,
+                                                    false, true);
             for (size_t j = 0; j < n; ++j) sampler.bartOffset[j] += sampler.userOffset[j];
             break;
-            
+
             case OFFSET_PARAMETRIC:
             // Replaces the whole Stan part.
             std::memcpy(sampler.bartOffset, sampler.userOffset, n * sizeof(double));
@@ -656,7 +669,7 @@ extern "C" {
         }
         if (!sampler.responseIsBinary) {
           // Rprintf("getting sigma\n");
-          double sigma = sampler.stanSampler->getSigma(*sampler.stanModel);
+          double sigma = sampler.paramSampler->getSigma();
           bartFunctions.setSigma(sampler.bartSampler, sigma);
         }
         
@@ -668,7 +681,7 @@ extern "C" {
         
         // Rprintf("incrementing sampling\n");
         if (sampler.keepFits)
-          sampler.stanSampler->sample_writer.increment();
+          sampler.paramSampler->sample_writer.increment();
         
         // Rprintf("setting bart offset\n");
         // this will adjusting the scale every iteration during the first 1/8 of warmup, 
@@ -701,18 +714,18 @@ extern "C" {
         }
         
         // Rprintf("setting stan offset\n");
-        stan4bart::setStanOffset(*sampler.stanModel, sampler.stanOffset);
+        sampler.paramSampler->setOffset(sampler.stanOffset);
         if (sampler.responseIsBinary) {
           // Rprintf("getting latents\n");
           bartFunctions.getLatents(sampler.bartSampler, sampler.bartLatents);
-          stan4bart::setResponse(*sampler.stanModel, sampler.bartLatents);
+          sampler.paramSampler->setResponse(sampler.bartLatents);
         }
         
         if (sampler.callback != R_NilValue) {
           std::memcpy(REAL(yhat_train), trainingSample, n * sizeof(double));
           if (yhat_test != R_NilValue)
             std::memcpy(REAL(yhat_test), bartSamples->current.test, sampler.numTestObservations * sizeof(double));
-          sampler.stanSampler->copyOutParameters(REAL(stan_pars), sampler.keepFits ? -1 : 0);
+          sampler.paramSampler->copyOutParameters(REAL(stan_pars), sampler.keepFits ? -1 : 0);
 
           SEXP callbackIterResult = PROTECT(Rf_eval(callbackClosure, sampler.callbackEnv));
           bool resultAllocated = false;
@@ -789,7 +802,7 @@ extern "C" {
       ++protectCount;
       int pos = 0;
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
-        SET_VECTOR_ELT(resultExpr, pos++, createStanResultsExpr(sampler.stanSampler->sample_writer));
+        SET_VECTOR_ELT(resultExpr, pos++, createStanResultsExpr(sampler.paramSampler->sample_writer));
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART)
         SET_VECTOR_ELT(resultExpr, pos++, stan4bart::createBartResultsExpr(*bartSamples));
       if (sampler.callback != R_NilValue)
@@ -858,8 +871,8 @@ extern "C" {
     if (samplerPtr == NULL) Rf_error("disengageAdaptation called on NULL external pointer");
     Sampler& sampler(*samplerPtr);
     
-    sampler.stanSampler->sampler->disengage_adaptation();
-    
+    sampler.paramSampler->freeze();
+
     return R_NilValue;
   }
 

@@ -24,7 +24,9 @@
 ///     zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!binary) ]
 
 #include <cmath>      // std::exp, std::log, std::sqrt
+#include <cstring>    // std::memcpy
 #include <stdexcept>  // std::invalid_argument
+#include <string>     // std::string, std::to_string
 #include <vector>
 
 #include <Eigen/Dense>
@@ -145,10 +147,90 @@ struct ParametricModel {
 
   int dim() const { return dim_; }
 
+  /// \brief Length of the constrained parameter array Stan's write_array emits
+  ///        for the reachable scope (has_intercept == 0, no shrinkage latents):
+  ///   z_beta, z_b, z_T, rho, zeta, tau, [aux_unscaled, aux], beta, b, theta_L.
+  int constrainedDim() const {
+    return K + q + len_z_T + len_rho + len_concentration + t
+         + (is_binary ? 0 : 2)   // aux_unscaled + aux
+         + K + q + len_theta_L;   // beta + b + theta_L
+  }
+
+  /// \brief Index of beta.1 within the constrained array (b follows at +K).
+  int betaConstrainedOffset() const {
+    return K + q + len_z_T + len_rho + len_concentration + t + (is_binary ? 0 : 2);
+  }
+  /// \brief Index of aux.1 (the residual sd) within the constrained array;
+  ///        valid only when !is_binary.
+  int auxConstrainedOffset() const {
+    return K + q + len_z_T + len_rho + len_concentration + t + 1;
+  }
+
+  /// \brief The Stan-identical constrained parameter names, in write_array
+  ///        order, for the reachable scope. Mirrors continuous.hpp's
+  ///        constrained_param_names() so the R side consumes rows by name
+  ///        exactly as under the Stan sampler.
+  std::vector<std::string> constrainedParamNames() const {
+    std::vector<std::string> names;
+    names.reserve(static_cast<size_t>(constrainedDim()));
+    auto emit = [&](const char* base, int n) {
+      for (int i = 1; i <= n; ++i)
+        names.emplace_back(std::string(base) + "." + std::to_string(i));
+    };
+    emit("z_beta", K);
+    emit("z_b", q);
+    emit("z_T", len_z_T);
+    emit("rho", len_rho);
+    emit("zeta", len_concentration);
+    emit("tau", t);
+    if (!is_binary) { emit("aux_unscaled", 1); emit("aux", 1); }
+    emit("beta", K);
+    emit("b", q);
+    emit("theta_L", len_theta_L);
+    return names;
+  }
+
+  /// \brief The parametric mean X*beta + Z*b (offset-free), read from a
+  ///        constrained array. Mirrors continuous.hpp::get_parametric_mean.
+  void parametricMean(const double* constrained, double* result,
+                      bool includeFixed, bool includeRandom) const {
+    const double* betap = constrained + betaConstrainedOffset();
+    const double* bp = betap + K;
+    Eigen::VectorXd eta = Eigen::VectorXd::Zero(N);
+    if (includeFixed && K > 0) {
+      Eigen::Map<const Eigen::VectorXd> betaVec(betap, K);
+      eta.noalias() += X * betaVec;
+    }
+    if (includeRandom && t > 0) {
+      for (int i = 0; i < N; ++i) {
+        double acc = 0.0;
+        for (int k = Zu[i]; k < Zu[i + 1]; ++k) acc += Zw[k] * bp[Zv[k]];
+        eta[i] += acc;
+      }
+    }
+    std::memcpy(result, eta.data(), static_cast<size_t>(N) * sizeof(double));
+  }
+
+  /// \brief The residual sd (aux) read from a constrained array.
+  double getAux(const double* constrained) const {
+    return constrained[auxConstrainedOffset()];
+  }
+
   /// \brief Evaluate the log-posterior and its gradient at the unconstrained
-  ///        point `par`. Parameter-independent constants are dropped (so the
-  ///        value matches Stan's log_prob up to a constant additive offset).
+  ///        point `par`. Matches the walnuts::LogpGrad concept.
   void operator()(const Eigen::VectorXd& par, double& logp, Eigen::VectorXd& grad) const {
+    eval(par, logp, grad, nullptr);
+  }
+
+  /// \brief The log-posterior, its gradient, and (when `constrained` is
+  ///        non-null) the constrained parameter array in Stan write_array
+  ///        order. C2's WALNUTS wrapper calls this once per stored draw to
+  ///        re-emit beta/b/theta_L/aux with Stan-identical names; the sampling
+  ///        hot path calls operator() (constrained == nullptr) so no re-emission
+  ///        cost is paid per leapfrog. Parameter-independent constants are
+  ///        dropped (so the value matches Stan's log_prob up to a constant).
+  void eval(const Eigen::VectorXd& par, double& logp, Eigen::VectorXd& grad,
+            double* constrained) const {
     if (grad.size() != dim_) grad.resize(dim_);
     grad.setZero();
     logp = 0.0;
@@ -263,6 +345,28 @@ struct ParametricModel {
           for (int c = 0; c < nc; ++c) acc += bl.T(r, c) * z_b_p[base + c];
           b[base + r] = acc;
         }
+      }
+    }
+
+    // --- constrained re-emission (Stan write_array order): only when the
+    //     caller wants the stored draw, not on the leapfrog hot path. theta_L
+    //     is the column-major vech of each block's Cholesky factor T
+    //     (continuous.stan:51-55), so make_b reconstructs the same T. ---
+    if (constrained != nullptr) {
+      int o = 0;
+      for (int k = 0; k < K; ++k)                  constrained[o++] = z_beta_p[k];
+      for (int s = 0; s < q; ++s)                  constrained[o++] = z_b_p[s];
+      for (int e = 0; e < len_z_T; ++e)            constrained[o++] = z_T_p[e];
+      for (int j = 0; j < len_rho; ++j)            constrained[o++] = rho[j];
+      for (int j = 0; j < len_concentration; ++j)  constrained[o++] = zeta[j];
+      for (int i = 0; i < t; ++i)                  constrained[o++] = tau[i];
+      if (!is_binary) { constrained[o++] = au; constrained[o++] = aux; }
+      for (int k = 0; k < K; ++k)                  constrained[o++] = beta[k];
+      for (int s = 0; s < q; ++s)                  constrained[o++] = b[s];
+      for (const Block& bl : blocks) {
+        const int nc = bl.nc;
+        for (int c = 0; c < nc; ++c)
+          for (int r = c; r < nc; ++r) constrained[o++] = bl.T(r, c);
       }
     }
 
@@ -450,6 +554,14 @@ struct ParametricModel {
       grad[off_aux] = g_au * au + 1.0;  // *au chain (au = exp) + log Jacobian
       logp += par[off_aux];             // + log(au) Jacobian
     }
+
+    // Non-finite values (exp overflow in tau/zeta/aux at extreme leapfrog
+    // positions) must THROW, matching Stan's log_prob contract: WALNUTS'
+    // NoExceptLogpGrad catches and substitutes -inf logp + zero gradient,
+    // treating the step as divergent. Silently returning NaN instead poisons
+    // the accept probability and, through Adam, the adapted step size.
+    if (!std::isfinite(logp) || !grad.allFinite())
+      throw std::domain_error("parametric_model: non-finite log density or gradient");
   }
 };
 
