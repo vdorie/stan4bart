@@ -24,7 +24,7 @@ namespace stan4bart {
     std::vector<std::uint32_t> variableCountSamples;
 
     std::size_t position;
-    dbarts_results current;
+    dbarts_results current = {};
 
     IterableBartResults(std::size_t numObservations_,
                         std::size_t numPredictors_,
@@ -38,6 +38,10 @@ namespace stan4bart {
         kSamples(kIsSampled_ ? numSamples_ : 0),
         variableCountSamples(numPredictors_ * numSamples_), position(0)
     {
+      // the versioned-struct contract: dbarts_sampler_run fills only the
+      // fields structSize says the caller's dbarts_results carries; left
+      // unset, every output field is skipped and the train buffers stay zero
+      current.structSize = sizeof(dbarts_results);
       setCurrentPointers();
     }
 
