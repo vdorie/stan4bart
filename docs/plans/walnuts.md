@@ -482,6 +482,17 @@ C3. BINARY path to WALNUTS (Stan now unused at runtime, still compiled). The bin
    baseline under C2's pre-registered tolerance (k = 4 on means via combined MCSE;
    sd ratio in [0.8, 1.25]); test-02-binary green. Size: S-M. Abort: as C2.
 
+### C3 landing (2026-07-16)
+
+C3 = 2ee6048. The family branch collapsed - both families on WALNUTS, Stan
+compiled but unused at runtime. Binary gate 55/55 within the pre-registered
+bands (worst mean ratio 2.56, worst sd ratio 1.137; independently re-run at
+landing - identical). Suite 239/0, nothing regenerated, reproducibility
+verified for binary directly. VD signed off the C4 author-list surgery
+2026-07-16; the C4 protocol is pause -> VD confirms a quiet machine ->
+Stan-era perf baselines (before-numbers) -> the deletion -> after-numbers
+in the same window.
+
 C4. DELETE STAN. Remove src/include/{stan,sundials,rstan}, src/stan_files/ (incl. the
    stale continuous_new.hpp), stan_sampler.{cpp,hpp}, stan_sampler_includes.hpp,
    interruptable_sampler.hpp. double_writer.hpp is RETAINED-AND-DE-STANNED, not
