@@ -1,17 +1,11 @@
 An unordered backlog; history lives in docs/plans/, docs/design/, and git.
 
 items
-  bart-train-recompute: LANDED 2026-07-16 as the store = "trees" opt-in
-    (96-99 percent of a large fit object) with on-demand recomputation
-    from kept trees through dbarts's exact-replay predict - trades an
-    always-paid memory cost for a small per-access compute cost, per
-    the general speed/flexibility objective (approved in principle,
-    2026-07-16; measurements and framing in
-    docs/plans/sample-storage.md). Needs keepTrees semantics, a lazy
-    seam behind fitted/extract, and an eager-storage option for
-    fast-repeated-access users; no dbarts.h change. If it lands well
-    it becomes the reference pattern for other dbarts consumers.
   cleanup-file-names: source-file naming pass (pre-WALNUTS entry,
     still applicable to the surviving files).
   factors-categorical: adopt dbarts's categorical splits instead of
     pinning factors to indicators (the 1.0 port's recorded follow-up).
+  store-trees-adaptive-default: revisit making store = "trees" the
+    default above a size threshold once the opt-in's contracts are
+    lived-in (docs/plans/bart-train-recompute.md C4 resolution); also
+    the candidate reference pattern for other dbarts consumers.
