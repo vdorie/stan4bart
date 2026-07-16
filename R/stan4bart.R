@@ -453,8 +453,14 @@ package_samples <- function(chain_results, bart_var_names) {
     result$adaptation <- adaptation
   }
 
-  if (!is.null(attr(chain_results, "sampler.bart")))
+  if (!is.null(attr(chain_results, "sampler.bart"))) {
     result$sampler.bart <- attr(chain_results, "sampler.bart")
+    # Retained for lazy pointer rebuild after reload; bart_env is a reference
+    # cell that caches the rebuilt pointer so a reloaded fit rebuilds at most
+    # once per session (getBartSampler(), generics.R).
+    result$state.bart <- attr(chain_results, "state.bart")
+    result$bart_env <- new.env(parent = emptyenv())
+  }
 
   result
 }

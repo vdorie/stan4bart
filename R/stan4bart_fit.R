@@ -652,8 +652,20 @@ stan4bart_fit <-
     control.bart@n.chains <- chains
     control.bart@keepTrees <- TRUE
     control.bart@n.samples <- as.integer(iter - warmup)
-    attr(chainResults, "sampler.bart") <- 
+    attr(chainResults, "sampler.bart") <-
       .Call(C_stan4bart_createStoredBARTSampler, control.bart, data.bart, model.bart, all_state)
+
+    # Retain the SERIALIZABLE inputs so the stored-tree external pointer can be
+    # rebuilt lazily after saveRDS/readRDS (the live pointer dies on reload).
+    # The big training design matrix (@x/@x.test) is dropped here and
+    # re-spliced from the fit's $bartData at rebuild, so the retained bundle is
+    # n-independent (dominated by the kept-tree state, tens of MB).
+    data.bart.light <- data.bart
+    data.bart.light@x <- data.bart.light@x[integer(0L), , drop = FALSE]
+    data.bart.light@x.test <- data.bart.light@x.test[integer(0L), , drop = FALSE]
+    attr(chainResults, "state.bart") <-
+      list(state = all_state, control = control.bart,
+           model = model.bart, data = data.bart.light)
   }
   
   chainResults

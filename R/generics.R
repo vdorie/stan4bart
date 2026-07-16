@@ -181,6 +181,43 @@ get_samples <- function(expr, include_warmup, only_warmup)
   result
 }
 
+# Liveness probe for a StoredBARTSampler external pointer. predictBART null-
+# checks the pointer (init.cpp:335) BEFORE its early return on a NULL test
+# matrix (init.cpp:340), so predictBART(ptr, NULL, NULL) is a cheap, side-
+# effect-free liveness test: it returns NULL for a live pointer and errors for
+# a dead one - the state a saveRDS/readRDS round trip leaves behind (a non-NULL
+# externalptr whose address is NULL).
+bart_pointer_is_live <- function(ptr) {
+  if (is.null(ptr)) return(FALSE)
+  !inherits(tryCatch(.Call(C_stan4bart_predictBART, ptr, NULL, NULL),
+                     error = function(e) e), "error")
+}
+
+# Return a live StoredBARTSampler pointer for `object`, rebuilding it from the
+# retained serializable state (object$state.bart) when the live pointer has
+# died in a fresh session after reload. The training design matrix, dropped
+# from the retained bundle to keep it n-independent, is re-spliced from
+# $bartData. The rebuilt pointer is cached in object$bart_env (a reference
+# cell), so a reloaded fit rebuilds at most once and holds the pointer for the
+# session; the in-session path returns the original live pointer untouched.
+getBartSampler <- function(object) {
+  if (bart_pointer_is_live(object$sampler.bart))
+    return(object$sampler.bart)
+  env <- object$bart_env
+  if (!is.null(env) && bart_pointer_is_live(env$ptr))
+    return(env$ptr)
+  if (is.null(object$state.bart))
+    stop("bart component requires stan4bart to be called with `bart_args = list('keepTrees' = TRUE)`")
+  restore <- object$state.bart
+  data.bart <- restore$data
+  data.bart@x <- object$bartData@x
+  data.bart@x.test <- object$bartData@x.test
+  ptr <- .Call(C_stan4bart_createStoredBARTSampler,
+               restore$control, data.bart, restore$model, restore$state)
+  if (!is.null(env)) env$ptr <- ptr
+  ptr
+}
+
 extract.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
@@ -202,7 +239,7 @@ extract.stan4bartFit <-
     treeNums <- if ("treeNums" %in% names(dotsList)) as.integer(dotsList[["treeNums"]]) else NULL
     chainNums <- if ("chainNums" %in% names(dotsList)) as.integer(dotsList[["chainNums"]]) else NULL
     sampleNums <- if ("sampleNums" %in% names(dotsList)) as.integer(dotsList[["sampleNums"]]) else NULL
-    return(.Call(C_stan4bart_getTrees, object$sampler.bart, chainNums, sampleNums, treeNums, FALSE))
+    return(.Call(C_stan4bart_getTrees, getBartSampler(object), chainNums, sampleNums, treeNums, FALSE))
   } else {
     if (length(list(...)) > 0) warning("unused arguments ignored")
   }
@@ -682,7 +719,7 @@ predict.stan4bartFit <-
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
     # predictions arrive on the original response scale: the restored
     # sampler's state carries each chain's fit transform
-    indiv.bart <- .Call(C_stan4bart_predictBART, object$sampler.bart, testData$X.bart, NULL)
+    indiv.bart <- .Call(C_stan4bart_predictBART, getBartSampler(object), testData$X.bart, NULL)
     if (length(dim(indiv.bart)) == 2L)
       dim(indiv.bart) <- c(dim(indiv.bart), 1L)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
