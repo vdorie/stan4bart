@@ -1,6 +1,14 @@
 An unordered backlog; history lives in docs/plans/, docs/design/, and git.
 
 items
+  callback-estimators: TABLED with its consumer (bartCause) 2026-07-16.
+    The design and measurements are complete in
+    docs/plans/callback-estimators.md (per-draw reducing callbacks
+    store draws x estimators instead of n x draws surfaces; prototype
+    +1.1 percent wall, bitwise ate; the stan4bart-side contract
+    refinements - assembled response-scale ev to the callback, warmup
+    gating, documenting the seam - are consumer-gated and land with
+    adoption).
   cleanup-file-names: source-file naming pass (pre-WALNUTS entry,
     still applicable to the surviving files).
   factors-categorical: adopt dbarts's categorical splits instead of
