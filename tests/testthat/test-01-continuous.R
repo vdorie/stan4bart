@@ -339,6 +339,30 @@ test_that("predict works with one chain", {
   expect_equal(names(dimnames(predictions)), c("observation", "iterations:chains"))
 })
 
+test_that("predict samples new levels of a random-slope grouping factor", {
+  # levelfun (R/lme4_functions.R) sampled new-level coefficients by slicing
+  # the per-draw covariance array with drop = FALSE, e.g. L[,,i,drop=FALSE];
+  # for a random-slope block (more than one predictor, as with (1+X4|g.1))
+  # that slice is a p x p x 1 array, not the p x p matrix chol() requires,
+  # and base::chol() errored "'a' must be a square matrix". Intercept-only
+  # blocks (p == 1) did not trigger it: chol()'s as.matrix() coercion
+  # happens to collapse a 1 x 1 x 1 array into a valid 1 x 1 matrix.
+  # Trigger: predict(..., newdata) with the default sample_new_levels = TRUE
+  # when newdata has a grouping-factor level absent from training.
+  df.train <- df[seq_len(floor(0.8 * nrow(df))),]
+  df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
+  df.test$g.1[1L] <- max(df$g.1) + 1L # a g.1 level absent from df.train
+
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                   df.train,
+                   cores = 1, verbose = -1L, chains = 1, warmup = 7L, iter = 13L,
+                   bart_args = list(n.trees = 11, keepTrees = TRUE))
+
+  predictions <- predict(fit, df.test, type = "indiv.ranef")
+  expect_equal(dim(predictions), c(nrow(df.test), 13L - 7L))
+  expect_true(all(is.finite(predictions)))
+})
+
 test_that("ppd has approximately right amount of noise", {
   skip_if_not_installed("lme4")
   df.train <- df
