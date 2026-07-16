@@ -273,6 +273,29 @@ C4 - Default-policy decision (Q1). With C0-C3 contracts in hand, the author pick
   if adaptive. Size: S (policy + docs + NEWS). No code lands here beyond wiring
   the chosen default.
 
+## Landings through C2 (2026-07-16)
+
+C1 = dbarts 5b98ea5. The setState-at-scale failure was not a restore bug:
+the empty-leaf veto's finite -1e7 sentinel was out-penalized by legitimate
+branch scores at scale, empty leaves entered live trees, and restore
+correctly rejected the degenerate state. The sentinel is now -HUGE_VAL -
+draw-neutral at every gated scale (both sentinels underflow exp to zero;
+all three bitwise anchors identical) - with a fast regression test and the
+empty-leaf-veto design note corrected.
+
+C0 + C2 = d6777d6. The exactness harness: recompute-from-trees matches
+stored bart_train to 6.4e-14 worst-case across gaussian/binary tiers
+including past the old restore threshold (gate 1e-10; the stored value
+carries the offset round-trip and is the noisier quantity). C2 retains
+state.bart on keepTrees fits and rebuilds the sampler pointer lazily
+(liveness-probed, cached per session, in-session path untouched,
+keepTrees = FALSE fits byte-identical), fixing the standing
+predict-after-reload failure; test-14-serialization proves the round trip
+in a fresh R process. Suite 275/0; continuous_nc1 tier PASS (sampling
+untouched). The C0+C2 implementer was lost to a usage limit mid-task; the
+orchestrator finished its remainder (one test-harness fix: deparse of a
+long .libPaths wraps - collapse before scripting).
+
 ## Verification
 
 - Exactness (C0, re-run every commit): max abs diff stored-vs-recompute < 1e-10
