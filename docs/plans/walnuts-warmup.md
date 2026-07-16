@@ -493,3 +493,15 @@ everywhere, is the stronger mixing evidence. Honest cost note: at
 large_n_re w=20 the seeded warmup itself works harder (warm leapfrog
 32 -> 215/transition over the 20 transitions) before delivering the
 cheaper sampling phase.
+
+### C2 resolution (2026-07-16): no allocation change
+
+B1 stands, per the Q(b) resolution's escalation clause: the enforced
+dimension-aware floor (B2) required the warmup grid to show a specific
+form buying ESS/sec broadly, and it does not. Knee locations vary by
+tier rather than tracking dimension - binary is already well-tuned at
+warmup=20 (sampling leapfrog ~16, its floor) while large_n_re needed
+warmup >= 100 pre-seed - and the C1 seed moved the knees, shrinking
+what a floor would protect. iter/2 stays; the documented floor and the
+mis-tuning warning are C3's deliverables. No code change; nothing to
+gate.
