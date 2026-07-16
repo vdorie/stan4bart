@@ -409,3 +409,87 @@ Q(d) EXPOSE WALNUTS TUNING KNOBS TO USERS. Fork: WALNUTS' live knobs
   the WALNUTS/NUTS semantics). Cost of (i): a user with a pathological target has no
   escape hatch but more warmup. RECOMMENDATION: (i), with (ii) held in reserve only
   if C0 surfaces a concrete mistuning the auto-seed cannot fix. Do NOT do (iii).
+
+## Landings
+
+### C0 landing (2026-07-16, 81df148)
+
+Eval counter + mean_leapfrog[_warmup] diagnostic + bench-warmup.R +
+bench-warmup-BASELINE.csv, draw-neutral (identical() verified). The
+recorded baseline shows the mechanism knee sharply (large mixed tier
+50 -> 17 leapfrogs/transition across warmup 20 -> 400) but the wall
+knee diluted to ~1.2x by the BART share; the review's 2.2x reflected
+an unusually badly frozen 20-iteration warmup. Full numbers in the
+commit message and the baseline CSV.
+
+### C1 landing (2026-07-16)
+
+WHAT LANDED IS NOT THE RESOLVED Q(a) OPTION (i). A3 (Nutpie mass +
+probed step) FAILED the distributional floor and was rejected; the
+tree carries mass-only A2 (the fork's option (ii)), approved by VD
+2026-07-16 after the investigation below. The one-line delta to
+recreate A3: add `.adapt_step_build(impl_->rng, impl_->model)` before
+`.build()` in the ctor's seed block.
+
+The A3 failure and its mechanism. Gate run: nc1 FAIL (1/23 mean ratio
+4.92 vs band 4), weighted FAIL (1/45 at 4.28), binary FAIL (4/55 sd
+ratios to 1.475 vs band 1.25); nc2/nc3 pass. Binary ensemble, 4 seeds
+x 8 chains: unseeded 0/32 bad chains, A3 5/32 catastrophic (chains
+entering sampling locked in a rejection state, ess_bulk ~2 over the
+full 3000-draw phase, sd ratio to 3.0). Component isolation at the
+failing seeds: mass-only 0/24, probe-only 0/24 - the failure is the
+probe x mass INTERACTION, not either half and not the rng-stream
+shift. Mechanism: probing the step against the seeded Nutpie mass at
+the construction-time target (conditioned on the initial BART offset /
+probit latents, far from where the Gibbs sweeps settle) returns
+initial steps 1.0-1.5, i.e. 2-4x Adam's equilibrium (~0.45), and that
+oversized start locks ~15% of binary chains despite warmup=1000.
+Probed against unit mass the probe returns a harmless 0.01-0.03; the
+constant 0.1 was harmless; mass-only starts from 0.1 and is harmless.
+There is no safe middle: taming the probe (unit-mass probe, clamping)
+reduces to "step ~0.1", which is mass-only with extra machinery.
+
+What landed: the ctor seeds the initial mass from upstream's
+InitConfigBuilder::masses ((1 - s)|grad| + s, one gradient eval),
+evaluated at the chain's actual initial unconstrained position
+(centered zero is the onion dot_self == 0 singularity for nc >= 3
+blocks); s reuses WarmupConfig::mass_additive_smoothing() = 1e-5;
+initial step stays 0.1; try/catch falls back to the exact historical
+identity start on any non-finite seed eval; the seed's eval lands in
+the warmup-phase counter, keeping sampling-phase mean_leapfrog clean.
+Lifecycle untouched - the seed only moves adaptation's start.
+
+Gates on the landed tree (mass-only), independently re-run at
+landing: preclean install clean; FD gate worst rel err 2.35e-08 (tol
+1e-06); testthat 318/0 (the suite carries NO absolute draw pins -
+nothing regenerated, matching every prior draw-moving landing; the
+single warning verified pre-existing on the pre-seed build);
+test-05-rng reproducibility green; ALL FIVE tiers pass vs
+posterior-baselines-75d7970.rds, not re-blessed (worst mean/sd per
+tier: nc1 2.85/1.199, nc2 2.50/0.901, nc3 3.13/1.124, weighted
+2.54/0.806, binary 1.73/1.098).
+
+Measurement vs bench-warmup-BASELINE.csv (sampling-phase
+mean_leapfrog, baseline -> seeded, knee region):
+
+  tier            w=20          w=50          w=100
+  large_n_re      50.3 -> 32.0  32.0 -> 21.9  23.9 -> 22.6
+  continuous_nc1  29.2 -> 27.0  18.8 -> 16.0  15.3 -> 14.2
+  continuous_nc2  30.5 -> 47.8  29.1 -> 30.4  18.1 -> 15.6
+  continuous_nc3  37.7 -> 42.4  23.7 -> 27.0  15.7 -> 16.1
+  weighted        30.6 -> 35.4  25.5 -> 25.8  17.2 -> 16.5
+  binary          16.1 -> 15.9  15.0 -> 13.3  14.3 -> 15.3
+
+Verdict: MIXED - shifted left exactly where the arc aimed, flat
+elsewhere. On large_n_re the knee moves one grid step left (seeded
+w=20 equals the baseline's w=50 sampling cost; seeded w=50 beats
+baseline w=100); nc1 improves 7-15% across the grid; the other tiers
+are flat at the knee (nc2's w=20 cell is worse, within that cell's
+volatility). Median seeded/baseline over the full grid: large_n_re
+0.89, nc1 0.93, others 1.00-1.07; per-iter wall 0.995 overall. ESS/sec
+is not resolvable by the single-chain 1000-draw instrument (two-sided
+cell scatter); the 8-chain distributional gate, which passes
+everywhere, is the stronger mixing evidence. Honest cost note: at
+large_n_re w=20 the seeded warmup itself works harder (warm leapfrog
+32 -> 215/transition over the 20 transitions) before delivering the
+cheaper sampling phase.

@@ -271,12 +271,60 @@ WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
     sample_writer.names = std::move(all);
   }
 
-  // Start adaptation: identity initial mass (Stan's unit_e initial metric),
-  // user step size (Adam adapts from here). Config objects are Impl members,
+  // Seed adaptation's initial mass from upstream's callable Nutpie heuristic
+  // instead of the historical identity metric: mass = (1 - s)|grad| + s
+  // (config.hpp InitConfigBuilder::masses, one gradient eval), evaluated at the
+  // chain's initial unconstrained position. That position is the
+  // uniform(-init_radius, init_radius) draw, NOT a centered zero: unconstrained
+  // zero is exactly the onion dot_self == 0 singularity (parametric_model.hpp
+  // make_theta_L, sf = sqrt(rho / D) with D == 0) that the random start is
+  // chosen to avoid, so seeding at zero would throw and fall back for every
+  // nc >= 3 block. The actual init point is finite for every reachable model
+  // and stays reproducible (the draw is a deterministic function of the chain
+  // seed). The smoothing s reuses upstream's own mass additive-smoothing
+  // default (WarmupConfig::mass_additive_smoothing, 1e-5) - the same
+  // (1 - s)x + s interpolation the online mass estimator applies - so a
+  // near-zero gradient coordinate keeps a positive floor rather than a
+  // degenerate zero mass. mass_init_count (4) regularizes the whole warmup mass
+  // estimate toward this seed, so it helps well past t = 0.
+  //
+  // The initial STEP stays at the conservative 0.1 constant; upstream's step
+  // probe (adapt_step_build) is deliberately NOT run. Probing against the
+  // seeded mass at the construction-time target - conditioned on the initial
+  // BART offset / probit latents, both far from where the Gibbs sweeps settle -
+  // returns steps 2-4x Adam's equilibrium, an oversized start measured to lock
+  // ~15% of binary-tier chains into a full-sampling-phase rejection state
+  // (ess ~= 2; 5/32 chains across four seeds vs 0/32 unseeded, 0/24 with
+  // mass-only). Adam recovers the step from 0.1 within tens of warmup
+  // transitions, so the probe's upside is small and its tail risk is not.
+  //
+  // The seed's gradient eval runs HERE, at construction, before the first
+  // warmup transition, so it folds into the warmup phase's
+  // mean_leapfrog_warmup (evals_warmup counts it) and leaves the
+  // sampling-phase mean_leapfrog clean (the eval counters assembled into
+  // fit$adaptation by stan4bart_fit.R).
+  //
+  // Robust fallback: the model throws std::domain_error on a non-finite log
+  // density or gradient (parametric_model.hpp), matching NoExceptLogpGrad's
+  // divergence semantics. A poisoned seed eval falls back to the historical
+  // identity mass rather than seeding from a non-finite value.
+  //
+  // The seed only moves the STARTING point of adaptation; the freeze ->
+  // fixed-draws lifecycle is untouched. Config objects are Impl members,
   // referenced by the adapter, so they outlive it.
-  walnuts::InitChainConfig init(impl_->step_size, impl_->position,
-                                Eigen::VectorXd::Ones(dim));
-  impl_->adapter.emplace(impl_->rng, impl_->handler, impl_->model, init,
+  const double mass_smoothing = impl_->warmup_cfg.mass_additive_smoothing();
+  std::optional<walnuts::InitChainConfig> init;
+  try {
+    walnuts::InitConfig seeded =
+        walnuts::InitConfigBuilder(1u, static_cast<std::size_t>(dim))
+            .positions(impl_->position)
+            .masses(impl_->model, mass_smoothing)   // one gradient eval
+            .build();
+    init.emplace(impl_->step_size, impl_->position, seeded.mass(0u));
+  } catch (...) {
+    init.emplace(impl_->step_size, impl_->position, Eigen::VectorXd::Ones(dim));
+  }
+  impl_->adapter.emplace(impl_->rng, impl_->handler, impl_->model, *init,
                          impl_->warmup_cfg, impl_->sampling_cfg);
 }
 
