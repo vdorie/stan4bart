@@ -296,6 +296,27 @@ untouched). The C0+C2 implementer was lost to a usage limit mid-task; the
 orchestrator finished its remainder (one test-harness fix: deparse of a
 long .libPaths wraps - collapse before scripting).
 
+### C3 landing and C4 resolution (2026-07-16) - ARC CLOSED
+
+C3 = 2bd83a1. R-side seam only (the C-side keepFits gate bundles too much;
+the accumulation point in package_samples is the smaller correct cut).
+store = "trees" forces keepTrees, drops bart_train/bart_test, and routes
+extract/fitted/predict(no newdata) through recompute - means stream in
+~16 MB row blocks, full matrices materialize with the latency documented
+in the Rd. Equality gates: parametric draws identical between modes, bart
+surfaces within 1e-10 (measured 1e-12 to 1e-14), gaussian + binary,
+in-session + reloaded. Suite 307/0; harness ALL PASS; nc1 tier PASS;
+check Status OK. Known fallbacks: fitted streaming defers to full
+materialization for component-replacing offsets, na.exclude gaps, or a
+missing parametric design (guarded in code).
+
+C4 RESOLVED to Option B held: store = "fits" stays the default, the
+opt-in is the shipped policy, and a size-adaptive default is revisited
+only after the contracts are lived-in - the conservative branch changes
+nothing for existing users, honors the measured latency of full-matrix
+recompute at scale (~74 s at n=50k), and leaves the 94-98% memory win one
+argument away for the users who need it.
+
 ## Verification
 
 - Exactness (C0, re-run every commit): max abs diff stored-vs-recompute < 1e-10

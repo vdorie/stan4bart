@@ -1,7 +1,7 @@
 An unordered backlog; history lives in docs/plans/, docs/design/, and git.
 
 items
-  bart-train-recompute: replace the stored n x draws bart_train block
+  bart-train-recompute: LANDED 2026-07-16 as the store = "trees" opt-in
     (96-99 percent of a large fit object) with on-demand recomputation
     from kept trees through dbarts's exact-replay predict - trades an
     always-paid memory cost for a small per-access compute cost, per
