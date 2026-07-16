@@ -793,10 +793,13 @@ fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
 }
 
 predict.stan4bartFit <-
-  function(object, newdata, offset,
+  # 'offset' must stay behind the defaulted arguments: undefaulted and third,
+  # it captures a positionally-supplied 'type', e.g. predict(fit, newdata, "ev").
+  function(object, newdata,
            type = c("ev", "ppd", "indiv.fixef", "indiv.ranef", "indiv.bart"),
            combine_chains = TRUE,
            sample_new_levels = TRUE,
+           offset,
            ...)
 {
   if (length(list(...)) > 0) warning("unused arguments ignored")

@@ -33,10 +33,11 @@
   \dots)
 
 \method{predict}{stan4bartFit}(
-  object, newdata, offset,
+  object, newdata,
   type = c("ev", "ppd", "indiv.fixef", "indiv.ranef", "indiv.bart"),
   combine_chains = TRUE,
   sample_new_levels = TRUE,
+  offset,
   \dots)
 }
 \arguments{

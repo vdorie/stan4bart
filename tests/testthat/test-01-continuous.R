@@ -296,6 +296,34 @@ test_that("predict matches supplied data", {
   expect_equal(samples.pred, samples.ev)
 })
 
+test_that("predict accepts 'type' positionally on a fit with random effects", {
+  # 'offset' used to sit ahead of 'type' in predict.stan4bartFit's formals;
+  # a positionally-supplied 'type' (the conventional third argument, as in
+  # predict(fit, newdata, "ev")) was silently captured by 'offset' instead.
+  # For type %in% c("ev", "ppd") that character string then hit the
+  # indiv.bart + indiv.fixef + indiv.ranef + offset sum and threw "non-numeric
+  # argument to binary operator"; for the indiv.* types (which never use
+  # offset) 'type' quietly reverted to its default "ev", so the wrong
+  # component was returned with no error at all.
+  df.train <- df[seq_len(floor(0.8 * nrow(df))),]
+  df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
+
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2),
+                   df.train,
+                   cores = 1, verbose = -1L, chains = 3, warmup = 7, iter = 13,
+                   bart_args = list(n.trees = 11, keepTrees = TRUE))
+
+  expect_equal(predict(fit, df.test, "ev"), predict(fit, df.test, type = "ev"))
+  expect_equal(predict(fit, df.test, "indiv.bart"), predict(fit, df.test, type = "indiv.bart"))
+  expect_equal(predict(fit, df.test, "indiv.fixef"), predict(fit, df.test, type = "indiv.fixef"))
+  expect_equal(predict(fit, df.test, "indiv.ranef"), predict(fit, df.test, type = "indiv.ranef"))
+
+  # a genuine offset, only reachable by name, still lands where documented
+  off <- rep(0.5, nrow(df.test))
+  expect_equal(predict(fit, df.test, type = "ev", offset = off),
+              predict(fit, df.test, type = "ev") + off)
+})
+
 test_that("predict works with one chain", {
   df.train <- df[seq_len(floor(0.8 * nrow(df))),]
   df.test  <- df[seq.int(floor(0.8 * nrow(df)) + 1L, nrow(df)),]
