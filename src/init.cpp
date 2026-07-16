@@ -52,44 +52,11 @@ namespace {
     return R_ExternalPtrAddr(const_cast<SEXP>(lhs)) < R_ExternalPtrAddr(const_cast<SEXP>(rhs));
   }
   
-  // the flat C API of dbarts.h, resolved through R_GetCCallable at load
-  struct BARTFunctionTable {
-    int (*apiVersion)(void);
-    dbarts_sampler* (*create)(SEXP control, SEXP model, SEXP data,
-                              const char* family);
-    void (*destroy)(dbarts_sampler* sampler);
-    void (*run)(dbarts_sampler* sampler, std::size_t numBurnIn,
-                std::size_t numSamples, dbarts_results* results);
-    void (*sampleTreesFromPrior)(dbarts_sampler* sampler);
-    void (*setOffset)(dbarts_sampler* sampler, const double* offset,
-                      int updateScale);
-    void (*setSigma)(dbarts_sampler* sampler, double sigma);
-    int (*getLatents)(const dbarts_sampler* sampler, double* out);
-    void (*predict)(dbarts_sampler* sampler, const double* x_test,
-                    std::size_t numTestObservations,
-                    const double* offset_test, double* out);
-    void (*setTreeStorage)(dbarts_sampler* sampler, int keepTrees,
-                           std::size_t numSamplesToStore);
-    SEXP (*getTrees)(dbarts_sampler* sampler, const std::size_t*,
-                     std::size_t, const std::size_t*, std::size_t,
-                     const std::size_t*, std::size_t, int useLiveTrees);
-    void (*printTrees)(dbarts_sampler* sampler, const std::size_t*,
-                       std::size_t, const std::size_t*, std::size_t,
-                       const std::size_t*, std::size_t);
-    SEXP (*storeState)(dbarts_sampler* sampler);
-    void (*setState)(dbarts_sampler* sampler, SEXP state);
-    void (*setVerbose)(dbarts_sampler* sampler, int verbose,
-                       std::uint32_t printEvery);
-    std::size_t (*numObservations)(const dbarts_sampler* sampler);
-    std::size_t (*numPredictors)(const dbarts_sampler* sampler);
-    std::size_t (*numTestObservations)(const dbarts_sampler* sampler);
-    std::size_t (*numChains)(const dbarts_sampler* sampler);
-    std::size_t (*numTrees)(const dbarts_sampler* sampler);
-    std::size_t (*numSavedSamples)(const dbarts_sampler* sampler);
-    int (*kIsSampled)(const dbarts_sampler* sampler);
-  };
-  BARTFunctionTable bartFunctions;
-  
+  // The dbarts flat C API is reached through the same-name cached-pointer
+  // stubs the header emits under DBARTS_USE_STUBS (set in PKG_CPPFLAGS): each
+  // dbarts_sampler_* call below resolves its symbol through R_GetCCallable on
+  // first use, so the consumer never restates a signature.
+
   enum UserOffsetType {
     OFFSET_DEFAULT = 0,
     OFFSET_FIXEF,
@@ -119,7 +86,7 @@ namespace {
     StoredBARTSampler() : fit(NULL) { }
     ~StoredBARTSampler() {
       if (fit != NULL) {
-        bartFunctions.destroy(fit);
+        dbarts_sampler_destroy(fit);
         fit = NULL;
       }
     }
@@ -165,7 +132,7 @@ namespace {
       delete [] bartOffset;
 
       if (bartSampler != NULL) {
-        bartFunctions.destroy(bartSampler);
+        dbarts_sampler_destroy(bartSampler);
         bartSampler = NULL;
       }
 
@@ -224,16 +191,16 @@ extern "C" {
     sampler.keepTrees = rc_getBool(
       Rf_getAttrib(bartControlExpr, Rf_install("keepTrees")), "keepTrees",
       RC_NA | RC_NO, RC_END);
-    sampler.bartSampler = bartFunctions.create(bartControlExpr,
+    sampler.bartSampler = dbarts_sampler_create(bartControlExpr,
                                                bartModelExpr, bartDataExpr,
                                                "");
-    bartFunctions.setVerbose(sampler.bartSampler, 0, 100);
-    bartFunctions.setTreeStorage(sampler.bartSampler, 0, 0);
-    sampler.kIsSampled = bartFunctions.kIsSampled(sampler.bartSampler) != 0;
+    dbarts_sampler_setVerbose(sampler.bartSampler, 0, 100);
+    dbarts_sampler_setTreeStorage(sampler.bartSampler, 0, 0);
+    sampler.kIsSampled = dbarts_sampler_kIsSampled(sampler.bartSampler) != 0;
     sampler.numObservations =
-      bartFunctions.numObservations(sampler.bartSampler);
+      dbarts_sampler_numObservations(sampler.bartSampler);
     sampler.numTestObservations =
-      bartFunctions.numTestObservations(sampler.bartSampler);
+      dbarts_sampler_numTestObservations(sampler.bartSampler);
     
     size_t n = sampler.numObservations;
     sampler.bartOffset = new double[n];
@@ -260,18 +227,18 @@ extern "C" {
       }
     }
     
-    bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, true);
+    dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, true);
     if (!sampler.responseIsBinary)
-      bartFunctions.setSigma(sampler.bartSampler, sigma_init);
+      dbarts_sampler_setSigma(sampler.bartSampler, sigma_init);
 
     // the entry points that draw bracket R's RNG state internally
-    bartFunctions.sampleTreesFromPrior(sampler.bartSampler);
+    dbarts_sampler_sampleTreesFromPrior(sampler.bartSampler);
     
     // draw once before running; only the training fits are needed
     std::vector<double> firstDraw(n);
     dbarts_results firstResults = {};
     firstResults.train = firstDraw.data();
-    bartFunctions.run(sampler.bartSampler, 0, 1, &firstResults);
+    dbarts_sampler_run(sampler.bartSampler, 0, 1, &firstResults);
     
     for (size_t j = 0; j < n; ++j) firstDraw[j] -= sampler.bartOffset[j];
     
@@ -287,7 +254,7 @@ extern "C" {
     
     sampler.paramSampler->setOffset(sampler.stanOffset);
     if (sampler.responseIsBinary) {
-      bartFunctions.getLatents(sampler.bartSampler, sampler.bartLatents);
+      dbarts_sampler_getLatents(sampler.bartSampler, sampler.bartLatents);
       sampler.paramSampler->setResponse(sampler.bartLatents);
     }
 
@@ -343,12 +310,12 @@ extern "C" {
     
     rc_assertDimConstraints(x_testExpr, "dimensions of x_test", RC_LENGTH | RC_EQ, rc_asRLength(2),
                             RC_NA,
-                            RC_VALUE | RC_EQ, static_cast<int>(bartFunctions.numPredictors(fit)),
+                            RC_VALUE | RC_EQ, static_cast<int>(dbarts_sampler_numPredictors(fit)),
                             RC_END);
     int* dims = INTEGER(Rf_getAttrib(x_testExpr, R_DimSymbol));
     
-    size_t numChains = bartFunctions.numChains(fit);
-    size_t numSavedSamples = bartFunctions.numSavedSamples(fit);
+    size_t numChains = dbarts_sampler_numChains(fit);
+    size_t numSavedSamples = dbarts_sampler_numSavedSamples(fit);
     bool usesSavedTrees = numSavedSamples > 0;
     size_t numSamples = usesSavedTrees ? numSavedSamples : 1;
     size_t numTestObservations = static_cast<size_t>(dims[0]);
@@ -375,7 +342,7 @@ extern "C" {
     
     // predictions arrive on the original response scale: the restored state
     // carries the fit's transform, so no R-side rescaling remains
-    bartFunctions.predict(fit, REAL(x_testExpr), numTestObservations, testOffset, REAL(result));
+    dbarts_sampler_predict(fit, REAL(x_testExpr), numTestObservations, testOffset, REAL(result));
     
     UNPROTECT(1);
     
@@ -392,7 +359,7 @@ extern "C" {
     if (samplerPtr == NULL) Rf_error("exportBARTState called on NULL external pointer");
     Sampler& sampler(*samplerPtr);
     
-    return bartFunctions.storeState(sampler.bartSampler);
+    return dbarts_sampler_storeState(sampler.bartSampler);
   }
   
   static SEXP createStoredBARTSampler(SEXP controlExpr, SEXP dataExpr, SEXP modelExpr, SEXP stateExpr)
@@ -403,9 +370,9 @@ extern "C" {
     // the R side sizes the control for restoration (n.chains matching the
     // state, keepTrees with n.samples at the saved capacity); the state
     // carries the fit's response transform, so no scale pokes remain
-    sampler.fit = bartFunctions.create(controlExpr, modelExpr, dataExpr, "");
-    bartFunctions.setVerbose(sampler.fit, 0, 100);
-    bartFunctions.setState(sampler.fit, stateExpr);
+    sampler.fit = dbarts_sampler_create(controlExpr, modelExpr, dataExpr, "");
+    dbarts_sampler_setVerbose(sampler.fit, 0, 100);
+    dbarts_sampler_setState(sampler.fit, stateExpr);
     
     SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, R_NilValue));
     samplerPtr.release();
@@ -426,9 +393,9 @@ extern "C" {
     
     dbarts_sampler* fit(sampler.fit);
     
-    size_t numChains  = bartFunctions.numChains(fit);
-    size_t numSamples = bartFunctions.numSavedSamples(fit);
-    size_t numTrees   = bartFunctions.numTrees(fit);
+    size_t numChains  = dbarts_sampler_numChains(fit);
+    size_t numSamples = dbarts_sampler_numSavedSamples(fit);
+    size_t numTrees   = dbarts_sampler_numTrees(fit);
 
     size_t numChainIndices  = Rf_isNull(chainIndicesExpr)  ? numChains  : rc_getLength(chainIndicesExpr);
     size_t numSampleIndices = Rf_isNull(sampleIndicesExpr) ? numSamples : rc_getLength(sampleIndicesExpr);
@@ -466,7 +433,7 @@ extern "C" {
       for (size_t i = 0; i < numTreeIndices; ++i) treeIndices[i] = static_cast<size_t>(i_treeIndices[i] - 1);
     }
     
-    bartFunctions.printTrees(fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices);
+    dbarts_sampler_printTrees(fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices);
 
     delete [] treeIndices;
     delete [] sampleIndices;
@@ -486,11 +453,11 @@ extern "C" {
     // when currentExpr is true, return the live working trees even for a
     // keepTrees sampler; there is then no sample dimension
     bool useLiveTrees = Rf_asLogical(currentExpr) == TRUE;
-    bool treatAsSaved = bartFunctions.numSavedSamples(fit) > 0 && !useLiveTrees;
+    bool treatAsSaved = dbarts_sampler_numSavedSamples(fit) > 0 && !useLiveTrees;
      
-    size_t numChains  = bartFunctions.numChains(fit);
-    size_t numSamples = treatAsSaved ? bartFunctions.numSavedSamples(fit) : 0;
-    size_t numTrees   = bartFunctions.numTrees(fit);
+    size_t numChains  = dbarts_sampler_numChains(fit);
+    size_t numSamples = treatAsSaved ? dbarts_sampler_numSavedSamples(fit) : 0;
+    size_t numTrees   = dbarts_sampler_numTrees(fit);
 
     size_t numChainIndices  = Rf_isNull(chainIndicesExpr)  ? numChains  : rc_getLength(chainIndicesExpr);
     size_t numSampleIndices = Rf_isNull(sampleIndicesExpr) ? numSamples : rc_getLength(sampleIndicesExpr);
@@ -528,7 +495,7 @@ extern "C" {
       for (size_t i = 0; i < numTreeIndices; ++i) treeIndices[i] = static_cast<size_t>(i_treeIndices[i] - 1);
     }
         
-    SEXP resultExpr = PROTECT(bartFunctions.getTrees(
+    SEXP resultExpr = PROTECT(dbarts_sampler_getTrees(
       fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices,
       treeIndices, numTreeIndices, useLiveTrees ? 1 : 0));
     
@@ -598,7 +565,7 @@ extern "C" {
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART)
       bartSamples = new stan4bart::IterableBartResults(
         sampler.numObservations,
-        bartFunctions.numPredictors(sampler.bartSampler),
+        dbarts_sampler_numPredictors(sampler.bartSampler),
         sampler.numTestObservations, numStorageSamples, sampler.kIsSampled);
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
       sampler.paramSampler->sample_writer.resize(sampler.paramSampler->num_pars, numStorageSamples);
@@ -606,7 +573,7 @@ extern "C" {
     size_t n = sampler.numObservations;
     
     if (sampler.keepTrees)
-      bartFunctions.setTreeStorage(sampler.bartSampler, isWarmup ? 0 : 1,
+      dbarts_sampler_setTreeStorage(sampler.bartSampler, isWarmup ? 0 : 1,
                                    isWarmup ? 0 : static_cast<size_t>(numIter));
     
     if (sampler.verbose > 0)
@@ -660,7 +627,7 @@ extern "C" {
         if (!sampler.responseIsBinary) {
           // Rprintf("getting sigma\n");
           double sigma = sampler.paramSampler->getSigma();
-          bartFunctions.setSigma(sampler.bartSampler, sigma);
+          dbarts_sampler_setSigma(sampler.bartSampler, sigma);
         }
         
         /* if (!isWarmup) {
@@ -678,14 +645,14 @@ extern "C" {
         // ever other iteration during the second 1/8, every fourth iteration during the
         // third, and so forth
         int update_scale_mod = 1 << (8 * iter / numIter);
-        bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup && iter % update_scale_mod == 0);
-        // bartFunctions.setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
+        dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup && iter % update_scale_mod == 0);
+        // dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
       }
       
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {
         
         // Rprintf("sampling bart\n");
-        bartFunctions.run(sampler.bartSampler, 0, 1, &bartSamples->current);
+        dbarts_sampler_run(sampler.bartSampler, 0, 1, &bartSamples->current);
         double* trainingSample = const_cast<double*>(bartSamples->current.train);
         
         // bart with an offset will produce predictions that have the offset added;
@@ -707,7 +674,7 @@ extern "C" {
         sampler.paramSampler->setOffset(sampler.stanOffset);
         if (sampler.responseIsBinary) {
           // Rprintf("getting latents\n");
-          bartFunctions.getLatents(sampler.bartSampler, sampler.bartLatents);
+          dbarts_sampler_getLatents(sampler.bartSampler, sampler.bartLatents);
           sampler.paramSampler->setResponse(sampler.bartLatents);
         }
         
@@ -992,40 +959,23 @@ bit_cast(const From& src)
 
 #endif
 
-// this unusual set of declarations solves a rather obscure warning on Solaris
-typedef void* (*C_voidPtrFunction)(void);
-extern "C" typedef C_voidPtrFunction (*C_voidPtrFunctionLookup)(const char* _namespace, const char* name);
-
 namespace {
-  
-  void lookupBARTFunctions()
+
+  // Load-time version handshake, run before any other dbarts entry point so a
+  // mismatch is the first failure seen. major must match (incompatible-change
+  // component) and the installed minor must be at least the one stan4bart was
+  // built against (additive component). The stubs resolve each symbol through
+  // R_GetCCallable on first call, so against a pre-rework dbarts these accessor
+  // lookups themselves fail here with a missing-symbol error.
+  void checkDbartsAPIVersion()
   {
-    bartFunctions.apiVersion = std::bit_cast<int (*)(void)>(R_GetCCallable("dbarts", "dbarts_apiVersion"));
-    if (bartFunctions.apiVersion() != DBARTS_C_API_VERSION)
-      Rf_error("stan4bart was built against dbarts C API version %d but the installed dbarts provides %d; reinstall stan4bart",
-               DBARTS_C_API_VERSION, bartFunctions.apiVersion());
-    
-    bartFunctions.create               = std::bit_cast<dbarts_sampler* (*)(SEXP, SEXP, SEXP, const char*)>(R_GetCCallable("dbarts", "dbarts_sampler_create"));
-    bartFunctions.destroy              = std::bit_cast<void (*)(dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_destroy"));
-    bartFunctions.run                  = std::bit_cast<void (*)(dbarts_sampler*, std::size_t, std::size_t, dbarts_results*)>(R_GetCCallable("dbarts", "dbarts_sampler_run"));
-    bartFunctions.sampleTreesFromPrior = std::bit_cast<void (*)(dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_sampleTreesFromPrior"));
-    bartFunctions.setOffset            = std::bit_cast<void (*)(dbarts_sampler*, const double*, int)>(R_GetCCallable("dbarts", "dbarts_sampler_setOffset"));
-    bartFunctions.setSigma             = std::bit_cast<void (*)(dbarts_sampler*, double)>(R_GetCCallable("dbarts", "dbarts_sampler_setSigma"));
-    bartFunctions.getLatents           = std::bit_cast<int (*)(const dbarts_sampler*, double*)>(R_GetCCallable("dbarts", "dbarts_sampler_getLatents"));
-    bartFunctions.predict              = std::bit_cast<void (*)(dbarts_sampler*, const double*, std::size_t, const double*, double*)>(R_GetCCallable("dbarts", "dbarts_sampler_predict"));
-    bartFunctions.setTreeStorage       = std::bit_cast<void (*)(dbarts_sampler*, int, std::size_t)>(R_GetCCallable("dbarts", "dbarts_sampler_setTreeStorage"));
-    bartFunctions.getTrees             = std::bit_cast<SEXP (*)(dbarts_sampler*, const std::size_t*, std::size_t, const std::size_t*, std::size_t, const std::size_t*, std::size_t, int)>(R_GetCCallable("dbarts", "dbarts_sampler_getTrees"));
-    bartFunctions.printTrees           = std::bit_cast<void (*)(dbarts_sampler*, const std::size_t*, std::size_t, const std::size_t*, std::size_t, const std::size_t*, std::size_t)>(R_GetCCallable("dbarts", "dbarts_sampler_printTrees"));
-    bartFunctions.storeState           = std::bit_cast<SEXP (*)(dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_storeState"));
-    bartFunctions.setState             = std::bit_cast<void (*)(dbarts_sampler*, SEXP)>(R_GetCCallable("dbarts", "dbarts_sampler_setState"));
-    bartFunctions.setVerbose           = std::bit_cast<void (*)(dbarts_sampler*, int, std::uint32_t)>(R_GetCCallable("dbarts", "dbarts_sampler_setVerbose"));
-    bartFunctions.numObservations      = std::bit_cast<std::size_t (*)(const dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_numObservations"));
-    bartFunctions.numPredictors        = std::bit_cast<std::size_t (*)(const dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_numPredictors"));
-    bartFunctions.numTestObservations  = std::bit_cast<std::size_t (*)(const dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_numTestObservations"));
-    bartFunctions.numChains            = std::bit_cast<std::size_t (*)(const dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_numChains"));
-    bartFunctions.numTrees             = std::bit_cast<std::size_t (*)(const dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_numTrees"));
-    bartFunctions.numSavedSamples      = std::bit_cast<std::size_t (*)(const dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_numSavedSamples"));
-    bartFunctions.kIsSampled           = std::bit_cast<int (*)(const dbarts_sampler*)>(R_GetCCallable("dbarts", "dbarts_sampler_kIsSampled"));
+    int major = dbarts_apiMajorVersion();
+    int minor = dbarts_apiMinorVersion();
+    if (major != DBARTS_C_API_MAJOR || minor < DBARTS_C_API_MINOR)
+      Rf_error("stan4bart was built against dbarts C API version %d.%d but the "
+               "installed dbarts provides %d.%d; reinstall or rebuild stan4bart "
+               "against the installed dbarts",
+               DBARTS_C_API_MAJOR, DBARTS_C_API_MINOR, major, minor);
   }
 }
 
@@ -1117,8 +1067,8 @@ void attribute_visible R_init_stan4bart(DllInfo *info) {
   R_registerRoutines(info, NULL, R_callMethods, NULL, NULL);
   R_useDynamicSymbols(info, static_cast<Rboolean>(FALSE));
   
-  lookupBARTFunctions();
-  
+  checkDbartsAPIVersion();
+
   activeSamplers = new PointerSet(&compareExternalPointers);
   activeStoredBARTSamplers = new PointerSet(&compareExternalPointers);
 }

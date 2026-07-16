@@ -1,4 +1,4 @@
-PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG
+PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG -DDBARTS_USE_STUBS
 
 CXX_STD = CXX20
 SOURCES = bart_util.cpp init.cpp logdensity_export.cpp parametric_control.cpp misc_adaptiveRadixTree.c misc_string.c rc_bounds.c rc_util.c walnuts_sampler.cpp

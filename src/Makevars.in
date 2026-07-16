@@ -1,4 +1,4 @@
-PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG
+PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG -DDBARTS_USE_STUBS
 SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS)
 SHLIB_LD = $(SHLIB_CXXLD)
 
