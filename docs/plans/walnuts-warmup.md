@@ -325,6 +325,17 @@ C3. DOCS + DIAGNOSTIC SURFACE + NEWS (draw-neutral). The documented warmup-floor
    R/stan4bart.R (assembly), NEWS.md. Gate: R CMD check man; suite green; draws
    `identical()`. Size: S-M.
 
+C4. ADAPT_DELTA REWIRE (added at the Q(d) resolution; draw-neutral when unset,
+   draw-moving by user intent when set). adapt_delta returns to the accepted
+   stan_args, validated to (0, 1), mapped to WarmupConfig.step_accept_rate_target
+   (default 0.8 = current behavior); its deprecation warning is removed and the
+   man page documents the WALNUTS meaning (step-size acceptance target, the
+   adapt_delta analog). Files: R/stan4bart.R (arg + validation),
+   src/parametric_control.cpp or the config path (threading),
+   src/walnuts_sampler.cpp (WarmupConfig), man/stan4bart.Rd, a testthat case
+   (value reaches the sampler; unset = bitwise-identical draws). Gate: suite
+   green; seeded unset-fit draws identical(); R CMD check man. Size: S.
+
 ## Open questions for VD
 
 ALL RESOLVED (VD 2026-07-16): Q(a) SHIP the seed - Nutpie mass + probed
