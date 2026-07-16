@@ -13,11 +13,16 @@ items
     still applicable to the surviving files).
   factors-categorical: adopt dbarts's categorical splits instead of
     pinning factors to indicators (the 1.0 port's recorded follow-up).
-  perf-review: runtime performance review - profile representative fits
-    and rank optimization candidates beyond the BART core (parametric
-    adjoint, WALNUTS overheads, R/C++ marshalling, allocation churn,
-    R-level post-processing); findings to docs/plans/perf-review.md
-    (VD 2026-07-15; runtime only, compile time explicitly out of scope).
+  perf-followups: the ranked candidates from the landed runtime review
+    (docs/plans/perf-review.md, measured 2026-07-16): the WALNUTS
+    warmup/leapfrog-count lever (adequate warmup already halves
+    large-n mixed per-iteration wall, 2.2x; any tuning change is
+    distributional-gate-bound), ParametricModel::eval scratch reuse
+    (the buffer-reuse half is numerically inert; eval is 24-40% of
+    per-iteration compute), fitted() apply -> rowMeans, the optional
+    ppd-mean short-circuit, and extract() transient-array trims.
+    Setup/marshalling/assembly measured as fixed-cost and NOT worth
+    attacking; the BART 54-72% share is routed to dbarts.
   store-trees-adaptive-default: revisit making store = "trees" the
     default above a size threshold once the opt-in's contracts are
     lived-in (docs/plans/bart-train-recompute.md C4 resolution); also
