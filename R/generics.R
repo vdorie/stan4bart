@@ -218,6 +218,48 @@ getBartSampler <- function(object) {
   ptr
 }
 
+# The sampling run's draw x chain counts, read off whichever per-draw BART
+# component the fit retained. store = "fits" keeps bart_train and it is the
+# authoritative source; store = "trees" drops it but always keeps varcount (and
+# the parametric "stan" block), which carry the same two counts. Used wherever
+# the readers previously indexed dim(object$bart_train)[2:3].
+bart_sample_chain_dims <- function(object) {
+  for (comp in list(object$bart_train, object$bart_varcount, object$stan)) {
+    d <- dim(comp)
+    if (!is.null(d)) return(c(d[2L], d[3L]))
+  }
+  stop("cannot determine the BART sample and chain counts: no per-draw BART ",
+       "component was stored", call. = FALSE)
+}
+
+# TRUE when the stored BART block for `sample` is absent but the kept trees can
+# reproduce it (store = "trees"): the reader must route through recompute. The
+# design-matrix check keeps a fit with no test data (bart_test legitimately
+# NULL) from being treated as recompute-able for sample = "test".
+bart_needs_recompute <- function(object, sample) {
+  stored <- if (sample == "train") object$bart_train else object$bart_test
+  if (!is.null(stored) || is.null(object$state.bart)) return(FALSE)
+  X <- if (sample == "train") object$bartData@x else object$bartData@x.test
+  !is.null(X) && nrow(X) > 0L
+}
+
+# Reproduce the n x draws x chains bart_train / bart_test block a store = "trees"
+# fit did not retain, by replaying the kept trees over the training / test
+# design matrix through dbarts's predict path (predictBART, init.cpp:332).
+# Predictions arrive on the original response scale (the restored state carries
+# each chain's fit transform), shaped and named like the stored block. `rows`
+# restricts to a row subset (row-block streaming for fitted()); NULL is the full
+# matrix - the cost extract() documents.
+recompute_bart_block <- function(object, sample, rows = NULL) {
+  X <- if (sample == "train") object$bartData@x else object$bartData@x.test
+  if (!is.null(rows)) X <- X[rows, , drop = FALSE]
+  result <- .Call(C_stan4bart_predictBART, getBartSampler(object), X, NULL)
+  if (length(dim(result)) == 2L) dim(result) <- c(dim(result), 1L)
+  dimnames(result) <- list(observation = NULL, iterations = NULL,
+                           chain = paste0("chain:", seq_len(dim(result)[3L])))
+  result
+}
+
 extract.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
@@ -349,8 +391,9 @@ extract.stan4bartFit <-
     return(result)
   }
   
-  n_samples <- dim(object$bart_train)[2L]
-  n_chains  <- dim(object$bart_train)[3L]
+  bart_dims <- bart_sample_chain_dims(object)
+  n_samples <- bart_dims[1L]
+  n_chains  <- bart_dims[2L]
   n_fixef <- sum(fixef_parameters)
   n_warmup <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
   n_bart_vars <- dim(object$bart_varcount)[1L]
@@ -402,7 +445,8 @@ extract.stan4bartFit <-
     }
     if (inherits(na.action.bart, "exclude")) {
       frame <- model.frame(object, type = "bart")[-na.action.bart,,drop = FALSE]
-      if (dim(object$bart_train)[1L] != nrow(frame) && type == "indiv.bart")
+      n_obs_bart <- if (!is.null(object$bart_train)) dim(object$bart_train)[1L] else nrow(object$bartData@x)
+      if (n_obs_bart != nrow(frame) && type == "indiv.bart")
         warning("cannot obtain training predictions for rows where BART component has no NAs but other components do; add to test data instead")
       # The bart training result will always be of size N - na.action.all, even if
       # the bart training frame can have more rows.
@@ -454,14 +498,23 @@ extract.stan4bartFit <-
   }
   
   if (type %in% c("ev", "ppd", "indiv.bart")) {
-    if (!is.null(offset) && offset_type %in% "bart" && type != "indiv.bart")
+    if (!is.null(offset) && offset_type %in% "bart" && type != "indiv.bart") {
       indiv.bart <- offset
-    else
+    } else if (bart_needs_recompute(object, sample)) {
+      # store = "trees": replay the kept trees over the (training / test) design
+      # to reproduce the block that was not stored. The trees carry only the
+      # post-warmup draws, so warmup access is not recompute-able.
+      if (isTRUE(include_warmup) || only_warmup)
+        stop("cannot return warmup BART draws for a fit created with store = \"trees\"; ",
+             "the kept trees reproduce only the post-warmup draws", call. = FALSE)
+      indiv.bart <- recompute_bart_block(object, sample)
+    } else {
       indiv.bart <- if (sample == "train")
         get_samples(object$bart_train, include_warmup, only_warmup)
       else
         get_samples(object$bart_test, include_warmup, only_warmup)
-    
+    }
+
     if (inherits(na.action.bart, "exclude")) {
       indiv.bart.all <- array(NA_real_, c(n_all, dim(indiv.bart)[-1L]), dimnames(indiv.bart))
       indiv.bart.all[-na.action.bart,,] <- indiv.bart
@@ -536,10 +589,20 @@ fitted.stan4bartFit <-
            ...)
 {
   if (length(list(...)) > 0) warning("unused arguments ignored")
-  
+
   type <- match.arg(type)
+  sample <- match.arg(sample)
+
+  # store = "trees": for the BART-bearing linear surfaces, stream the posterior
+  # mean in row-blocks so peak memory stays block_n x draws x chains rather than
+  # materializing the full recomputed block that extract() would (M2). ppd is a
+  # sampled quantity and the parametric-only types never read the bart block, so
+  # both fall through to the extract()-then-average path below.
+  if (type %in% c("ev", "indiv.bart") && bart_needs_recompute(object, sample))
+    return(fitted_bart_streamed(object, type, sample, sample_new_levels))
+
   samples <- extract(object, type, sample, combine_chains = TRUE, sample_new_levels = sample_new_levels)
-  
+
   average_samples_f <- function(x) {
     if (is.array(x)) {
       d <- dim(x)
@@ -556,6 +619,71 @@ fitted.stan4bartFit <-
     result <- lapply(samples, average_samples_f)
   } else {
     result <- average_samples_f(samples)
+  }
+  result
+}
+
+# Posterior-mean fitted surface for a store = "trees" fit, computed by streaming
+# row-blocks so no full n x draws x chains block is ever held (M2). For each
+# block the BART draws are recomputed from the kept trees and the parametric
+# fixef/ranef surfaces are evaluated on the same rows (by subsetting their design
+# matrices, which keeps them block-sized too); the block is transformed by the
+# response family and reduced to one posterior mean per observation. Matches the
+# store = "fits" fitted() to numerical tolerance. The rarer training-side cases
+# extract() handles specially - a component-replacing offset or na.exclude gaps -
+# fall back to the materializing path (correct, just not memory-bounded).
+fitted_bart_streamed <- function(object, type, sample, sample_new_levels) {
+  is_bernoulli <- object$family$family == "binomial"
+  offset_type  <- object$offset_type
+
+  na_bart <- if (sample == "train") attr(object$frame, "na.action.bart") else object$test$na.action.bart
+  offset  <- if (sample == "train") object$offset else object$test$offset
+
+  has_fixef_par <- any(grepl("^beta|gamma", dimnames(object$stan)[[1L]]))
+  has_ranef     <- !is.null(object$reTrms) && length(object$reTrms) > 0L
+  X.fixef <- if (sample == "train") object$X else object$test$X
+  reTrms  <- if (sample == "train") object$reTrms else object$test$reTrms
+  # streaming needs the fixef/ranef designs for the requested sample; if a
+  # parametric contribution ev requires is present but its design is not
+  # available to evaluate per-block (or an offset replaces a component, or
+  # na.exclude leaves gaps), fall back to the full-materialization path so no
+  # contribution is silently dropped.
+  cannot_stream <- (type == "ev" && ((has_fixef_par && is.null(X.fixef)) ||
+                                     (has_ranef && is.null(reTrms))))
+  if (cannot_stream ||
+      (!is.null(offset) && length(offset) > 0L && offset_type != "default") ||
+      inherits(na_bart, "exclude")) {
+    samples <- extract(object, type, sample, combine_chains = TRUE, sample_new_levels = sample_new_levels)
+    return(if (!is.null(dim(samples))) apply(samples, seq_len(length(dim(samples)) - 1L), mean) else mean(samples))
+  }
+
+  X.bart <- if (sample == "train") object$bartData@x else object$bartData@x.test
+  n_obs  <- nrow(X.bart)
+  dims   <- bart_sample_chain_dims(object)
+  M      <- dims[1L] * dims[2L]
+
+  add_fixef <- type == "ev" && has_fixef_par && !is.null(X.fixef)
+  add_ranef <- type == "ev" && has_ranef
+  ev_offset <- if (type == "ev" && !is.null(offset) && length(offset) > 0L && offset_type == "default") offset else NULL
+
+  # bound peak at ~2e6 doubles (~16 MB) of recomputed draws per block
+  block   <- max(1L, min(n_obs, as.integer(ceiling(2e6 / max(1L, M)))))
+  result  <- numeric(n_obs)
+  start   <- 1L
+  while (start <= n_obs) {
+    idx <- seq.int(start, min(start + block - 1L, n_obs))
+    ev_b <- recompute_bart_block(object, sample, rows = idx)
+    if (add_fixef)
+      ev_b <- ev_b + fitted_fixed(object, X.fixef[idx, , drop = FALSE], FALSE)
+    if (add_ranef) {
+      reTrms_b <- reTrms
+      reTrms_b$Zt <- reTrms$Zt[, idx, drop = FALSE]
+      ev_b <- ev_b + fitted_random(object, reTrms_b, FALSE, sample_new_levels)
+    }
+    if (!is.null(ev_offset)) ev_b <- ev_b + ev_offset[idx]
+    if (type == "ev" && is_bernoulli) ev_b <- pnorm(ev_b)
+    result[idx] <- rowMeans(matrix(ev_b, length(idx), M))
+    start <- start + block
   }
   result
 }
@@ -595,7 +723,7 @@ fitted_fixed <- function(object, x, include_warmup)
   n_obs     <- nrow(x)
   # n_warmup  <- dim(object$warmup$bart_train)[2L]
   # n_samples <- dim(object$bart_train)[2L]
-  n_chains  <- dim(object$bart_train)[3L]
+  n_chains  <- bart_sample_chain_dims(object)[2L]
   n_samples <- ncol(fixef) %/% n_chains
   
   array(t(t(x %*% fixef) - intercept_delta),
@@ -690,8 +818,9 @@ predict.stan4bartFit <-
                        "all")
   testData <- getTestDataFrames(object, newdata, type = testFrames)
   
-  n_samples <- dim(object$bart_train)[2L]
-  n_chains  <- dim(object$bart_train)[3L]
+  bart_dims <- bart_sample_chain_dims(object)
+  n_samples <- bart_dims[1L]
+  n_chains  <- bart_dims[2L]
   n_obs     <- dim(testData$X.bart)[1L]
   n_fixef <- sum(grepl("^beta|gamma", dimnames(object$stan)[[1L]]))
   n_warmup  <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L

@@ -1,6 +1,6 @@
 context("stan4bart WALNUTS-era prior scope and control-arg deprecations")
 
-# Q(b)/Q(c) of docs/plans/walnuts.md, landed at C5: the shrinkage coefficient
+# docs/design/walnuts.md: the shrinkage coefficient
 # priors are refused with an informative R-level error before any C++ is
 # invoked (ParametricModel::finalize() would otherwise throw an uncaught
 # C++ exception - a process abort, not a catchable R error), and the

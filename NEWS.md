@@ -57,6 +57,25 @@
   sampler path is untouched - so posterior summaries are identical to prior
   releases regardless of the storage flags.
 
+* New `store` argument (`c("fits", "trees")`, default `"fits"`). `store =
+  "trees"` keeps only the sampled trees and recomputes the `bart_train` /
+  `bart_test` blocks on demand through the `dbarts` predict path, instead of
+  retaining the `n x draws x chains` blocks in the fit. It implies `keepTrees`
+  (and errors on a contradictory `bart_args = list(keepTrees = FALSE)`), keeps
+  the parametric `stan` and `bart_varcount` blocks, and leaves `bart_train` /
+  `bart_test` absent - read the BART fits through `extract`, `fitted`, or
+  `predict`, all of which route through the recompute seam. This is an opt-in
+  memory/time trade: the `bart_train` block is 94-98% of a large fit object
+  (`n >= 10000`), so dropping it is a large saving above a crossover near
+  `n = 550`; in exchange `extract` materializes the whole block on each call
+  (~15 s at `n = 10000`, 4 chains x 1000 draws) while `fitted` streams the
+  posterior mean in row blocks to stay memory-bounded. The recomputed values
+  match the stored path to a tight tolerance (~1e-13; the stored block carries
+  an extra offset round-trip and is the noisier quantity), and sampling is
+  untouched, so parametric draws are bit-identical to a `store = "fits"` fit
+  with the same seed. `store = "fits"` remains the default (no silent change).
+  See `docs/plans/bart-train-recompute.md`.
+
 ## Deprecated
 
 * The NUTS-specific `stan_args` controls - `adapt_delta`, `adapt_gamma`,

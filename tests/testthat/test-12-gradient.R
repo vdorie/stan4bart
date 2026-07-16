@@ -8,7 +8,7 @@ context("WALNUTS parametric target: gradient finite-difference gate")
 # A second proof used to live here - a cross-check of value(mine) against
 # Stan's own log_prob<false, true> at the same points (constant-difference
 # oracle for the target itself). It was removed with the Stan machinery at C4
-# (docs/plans/walnuts.md); the target was validated against that oracle while
+# (docs/design/walnuts.md); the target was validated against that oracle while
 # Stan still compiled (see the C1 landing note, worst spread 9.1e-13), and the
 # FD gate below continues to guard the gradient-vs-coded-target agreement.
 #

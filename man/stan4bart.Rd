@@ -41,6 +41,7 @@ stan4bart(formula,
           seed = NA_integer_,
           keep_fits = TRUE,
           save_warmup = FALSE,
+          store = c("fits", "trees"),
           callback = NULL,
           stan_args = NULL,
           bart_args = NULL)
@@ -113,6 +114,27 @@ stan4bart(formula,
   warmup is stored under \code{warmup} as before, and
   \code{include_warmup = TRUE} accessors work; on a default fit those
   accessors raise an informative error.}
+  \item{store}{character; how the fitted BART component is retained.
+  \code{"fits"} (the default) stores the full \eqn{n \times}{n x}
+  draws \eqn{\times}{x} chains \code{bart_train} (and \code{bart_test})
+  blocks, as in prior releases. \code{"trees"} instead stores only the kept
+  trees and recomputes those blocks on demand through the \code{dbarts}
+  predict path; it implies \code{keepTrees} (and errors if \code{bart_args}
+  contradicts it with \code{keepTrees = FALSE}). This is an opt-in memory/time
+  trade: at rest the fit no longer carries the \code{bart_train} block, which is
+  94-98\% of a large fit object (\code{n >= 10000}); in exchange every reader of
+  the BART fits pays a recompute cost on access. \code{fitted} streams the
+  posterior mean in row blocks, so its peak memory stays bounded, but
+  \code{extract} must materialize the whole block (unavoidable) - roughly 15 s
+  per call at \code{n = 10000} with 4 chains x 1000 draws, and over a minute at
+  \code{n = 50000}. Storing trees costs essentially nothing during sampling. The
+  saving only exists above a crossover near \code{n = 550}: below it the kept
+  trees cost as much as the fits they replace and add latency, so \code{"fits"}
+  remains the default and the recommended choice at small \code{n}. Under
+  \code{"trees"} the \code{bart_train}/\code{bart_test} components are absent;
+  read the BART fits through \code{\link[=stan4bart-generics]{extract}},
+  \code{\link[=stan4bart-generics]{fitted}}, or
+  \code{\link[=stan4bart-generics]{predict}} instead.}
   \item{callback}{A function that will be called at each iteration, accepting
   three arguments: \code{yhat.train}, \code{yhat.test}, \code{stan_pars}.
   See details for more information.}
@@ -317,9 +339,10 @@ stan4bart(formula,
   
   Results, better accessed using \code{\link[=stan4bart-generics]{extract}}:
   \item{\code{bart_train}}{samples of individual posterior predictions for BART
-  component}
+  component; absent (recomputed from the kept trees on access) when
+  \code{store = "trees"}}
   \item{\code{bart_test}}{predicted test values for BART component, when
-  applicable}
+  applicable; likewise absent under \code{store = "trees"}}
   \item{\code{bart_varcount}}{BART variable counts}
   \item{\code{sigma}}{samples of residual standard error; not present for
   binary outcomes}

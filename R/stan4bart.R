@@ -20,11 +20,13 @@ stan4bart <-
            seed = NA_integer_,
            keep_fits = TRUE,
            save_warmup = FALSE,
+           store = c("fits", "trees"),
            callback = NULL,
            stan_args = NULL,
            bart_args = NULL)
 {
   call <- match.call(expand.dots = TRUE)
+  store <- match.arg(store)
   mc <- match.call(expand.dots = FALSE)
   if (!is.null(data)) {
     data <- as.data.frame(data)
@@ -209,7 +211,19 @@ stan4bart <-
   }
   
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)
-  
+
+  # store = "trees" recomputes the BART fits on demand from the kept trees
+  # instead of retaining the n x draws x chains bart_train/bart_test blocks, so
+  # it needs keepTrees on. Force it, but refuse a contradictory explicit
+  # keepTrees = FALSE rather than silently overriding the user.
+  if (store == "trees") {
+    if (is.null(bart_args)) bart_args <- list()
+    if (!is.null(bart_args[["keepTrees"]]) && !isTRUE(bart_args[["keepTrees"]]))
+      stop("store = \"trees\" recomputes the BART fits from the kept trees and so ",
+           "requires keepTrees; drop keepTrees = FALSE from bart_args", call. = FALSE)
+    bart_args[["keepTrees"]] <- TRUE
+  }
+
   callbackEnv <- NULL
   if (!is.null(callback))
     callbackEnv <- list2env(result, parent = baseenv())
@@ -234,7 +248,7 @@ stan4bart <-
                                  stan_args,
                                  bart_args)
   
-  samples <- package_samples(chain_results, colnames(bartData@x))
+  samples <- package_samples(chain_results, colnames(bartData@x), store)
   for (name in names(samples)) 
     result[[name]] <- samples[[name]]
   
@@ -270,7 +284,7 @@ check_sampler_diagnostics <- function(object, stan_args, n_upars)
   invisible(NULL)
 }
 
-package_samples <- function(chain_results, bart_var_names) {
+package_samples <- function(chain_results, bart_var_names, store = "fits") {
   result <- list()
   warmup <- list()
   n_chains  <- length(chain_results)
@@ -316,33 +330,42 @@ package_samples <- function(chain_results, bart_var_names) {
   
   chain_names <- paste0("chain:", seq_len(n_chains))
   
-  # grab the bart bits
+  # grab the bart bits. store = "trees" drops the n x draws x chains
+  # bart_train/bart_test accumulation (and its warmup analog) from the fit
+  # object; the kept trees reproduce it on demand (getBartSampler ->
+  # predictBART, generics.R). The draw/chain counts still come off the per-chain
+  # blocks, which the C sampler returns regardless, so the rest of the assembly
+  # is unchanged; varcount and the parametric "stan" block are always kept.
   if (!is.null(chain_results[[1L]]$sample$bart$train)) {
     n_obs <- dim(chain_results[[1L]]$sample$bart$train)[1L]
     n_samples <- dim(chain_results[[1L]]$sample$bart$train)[2L]
-    result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
-                                 chain_results[[i_chains]]$sample$bart$train),
-                               dim = c(n_obs, n_samples, n_chains),
-                               dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
-    if (!is.na(n_warmup) && n_warmup > 0L) {
-       warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
-                                   chain_results[[i_chains]]$warmup$bart$train),
-                                 dim = c(n_obs, n_warmup, n_chains),
+    if (store == "fits") {
+      result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
+                                   chain_results[[i_chains]]$sample$bart$train),
+                                 dim = c(n_obs, n_samples, n_chains),
                                  dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      if (!is.na(n_warmup) && n_warmup > 0L) {
+         warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
+                                     chain_results[[i_chains]]$warmup$bart$train),
+                                   dim = c(n_obs, n_warmup, n_chains),
+                                   dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      }
     }
   }
   if (!is.null(chain_results[[1L]]$sample$bart$test)) {
     n_obs_test <- dim(chain_results[[1L]]$sample$bart$test)[1L]
     n_samples <- dim(chain_results[[1L]]$sample$bart$test)[2L]
-    result$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
-                                chain_results[[i_chains]]$sample$bart$test),
-                              dim = c(n_obs_test, n_samples, n_chains),
-                              dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
-    if (!is.na(n_warmup) && n_warmup > 0L) {
-      warmup$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
-                                  chain_results[[i_chains]]$warmup$bart$test),
-                                dim = c(n_obs_test, n_warmup, n_chains),
+    if (store == "fits") {
+      result$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
+                                  chain_results[[i_chains]]$sample$bart$test),
+                                dim = c(n_obs_test, n_samples, n_chains),
                                 dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      if (!is.na(n_warmup) && n_warmup > 0L) {
+        warmup$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
+                                    chain_results[[i_chains]]$warmup$bart$test),
+                                  dim = c(n_obs_test, n_warmup, n_chains),
+                                  dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      }
     }
   }
   if (!is.null(chain_results[[1L]]$sample$bart$varcount)) {
