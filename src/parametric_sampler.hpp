@@ -85,6 +85,13 @@ struct ParametricSampler {
   virtual int getAdaptDim() const = 0;
   virtual void getInvMass(double* out) const = 0;
 
+  /// \brief Cumulative leapfrog gradient-evaluation count of the parametric
+  ///        target since construction. Differencing it across the warmup ->
+  ///        sampling freeze yields mean leapfrog steps per transition per phase
+  ///        - the runtime diagnostic surfaced in fit$adaptation$mean_leapfrog
+  ///        (docs/plans/walnuts-warmup.md C0). Draw-neutral.
+  virtual long long getEvalCount() const = 0;
+
   /// \brief Refresh the conditioning data between Gibbs transitions.
   virtual void setOffset(const double* offset) = 0;
   virtual void setResponse(const double* y) = 0;

@@ -341,6 +341,8 @@ void WalnutsSampler::getInvMass(double* out) const {
     out[i] = i < m.size() ? m[i] : 0.0;
 }
 
+long long WalnutsSampler::getEvalCount() const { return impl_->model.evalCount(); }
+
 void WalnutsSampler::setOffset(const double* offset) {
   std::memcpy(impl_->model.offset_.data(), offset,
               static_cast<size_t>(impl_->model.N) * sizeof(double));

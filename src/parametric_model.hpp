@@ -148,6 +148,22 @@ struct ParametricModel {
   mutable Eigen::VectorXd g_rho_, g_zeta_, g_tau_chain_, g_zT_chain_;
   mutable std::vector<Block> blocks_;                     // t
 
+  /// \brief Count of gradient evaluations on the leapfrog hot path - eval()
+  ///        calls with constrained == nullptr, i.e. every operator() the WALNUTS
+  ///        integrator makes, one per leapfrog micro-step. The once-per-stored-
+  ///        draw re-emission eval (constrained != nullptr) is excluded, so
+  ///        (evals accrued over a phase) / (transitions in that phase) is the
+  ///        mean leapfrog steps per transition - the quantity that IS the
+  ///        parametric-step runtime. mutable, reached through std::cref like
+  ///        the scratch buffers; one model per chain and chains in separate
+  ///        processes make it race-free. A single increment on a member
+  ///        disjoint from the Eigen scratch, so the __restrict hot-loop
+  ///        codegen is unperturbed and draws stay bitwise identical.
+  mutable long long eval_count_ = 0;
+
+  /// \brief The cumulative leapfrog-hot-path eval count (see eval_count_).
+  long long evalCount() const { return eval_count_; }
+
   /// \brief Validate the reachable scope and precompute segment offsets and
   ///        the rho Beta shapes. Call once after populating the data members.
   void finalize() {
@@ -289,6 +305,9 @@ struct ParametricModel {
   ///        dropped (so the value matches Stan's log_prob up to a constant).
   void eval(const Eigen::VectorXd& par, double& logp, Eigen::VectorXd& grad,
             double* constrained) const {
+    // Count only the leapfrog hot path (operator() -> constrained == nullptr);
+    // the re-emission eval carries a constrained buffer and is not a leapfrog.
+    if (constrained == nullptr) ++eval_count_;
     assert(par.size() == dim_ && "eval: position vector size must equal dim()");
     if (grad.size() != dim_) grad.resize(dim_);
     grad.setZero();

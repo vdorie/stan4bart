@@ -43,6 +43,7 @@ struct WalnutsSampler : public ParametricSampler {
   double getStepSize() const override;
   int getAdaptDim() const override;
   void getInvMass(double* out) const override;
+  long long getEvalCount() const override;
 
   void setOffset(const double* offset) override;
   void setResponse(const double* y) override;

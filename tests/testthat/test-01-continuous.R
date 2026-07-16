@@ -86,6 +86,13 @@ test_that("default fit stores no warmup draws but keeps tuning summaries", {
   expect_equal(dim(fit$adaptation$snapshot), c(length(stan_rows), n_chains))
   expect_equal(dim(fit$adaptation$trace$stan), c(length(stan_rows), 7L, n_chains))
   expect_equal(dim(fit$adaptation$trace$sigma), c(7L, n_chains))
+
+  # mean leapfrog / eval per transition, per chain, for each phase (the
+  # leapfrog-count runtime diagnostic); at least one leapfrog per transition
+  expect_length(fit$adaptation$mean_leapfrog, n_chains)
+  expect_length(fit$adaptation$mean_leapfrog_warmup, n_chains)
+  expect_true(all(is.finite(fit$adaptation$mean_leapfrog) & fit$adaptation$mean_leapfrog >= 1))
+  expect_true(all(is.finite(fit$adaptation$mean_leapfrog_warmup) & fit$adaptation$mean_leapfrog_warmup >= 1))
 })
 
 test_that("include_warmup errors informatively when warmup was not saved", {

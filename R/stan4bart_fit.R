@@ -71,8 +71,19 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   # frozen tuning summaries, captured at the adaptation freeze
   if (control.common$warmup > 0L)
     results$adaptation <- .Call(C_stan4bart_getAdaptationInfo, sampler)
+  # Cumulative leapfrog eval count at the warmup/sampling boundary; differenced
+  # after the sampling run below it gives mean leapfrog per transition per phase
+  # (the runtime diagnostic, docs/plans/walnuts-warmup.md C0). Draw-neutral.
+  evals_warmup <- .Call(C_stan4bart_getEvalCount, sampler)
   results$sample <- .Call(C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
                           FALSE, "both")
+  if (control.common$warmup > 0L && !is.null(results$adaptation)) {
+    evals_total <- .Call(C_stan4bart_getEvalCount, sampler)
+    n_sample <- control.common$iter - control.common$warmup
+    results$adaptation$mean_leapfrog <-
+      if (n_sample > 0L) (evals_total - evals_warmup) / n_sample else NA_real_
+    results$adaptation$mean_leapfrog_warmup <- evals_warmup / control.common$warmup
+  }
   
   # predictions from a restored sampler arrive on the original response
   # scale (the state carries the fit's transform), so only the state exports

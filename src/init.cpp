@@ -858,6 +858,20 @@ extern "C" {
     return result;
   }
 
+  // The parametric target's cumulative leapfrog gradient-evaluation count. Read
+  // once after the warmup run and again after the sampling run; the two deltas
+  // over their transition counts give mean leapfrog per transition per phase
+  // (fit$adaptation$mean_leapfrog). Draw-neutral - a plain counter read.
+  static SEXP getEvalCount(SEXP samplerExpr)
+  {
+    Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
+    if (samplerPtr == NULL) Rf_error("getEvalCount called on NULL external pointer");
+    Sampler& sampler(*samplerPtr);
+    // R has no 64-bit integer SEXP; a double holds the count exactly well past
+    // any realizable eval total (2^53 leapfrog steps).
+    return Rf_ScalarReal(static_cast<double>(sampler.paramSampler->getEvalCount()));
+  }
+
 } // extern "C"
 
 namespace {
@@ -1050,6 +1064,7 @@ static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_printInitialSummary", printInitialSummary, 1),
   DEF_FUNC("stan4bart_disengageAdaptation", disengageAdaptation, 1),
   DEF_FUNC("stan4bart_getAdaptationInfo", getAdaptationInfo, 1),
+  DEF_FUNC("stan4bart_getEvalCount", getEvalCount, 1),
   DEF_FUNC("stan4bart_finalize", finalize, 0),
   DEF_FUNC("stan4bart_exportBARTState", exportBARTState, 1),
   DEF_FUNC("stan4bart_createStoredBARTSampler", createStoredBARTSampler, 4),

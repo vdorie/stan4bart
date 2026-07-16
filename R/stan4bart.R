@@ -453,6 +453,17 @@ package_samples <- function(chain_results, bart_var_names, store = "fits") {
     dimnames(inv_mass) <- list(parameter = NULL, chain = chain_names)
     adaptation <- list(step_size = setNames(step_size, chain_names), inv_mass = inv_mass)
 
+    # Mean leapfrog (eval) steps per transition, per chain, for each phase - the
+    # leapfrog-count diagnostic (docs/plans/walnuts-warmup.md C0). $mean_leapfrog
+    # is the sampling phase (the runtime-relevant one, high when the frozen
+    # tuning is poor); $mean_leapfrog_warmup is the warmup phase.
+    if (!is.null(chain_results[[1L]]$adaptation$mean_leapfrog)) {
+      adaptation$mean_leapfrog <- setNames(
+        vapply(chain_results, function(cr) cr$adaptation$mean_leapfrog, numeric(1L)), chain_names)
+      adaptation$mean_leapfrog_warmup <- setNames(
+        vapply(chain_results, function(cr) cr$adaptation$mean_leapfrog_warmup, numeric(1L)), chain_names)
+    }
+
     if (!is.null(chain_results[[1L]]$snapshot)) {
       snapshot <- sapply(chain_results, function(cr) cr$snapshot)
       dimnames(snapshot) <- list(parameters = names(chain_results[[1L]]$snapshot),
