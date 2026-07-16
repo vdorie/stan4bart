@@ -607,9 +607,23 @@ fitted.stan4bartFit <-
     if (is.array(x)) {
       d <- dim(x)
       l_d <- length(d)
-      apply(x, seq(1L, l_d - 1L), mean)
+      if (l_d == 2L) {
+        # matches apply(x, 1L, mean) - row means over the combined
+        # iterations:chains column margin
+        rowMeans(x)
+      } else {
+        # matches apply(x, seq(1L, l_d - 1L), mean) - average over the last
+        # (iterations:chains) margin only; reshape to a 2D matrix so a single
+        # rowMeans pass replaces the per-margin apply loop, then restore shape
+        dn <- dimnames(x)
+        dim(x) <- c(prod(d[-l_d]), d[l_d])
+        result <- rowMeans(x)
+        dim(result) <- d[-l_d]
+        if (!is.null(dn)) dimnames(result) <- dn[-l_d]
+        result
+      }
     } else if (is.matrix(x)) {
-      apply(x, 1L, mean)
+      rowMeans(x)
     } else {
       mean(x)
     }
