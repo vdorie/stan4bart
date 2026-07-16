@@ -907,7 +907,7 @@ predict.stan4bartFit <-
   }
   
   dimnames(result)[[3L]] <- paste0("chain:", seq_len(dim(result)[3L]))
-  
+
   if (combine_chains) {
     if (is.list(result)) {
       result <- lapply(result, combine_chains_f)
@@ -915,7 +915,79 @@ predict.stan4bartFit <-
       result <- combine_chains_f(result)
     }
   }
-  
+
   result
+}
+
+# Sampling-phase mean-leapfrog-steps-per-transition value above which the
+# frozen WALNUTS tuning is treated as poor. Derived from a warmup-grid
+# measurement (six reference tiers, warmup in {20,50,100,200,400,1000}, two
+# builds): every tier's sampling phase came in at <= 24 once warmup reached
+# the documented floor of 100, while cells below that floor ranged from
+# comparably tuned (tiers that never needed much warmup) up past 50. 30 sits
+# with margin above the well-tuned ceiling and below the clearly mis-tuned
+# band, so it does not fire on any reference tier run at or past the floor.
+mean_leapfrog_warn_threshold <- 30
+
+# Emit the one-line mis-tuning note if any chain's sampling-phase mean
+# leapfrog count exceeds the threshold above. A no-op when the fit has no
+# adaptation record (warmup = 0, or an object predating the diagnostic).
+warn_if_leapfrog_high <- function(object) {
+  mean_leapfrog <- object$adaptation$mean_leapfrog
+  if (is.null(mean_leapfrog) || !any(is.finite(mean_leapfrog)))
+    return(invisible(NULL))
+
+  worst <- max(mean_leapfrog, na.rm = TRUE)
+  if (worst > mean_leapfrog_warn_threshold) {
+    message(sprintf(
+      "parametric sampler tuning looks poor (mean leapfrog steps per transition = %.1f); consider increasing warmup.",
+      worst))
+  }
+  invisible(NULL)
+}
+
+print.stan4bartFit <- function(x, ...)
+{
+  cat("stan4bart model fit\n")
+  cat("formula: ", paste(deparse(x$formula), collapse = " "), "\n", sep = "")
+  cat("family:  ", x$family$family, "\n", sep = "")
+  if (!is.null(x$stan)) {
+    dims <- dim(x$stan)
+    cat(dims[3L], " chains, ", dims[2L], " samples per chain\n", sep = "")
+  }
+
+  warn_if_leapfrog_high(x)
+
+  invisible(x)
+}
+
+summary.stan4bartFit <- function(object, ...)
+{
+  warn_if_leapfrog_high(object)
+
+  result <- list(call = object$call, formula = object$formula,
+                 family = object$family$family,
+                 dim = if (!is.null(object$stan)) dim(object$stan)[2L:3L] else NULL,
+                 adaptation = object$adaptation[intersect(
+                   c("step_size", "mean_leapfrog", "mean_leapfrog_warmup"),
+                   names(object$adaptation))])
+  class(result) <- "summary.stan4bartFit"
+  result
+}
+
+print.summary.stan4bartFit <- function(x, ...)
+{
+  cat("stan4bart model fit\n")
+  cat("formula: ", paste(deparse(x$formula), collapse = " "), "\n", sep = "")
+  cat("family:  ", x$family, "\n", sep = "")
+  if (!is.null(x$dim))
+    cat(x$dim[2L], " chains, ", x$dim[1L], " samples per chain\n", sep = "")
+  if (!is.null(x$adaptation$mean_leapfrog)) {
+    cat("\nmean leapfrog steps per transition, by chain:\n")
+    cat("  warmup:   ", paste(round(x$adaptation$mean_leapfrog_warmup, 1), collapse = ", "), "\n", sep = "")
+    cat("  sampling: ", paste(round(x$adaptation$mean_leapfrog, 1), collapse = ", "), "\n", sep = "")
+  }
+
+  invisible(x)
 }
 

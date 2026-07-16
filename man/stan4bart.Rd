@@ -76,7 +76,15 @@ stan4bart(formula,
   draw and return. Includes warmup samples.}
   \item{warmup}{non-negative integer indicating number of posterior samples to
   draw and throw away. Also controls the number of iterations for which
-  adaptation is run.}
+  adaptation is run. The default (half of \code{iter}) is ample for the
+  parametric sampler's step size and mass tuning to converge. If \code{iter}
+  is shortened, keep \code{warmup} at or above roughly 100 for large-\eqn{n}
+  fits with many random-effect levels: under-warming leaves the tuning poor
+  and can roughly double the per-iteration cost of the parametric step. The
+  diagnostic is \code{fit$adaptation$mean_leapfrog} (mean leapfrog steps per
+  transition during sampling; see \sQuote{Value} below) - a high value
+  relative to a well-tuned fit indicates under-warming, and \code{print} and
+  \code{summary} warn when it looks poor.}
   \item{skip}{one or two positive integers. Every \code{skip} sample will be
   kept, while every other sample will be discarded. If argument is length two,
   an attempt will be made to use he named element \code{"bart"} for BART and
@@ -360,10 +368,15 @@ stan4bart(formula,
   the results subsection; present only when \code{save_warmup = TRUE}}
   \item{\code{adaptation}}{present when warmup was run and \code{save_warmup} is
   \code{FALSE}. A list with, per chain, the frozen \code{step_size}, the diagonal
-  \code{inv_mass}, a warmup-end \code{snapshot} of the parametric draw, and a
-  \code{trace} (a thinned warmup trace of the monitored scalars: the parametric
-  \code{stan} rows and the BART \code{sigma}) for a qualitative
-  where-did-it-stabilize plot}
+  \code{inv_mass}, the mean number of leapfrog (gradient evaluation) steps per
+  transition during the sampling phase (\code{mean_leapfrog}) and during
+  warmup (\code{mean_leapfrog_warmup}) - the runtime-relevant tuning
+  diagnostic; a high \code{mean_leapfrog} relative to a well-tuned fit
+  indicates under-warming (see the \code{warmup} argument above) - a
+  warmup-end \code{snapshot} of the parametric draw, and a \code{trace} (a
+  thinned warmup trace of the monitored scalars: the parametric \code{stan}
+  rows and the BART \code{sigma}) for a qualitative where-did-it-stabilize
+  plot}
   \item{\code{sampler.bart}}{external points to BART samplers; used only for
   \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
   \item{\code{range.bart}}{internal scale used by BART samplers, used by 

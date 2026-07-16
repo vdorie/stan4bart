@@ -8,6 +8,10 @@ S3method(predict, stan4bartFit)
 S3method(as.array, stan4bartFit)
 S3method(as.matrix, stan4bartFit)
 
+S3method(print, stan4bartFit)
+S3method(summary, stan4bartFit)
+S3method(print, summary.stan4bartFit)
+
 importFrom(dbarts, extract)
 importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao, bdiag)
 importFrom(parallel, makeCluster, clusterExport, clusterEvalQ, clusterMap, stopCluster)

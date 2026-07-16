@@ -28,6 +28,29 @@
   imported. C++20 is now required (`SystemRequirements: C++20`). WALNUTS
   (MIT license, Bob Carpenter) is vendored under `inst/include/walnuts`.
 
+* The warmup-phase initial mass is now seeded from the log-posterior gradient
+  at each chain's initial unconstrained position (`(1 - s) * |grad| + s`, a
+  Nutpie-style heuristic; `s` is the existing mass-smoothing constant),
+  replacing the previous identity (unit-mass) start; the initial step size is
+  unchanged. Sampled values for a given seed change as a result - this is a
+  draw-moving change, verified to stay within the pre-registered
+  distributional-equivalence band against the Stan-era baseline on all
+  reference tiers. It improves tuning at short warmup, especially for
+  large-`n` fits with many random-effect levels.
+
+* `fit$adaptation` gains `mean_leapfrog` and `mean_leapfrog_warmup`: the mean
+  number of leapfrog (gradient evaluation) steps per transition, per chain,
+  during the sampling and warmup phases respectively. This is the
+  runtime-relevant tuning diagnostic - a high `mean_leapfrog` relative to a
+  well-tuned fit signals under-warming - and is exact and draw-neutral (an
+  eval counter, not a new sampling path).
+
+* New `print` and `summary` methods for `stan4bartFit` fits. Both warn when
+  the sampling-phase `mean_leapfrog` looks poor ("parametric sampler tuning
+  looks poor ...; consider increasing warmup"), and `?stan4bart` documents a
+  warmup floor: if `iter` is shortened below the default, keep `warmup` at or
+  above roughly 100 for large-`n` fits with many random-effect levels.
+
 ## Storage
 
 * Warmup draws are no longer stored by default (`save_warmup = FALSE`), and the

@@ -505,3 +505,44 @@ warmup >= 100 pre-seed - and the C1 seed moved the knees, shrinking
 what a floor would protect. iter/2 stays; the documented floor and the
 mis-tuning warning are C3's deliverables. No code change; nothing to
 gate.
+
+### C3 landing (2026-07-16)
+
+Threshold: 30 (sampling-phase mean_leapfrog, max over chains).
+Derived from bench-warmup-BASELINE.csv and the seeded massonly grid
+together: across all six tiers, every cell run at or past the
+documented floor (warmup >= 100) sampled at <= 23.9 leapfrog
+steps/transition, while cells below the floor ranged from comparably
+tuned (binary, ~14-17 even at warmup=20) up to 50.3 (large_n_re,
+warmup=20, unseeded); 30 sits with margin above the at-floor ceiling
+and below the clearly mis-tuned band (>= 32) that the short-warmup
+large_n_re/nc2/nc3 cells occupy.
+
+Documented: man/stan4bart.Rd's warmup argument gains the floor
+guidance (keep warmup >= ~100 for large-n, many-random-effect-level
+fits if iter is shortened, pointing at fit$adaptation$mean_leapfrog
+and the print/summary warning); its Value section documents
+mean_leapfrog/mean_leapfrog_warmup (landed at C0 but never
+documented). print.stan4bartFit and summary.stan4bartFit are new - no
+print or summary method previously existed for stan4bartFit fits, so
+this commit both adds the diagnostic and the minimal S3 methods it
+lives on (new man/print.stan4bartFit.Rd). NEWS.md's dev section gains
+three entries: the C1 mass seed (previously unrecorded there), the
+mean_leapfrog/mean_leapfrog_warmup fields, and the print/summary
+warning plus the floor guidance.
+
+Gates: R CMD INSTALL clean (R-only diff, no recompile triggered);
+draw-neutrality identical() on $stan and $bart_train for a seeded
+continuous and a seeded binary fit, before vs after; testthat 328/0
+(318 + 10 new expectations from a 4-block test file covering the
+healthy-fit no-warning case, the inflated-mean_leapfrog warning case,
+the no-adaptation-record no-op case, and the summary object's carried
+fields; the one pre-existing test-01 new-level random-slope predict
+warning is unchanged); R CMD check (--no-tests --no-manual
+--no-vignettes on the built tarball) Status: OK, no NOTEs or
+WARNINGs.
+
+Off-spec, not touched: no .lintr/air.toml exists in the repo, and
+`air format --check` fails against the pre-existing R/generics.R too
+(not just this diff), so it is not an enforced convention here; new
+code was hand-matched to the surrounding style instead.
