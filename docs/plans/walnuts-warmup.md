@@ -327,6 +327,17 @@ C3. DOCS + DIAGNOSTIC SURFACE + NEWS (draw-neutral). The documented warmup-floor
 
 ## Open questions for VD
 
+ALL RESOLVED (VD 2026-07-16): Q(a) SHIP the seed - Nutpie mass + probed
+step, option (i), still measured by C0 first (a flat C0 result gets
+reported back, not silently downgraded). Q(b) option (i) - keep
+iter/2, documented floor, poor-tuning warning; escalation to an
+enforced floor only on a clean C0 grid result. Q(c) option (i) - the
+draw-neutral eval counter. Q(d) option (iii) REWIRE - VD's correction
+of the premise: "the deprecation was just to remove STAN, not
+something deeper"; adapt_delta comes back as a live argument mapped to
+WarmupConfig.step_accept_rate_target (default 0.8), un-deprecated. The
+original forks, for the record:
+
 Q(a) SHIP THE SEED, OR STOP AT DOCS. Fork: whether to land a draw-moving seed
   change at all. The upstream heuristics (adapt_step + Nutpie mass) are free to
   call and are the standard warm-start, but their payoff HERE is unmeasured, and at
