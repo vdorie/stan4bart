@@ -154,6 +154,16 @@ are ~instant - they read the small stan block, not the n x draws BART block.
    Cost: M. Risk: MEDIUM - eval is the FD-gated hot path; reuse buffers WITHOUT
    reordering arithmetic to keep draws bit-identical, and re-run the FD gate
    (test-12) + distributional tiers. Buffer reuse alone is numerically inert.
+   LANDED (the buffer-reuse half; measured outcome differed from the estimate):
+   naive member-hoisting alone REGRESSED eval ~5% - scratch reached through
+   `this` defeats the local-no-alias codegen in the hand-written O(N) loops -
+   so the landed form pairs the reuse with __restrict pointers on the three
+   hot loops (a true guarantee, the member buffers are disjoint). Net eval win
+   ~3-7% (interleaved microbench, arm64 clang), whole-fit per-iter ~3% at
+   n=1e4 within noise. Draws bit-identical (identical() TRUE, continuous and
+   binary with RE), FD gate 10/10 at the landed baseline. Loop FUSION remains
+   unlanded: it reorders arithmetic and would need the distributional tiers -
+   the measured ceiling above suggests it is not worth that gate.
 
 3. fitted() apply -> rowMeans (CHEAPEST WIN).
    Payoff: average_samples_f uses apply(x, MARGIN, mean) (generics.R:606-616);

@@ -23,6 +23,7 @@
 ///   [ z_beta(K), z_b(q), z_T(len_z_T), rho_free(len_rho),
 ///     zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!binary) ]
 
+#include <cassert>    // assert
 #include <cmath>      // std::exp, std::log, std::sqrt
 #include <cstring>    // std::memcpy
 #include <stdexcept>  // std::invalid_argument
@@ -112,6 +113,40 @@ struct ParametricModel {
 
   // Beta-onion prior shapes for each rho entry (len_rho), precomputed.
   Eigen::VectorXd rho_a1, rho_a2;
+
+  /// \brief Per-grouping-factor forward cache + reverse-pass adjoints for the
+  ///        make_theta_L / make_b construction. Held across eval() calls so its
+  ///        buffers are reused rather than reallocated (block geometry - nc,
+  ///        level_count - is fixed by finalize(), so every buffer's size is
+  ///        call-invariant). g_T/g_sd/g_pi are the reverse-pass scratch (g_T was
+  ///        formerly a separate per-call std::vector<MatrixXd>).
+  struct Block {
+    int nc, level_count, b_off, tau_idx, rho_off, zeta_off;
+    double s, trace, Zsum;
+    Eigen::VectorXd pi, sd;
+    Eigen::MatrixXd T;
+    std::vector<double> sf, Dm;      // per onion row m (index m in 2..nc-1)
+    std::vector<int> zT_row_start;   // per onion row m: start index into z_T
+    Eigen::MatrixXd g_T;             // reverse adjoint of T
+    Eigen::VectorXd g_sd, g_pi;      // reverse-pass per-block scratch
+  };
+
+  /// \brief Reusable eval() scratch. THREAD-SAFETY: one ParametricModel lives
+  ///        per chain (walnuts_sampler.cpp Impl::model); WALNUTS holds it by
+  ///        const reference (util.hpp NoExceptLogpGrad's std::cref), and eval()
+  ///        is never entered concurrently on a single instance - chains run as
+  ///        separate R processes (stan4bart_fit.R makeCluster), the per-chain
+  ///        WALNUTS classes (AdaptiveWalnuts/WalnutsSampler) spawn no threads,
+  ///        and the leapfrog evaluations and the re-emission eval run in
+  ///        sequence. These mutable buffers are therefore reused across calls
+  ///        (buffer reuse only; the arithmetic and its order are unchanged).
+  ///        Sizes are call-invariant; buffers are sized on first use.
+  mutable Eigen::VectorXd rho_, zeta_, tau_;              // len_rho, len_conc, t
+  mutable Eigen::VectorXd beta_, dbeta_dz_;               // K
+  mutable Eigen::VectorXd b_, eta_, g_eta_, g_beta_;      // q, N, N, K
+  mutable Eigen::VectorXd g_b_, g_z_b_;                   // q
+  mutable Eigen::VectorXd g_rho_, g_zeta_, g_tau_chain_, g_zT_chain_;
+  mutable std::vector<Block> blocks_;                     // t
 
   /// \brief Validate the reachable scope and precompute segment offsets and
   ///        the rho Beta shapes. Call once after populating the data members.
@@ -254,6 +289,7 @@ struct ParametricModel {
   ///        dropped (so the value matches Stan's log_prob up to a constant).
   void eval(const Eigen::VectorXd& par, double& logp, Eigen::VectorXd& grad,
             double* constrained) const {
+    assert(par.size() == dim_ && "eval: position vector size must equal dim()");
     if (grad.size() != dim_) grad.resize(dim_);
     grad.setZero();
     logp = 0.0;
@@ -266,7 +302,11 @@ struct ParametricModel {
     const double* tau_f_p   = par.data() + off_tau;
 
     // --- constrain rho / zeta / tau / aux ---
-    Eigen::VectorXd rho(len_rho), zeta(len_concentration), tau(t);
+    // (reused scratch bound to local names; arithmetic body unchanged)
+    rho_.resize(len_rho); zeta_.resize(len_concentration); tau_.resize(t);
+    Eigen::VectorXd& rho = rho_;
+    Eigen::VectorXd& zeta = zeta_;
+    Eigen::VectorXd& tau = tau_;
     for (int j = 0; j < len_rho; ++j)          rho[j]  = 1.0 / (1.0 + std::exp(-rho_f_p[j]));
     for (int j = 0; j < len_concentration; ++j) zeta[j] = std::exp(zeta_f_p[j]);
     for (int i = 0; i < t; ++i)                tau[i]  = std::exp(tau_f_p[i]);
@@ -282,7 +322,9 @@ struct ParametricModel {
     }
 
     // --- beta = transform(z_beta) ---
-    Eigen::VectorXd beta(K), dbeta_dz(K);
+    beta_.resize(K); dbeta_dz_.resize(K);
+    Eigen::VectorXd& beta = beta_;
+    Eigen::VectorXd& dbeta_dz = dbeta_dz_;
     for (int k = 0; k < K; ++k) {
       if (prior_dist == 1) { beta[k] = z_beta_p[k] * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = prior_scale[k]; }
       else if (prior_dist == 2) { beta[k] = CFt(z_beta_p[k], prior_df[k]) * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = dCFt(z_beta_p[k], prior_df[k]) * prior_scale[k]; }
@@ -290,21 +332,15 @@ struct ParametricModel {
     }
 
     // --- forward make_theta_L: build lower-tri Cholesky factor T per block,
-    //     caching intermediates for the reverse pass ---
-    struct Block {
-      int nc, level_count, b_off, tau_idx, rho_off, zeta_off;
-      double s, trace, Zsum;
-      Eigen::VectorXd pi, sd;
-      Eigen::MatrixXd T;
-      std::vector<double> sf, Dm;      // per onion row m (index m in 2..nc-1)
-      std::vector<int> zT_row_start;   // per onion row m: start index into z_T
-    };
-    std::vector<Block> blocks;
-    blocks.reserve(t);
+    //     caching intermediates for the reverse pass (Block type + reused
+    //     buffers are members; geometry is call-invariant so resize is a no-op
+    //     after the first call) ---
+    blocks_.resize(t);
+    std::vector<Block>& blocks = blocks_;
 
     int b_mark = 0, rho_mark = 0, zeta_mark = 0, zT_mark = 0;
     for (int i = 0; i < t; ++i) {
-      Block bl;
+      Block& bl = blocks[i];
       bl.nc = p[i];
       bl.level_count = l[i];
       bl.b_off = b_mark;
@@ -315,20 +351,20 @@ struct ParametricModel {
       bl.s = tau[i] * re_scale[i] * dispersion;
 
       if (nc == 1) {
-        bl.T = Eigen::MatrixXd::Constant(1, 1, bl.s);
+        bl.T.setConstant(1, 1, bl.s);
       } else {
         bl.trace = bl.s * bl.s * nc;
-        bl.pi = Eigen::VectorXd(nc);
+        bl.pi.resize(nc);
         double zsum = 0.0;
         for (int c = 0; c < nc; ++c) { bl.pi[c] = zeta[zeta_mark + c]; zsum += bl.pi[c]; }
         bl.Zsum = zsum;
         bl.pi /= zsum;
         zeta_mark += nc;
 
-        bl.sd = Eigen::VectorXd(nc);
+        bl.sd.resize(nc);
         for (int c = 0; c < nc; ++c) bl.sd[c] = std::sqrt(bl.pi[c] * bl.trace);
 
-        bl.T = Eigen::MatrixXd::Zero(nc, nc);
+        bl.T.setZero(nc, nc);
         bl.T(0, 0) = bl.sd[0];
         const double T21 = 2.0 * rho[rho_mark] - 1.0;
         bl.T(1, 1) = bl.sd[1] * std::sqrt(1.0 - T21 * T21);
@@ -354,11 +390,11 @@ struct ParametricModel {
         rho_mark += nc - 1;
       }
       b_mark += nc * l[i];
-      blocks.push_back(std::move(bl));
     }
 
     // --- forward make_b: b_level = T_i * z_b_level ---
-    Eigen::VectorXd b(q);
+    b_.resize(q);
+    Eigen::VectorXd& b = b_;
     for (const Block& bl : blocks) {
       const int nc = bl.nc;
       for (int lev = 0; lev < bl.level_count; ++lev) {
@@ -397,39 +433,73 @@ struct ParametricModel {
     }
 
     // --- eta = offset_ + X beta + Z b ---
-    Eigen::VectorXd eta = offset_;
+    // The reused scratch lives in members (reached through `this`), which
+    // defeats the no-alias codegen the compiler got for free when these were
+    // stack temporaries; the O(N) loops below re-establish it with restrict-
+    // qualified local pointers into the (genuinely non-overlapping) buffers.
+    // Purely a compiler hint - the iteration order, the values, and the
+    // accumulation order are byte-for-byte identical (bitwise-gated).
+    eta_ = offset_;
+    Eigen::VectorXd& eta = eta_;
     if (K > 0) eta.noalias() += X * beta;
-    for (int i = 0; i < N; ++i) {
-      double acc = 0.0;
-      for (int k = Zu[i]; k < Zu[i + 1]; ++k) acc += Zw[k] * b[Zv[k]];
-      eta[i] += acc;
+    {
+      double* __restrict etap = eta_.data();
+      const double* __restrict bp = b_.data();
+      const double* __restrict Zwp = Zw.data();
+      const int* __restrict Zvp = Zv.data();
+      const int* __restrict Zup = Zu.data();
+      for (int i = 0; i < N; ++i) {
+        double acc = 0.0;
+        for (int k = Zup[i]; k < Zup[i + 1]; ++k) acc += Zwp[k] * bp[Zvp[k]];
+        etap[i] += acc;
+      }
     }
 
     // --- Gaussian likelihood; g_eta = lambda * (w .* r) ---
     const double lambda = 1.0 / (actual_aux * actual_aux);
-    Eigen::VectorXd g_eta(N);
+    g_eta_.resize(N);
+    Eigen::VectorXd& g_eta = g_eta_;
     double S = 0.0;  // sum_i w_i r_i^2
-    for (int i = 0; i < N; ++i) {
-      const double r = y_[i] - eta[i];
-      const double w = has_weights ? weights[i] : 1.0;
-      S += w * r * r;
-      g_eta[i] = lambda * w * r;
+    {
+      const double* __restrict yp = y_.data();
+      const double* __restrict etap = eta_.data();
+      double* __restrict getap = g_eta_.data();
+      const double* __restrict wp = has_weights ? weights.data() : nullptr;
+      for (int i = 0; i < N; ++i) {
+        const double r = yp[i] - etap[i];
+        const double w = has_weights ? wp[i] : 1.0;
+        S += w * r * r;
+        getap[i] = lambda * w * r;
+      }
     }
     logp += -N * std::log(actual_aux) - 0.5 * lambda * S;
 
     // --- backprop eta -> beta, b ---
-    Eigen::VectorXd g_beta = (K > 0) ? Eigen::VectorXd(X.transpose() * g_eta) : Eigen::VectorXd();
-    Eigen::VectorXd g_b = Eigen::VectorXd::Zero(q);
-    for (int i = 0; i < N; ++i)
-      for (int k = Zu[i]; k < Zu[i + 1]; ++k) g_b[Zv[k]] += Zw[k] * g_eta[i];
+    // g_beta = X^T g_eta into reused storage (same GEMV, no per-call temporary)
+    if (K > 0) g_beta_.noalias() = X.transpose() * g_eta;
+    else       g_beta_.resize(0);
+    Eigen::VectorXd& g_beta = g_beta_;
+    g_b_.setZero(q);
+    Eigen::VectorXd& g_b = g_b_;
+    {
+      double* __restrict gbp = g_b_.data();
+      const double* __restrict getap = g_eta_.data();
+      const double* __restrict Zwp = Zw.data();
+      const int* __restrict Zvp = Zv.data();
+      const int* __restrict Zup = Zu.data();
+      for (int i = 0; i < N; ++i)
+        for (int k = Zup[i]; k < Zup[i + 1]; ++k) gbp[Zvp[k]] += Zwp[k] * getap[i];
+    }
 
     // --- reverse make_b: g_T += g_b_level z_b_level^T (lower tri); g_z_b += T^T g_b_level ---
-    Eigen::VectorXd g_z_b = Eigen::VectorXd::Zero(q);
-    std::vector<Eigen::MatrixXd> g_T(blocks.size());
+    // g_T for each block is reused per-block scratch (bl.g_T); g_z_b is reused.
+    g_z_b_.setZero(q);
+    Eigen::VectorXd& g_z_b = g_z_b_;
     for (size_t bi = 0; bi < blocks.size(); ++bi) {
-      const Block& bl = blocks[bi];
+      Block& bl = blocks[bi];
       const int nc = bl.nc;
-      Eigen::MatrixXd gT = Eigen::MatrixXd::Zero(nc, nc);
+      bl.g_T.setZero(nc, nc);
+      Eigen::MatrixXd& gT = bl.g_T;
       for (int lev = 0; lev < bl.level_count; ++lev) {
         const int base = bl.b_off + lev * nc;
         for (int r = 0; r < nc; ++r) {
@@ -438,27 +508,32 @@ struct ParametricModel {
           for (int c = 0; c < nc; ++c) g_z_b[base + c] += bl.T(r, c) * gbr;   // T^T g_b
         }
       }
-      g_T[bi] = std::move(gT);
     }
 
     // --- reverse make_theta_L: g_T -> {dispersion, tau, zeta, rho, z_T} ---
-    Eigen::VectorXd g_rho = Eigen::VectorXd::Zero(len_rho);
-    Eigen::VectorXd g_zeta = Eigen::VectorXd::Zero(len_concentration);
-    Eigen::VectorXd g_tau_chain = Eigen::VectorXd::Zero(t);
-    Eigen::VectorXd g_zT_chain = Eigen::VectorXd::Zero(len_z_T);
+    g_rho_.setZero(len_rho);
+    g_zeta_.setZero(len_concentration);
+    g_tau_chain_.setZero(t);
+    g_zT_chain_.setZero(len_z_T);
+    Eigen::VectorXd& g_rho = g_rho_;
+    Eigen::VectorXd& g_zeta = g_zeta_;
+    Eigen::VectorXd& g_tau_chain = g_tau_chain_;
+    Eigen::VectorXd& g_zT_chain = g_zT_chain_;
     double g_disp = 0.0;
     for (size_t bi = 0; bi < blocks.size(); ++bi) {
-      const Block& bl = blocks[bi];
+      Block& bl = blocks[bi];
       const int nc = bl.nc;
-      const Eigen::MatrixXd& gT = g_T[bi];
+      const Eigen::MatrixXd& gT = bl.g_T;
       double g_s = 0.0;
 
       if (nc == 1) {
         g_s = gT(0, 0);
       } else {
         double g_trace = 0.0;
-        Eigen::VectorXd g_sd = Eigen::VectorXd::Zero(nc);
-        Eigen::VectorXd g_pi = Eigen::VectorXd::Zero(nc);
+        bl.g_sd.setZero(nc);
+        bl.g_pi.setZero(nc);
+        Eigen::VectorXd& g_sd = bl.g_sd;
+        Eigen::VectorXd& g_pi = bl.g_pi;
 
         // T(0,0) = sd[0]
         g_sd[0] += gT(0, 0);
