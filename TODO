@@ -9,8 +9,6 @@ items
     refinements - assembled response-scale ev to the callback, warmup
     gating, documenting the seam - are consumer-gated and land with
     adoption).
-  cleanup-file-names: source-file naming pass (pre-WALNUTS entry,
-    still applicable to the surviving files).
   perf-followups: the ranked candidates from the landed runtime review
     (docs/plans/perf-review.md, measured 2026-07-16): the WALNUTS
     warmup/leapfrog-count lever (adequate warmup already halves
