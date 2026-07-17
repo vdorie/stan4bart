@@ -11,8 +11,6 @@ items
     adoption).
   cleanup-file-names: source-file naming pass (pre-WALNUTS entry,
     still applicable to the surviving files).
-  factors-categorical: adopt dbarts's categorical splits instead of
-    pinning factors to indicators (the 1.0 port's recorded follow-up).
   perf-followups: the ranked candidates from the landed runtime review
     (docs/plans/perf-review.md, measured 2026-07-16): the WALNUTS
     warmup/leapfrog-count lever (adequate warmup already halves
