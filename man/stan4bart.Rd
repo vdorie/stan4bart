@@ -142,7 +142,9 @@ stan4bart(formula,
   \code{"trees"} the \code{bart_train}/\code{bart_test} components are absent;
   read the BART fits through \code{\link[=stan4bart-generics]{extract}},
   \code{\link[=stan4bart-generics]{fitted}}, or
-  \code{\link[=stan4bart-generics]{predict}} instead.}
+  \code{\link[=stan4bart-generics]{predict}} instead - those generics work
+  unchanged under either setting. A \code{"fits"} fit retaining more than a
+  gigabyte of per-draw blocks notes this alternative once per session.}
   \item{callback}{A function that will be called at each iteration, accepting
   three arguments: \code{yhat.train}, \code{yhat.test}, \code{stan_pars}.
   See details for more information.}

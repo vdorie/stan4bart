@@ -199,3 +199,14 @@ test_that("store = 'trees' refuses a contradictory keepTrees = FALSE", {
               bart_args = list(n.trees = 10L, keepTrees = FALSE)),
     "requires keepTrees")
 })
+
+test_that("a large store = 'fits' fit nudges toward store = 'trees' once per session", {
+  # helper-level test: a fit large enough to trip the gigabyte threshold is
+  # not buildable in a test suite, so exercise the nudge on the byte count it
+  # would receive from package_samples
+  rm(list = ls(stan4bart:::.message_env), envir = stan4bart:::.message_env)
+  expect_message(stan4bart:::nudge_if_bart_store_large(2^31), "store = \"trees\"")
+  expect_message(stan4bart:::nudge_if_bart_store_large(2^31), NA)
+  rm(list = ls(stan4bart:::.message_env), envir = stan4bart:::.message_env)
+  expect_message(stan4bart:::nudge_if_bart_store_large(2^20), NA)
+})

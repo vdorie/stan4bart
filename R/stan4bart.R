@@ -368,6 +368,10 @@ package_samples <- function(chain_results, bart_var_names, store = "fits") {
       }
     }
   }
+  if (store == "fits") {
+    nudge_if_bart_store_large(8 * (length(result$bart_train) + length(result$bart_test) +
+                                   length(warmup$bart_train) + length(warmup$bart_test)))
+  }
   if (!is.null(chain_results[[1L]]$sample$bart$varcount)) {
     n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
     n_samples <- dim(chain_results[[1L]]$sample$bart$varcount)[2L]

@@ -358,3 +358,23 @@ Q3 (exactness + downstream contract). Accept the ~1e-13 non-bitwise divergence i
 
 Q4 (caching). Is a memoized posterior-mean vector (n doubles) worth holding for
   repeated fitted() calls, or keep the recompute fully stateless?
+
+## C4 revisit resolution (2026-07-16)
+
+The deferred (C) size-adaptive default is REJECTED (VD): storage
+semantics should not depend on data size. The failure mode is the
+decisive argument - a script that works on a sample breaks or crawls
+only at production scale (fit$bart_train absent, extract minutes
+instead of instant), and it lands hardest on bartCause, whose
+response-fit path calls extract twice per fit and would have been
+silently slowed by exactly the fits it is used hardest on. store =
+"fits" stays the default permanently. Landed instead: a
+once-per-session nudge at fit assembly when the retained per-draw
+blocks exceed a gigabyte (nudge_if_bart_store_large, R/generics.R;
+threshold constant bart_store_nudge_bytes), whose message carries the
+safety guarantee that extract/fitted/predict work unchanged under
+store = "trees". bartCause needs no modification: it builds its own
+stan4bart calls under the unchanged default, and a user passing store
+= "trees" through bartc(...) gets correct values at a knowing
+recompute cost. The store-trees-adaptive-default TODO item is
+retired by this record.

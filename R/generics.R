@@ -624,6 +624,23 @@ extract.stan4bartFit <-
 
 .message_env <- new.env(parent = emptyenv())
 
+# Retained-bytes level at which fit assembly points a store = "fits" user at
+# store = "trees". One gigabyte separates fits whose per-draw BART blocks
+# dominate the object from small fits, where "fits" remains the recommended
+# choice (the recompute crossover is far lower, but below this the absolute
+# cost is too small to interrupt anyone over).
+bart_store_nudge_bytes <- 2^30
+
+nudge_if_bart_store_large <- function(bytes) {
+  if (bytes > bart_store_nudge_bytes && !isTRUE(.message_env$bart_store)) {
+    .message_env$bart_store <- TRUE
+    message(sprintf(
+      "fit retains %.1f GB of per-draw BART fits; store = \"trees\" drops them and recomputes on access - extract, fitted, and predict work unchanged (once per session)",
+      bytes / 2^30))
+  }
+  invisible(NULL)
+}
+
 fitted.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",

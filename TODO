@@ -21,7 +21,3 @@ items
     ppd-mean short-circuit, and extract() transient-array trims.
     Setup/marshalling/assembly measured as fixed-cost and NOT worth
     attacking; the BART 54-72% share is routed to dbarts.
-  store-trees-adaptive-default: revisit making store = "trees" the
-    default above a size threshold once the opt-in's contracts are
-    lived-in (docs/plans/bart-train-recompute.md C4 resolution); also
-    the candidate reference pattern for other dbarts consumers.

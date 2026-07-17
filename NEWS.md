@@ -110,7 +110,10 @@
   match the stored path to a tight tolerance (~1e-13; the stored block carries
   an extra offset round-trip and is the noisier quantity), and sampling is
   untouched, so parametric draws are bit-identical to a `store = "fits"` fit
-  with the same seed. `store = "fits"` remains the default (no silent change).
+  with the same seed. `store = "fits"` remains the default (no silent change);
+  a `store = "fits"` fit retaining more than a gigabyte of per-draw BART blocks
+  notes the alternative once per session. A size-adaptive default was
+  considered and rejected: storage semantics should not depend on data size.
   See `docs/plans/bart-train-recompute.md`.
 
 ## Deprecated
