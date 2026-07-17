@@ -257,6 +257,12 @@ bart_needs_recompute <- function(object, sample) {
 recompute_bart_block <- function(object, sample, rows = NULL) {
   X <- if (sample == "train") object$bartData@x else object$bartData@x.test
   if (!is.null(rows)) X <- X[rows, , drop = FALSE]
+  # Under categorical splits, bartData@x (unlike x.test, already built dense by
+  # makeTestModelMatrix) is a dbartsMixedMatrix - dbarts's sparse/dense training
+  # representation, not a plain matrix - and predictBART requires a real matrix.
+  # as.matrix() is dbarts's own dense conversion, encoding factor columns the
+  # same 0-indexed-double way x.test already does.
+  if (inherits(X, "dbartsMixedMatrix")) X <- as.matrix(X)
   result <- .Call(C_stan4bart_predictBART, getBartSampler(object), X, NULL)
   if (length(dim(result)) == 2L) dim(result) <- c(dim(result), 1L)
   dimnames(result) <- list(observation = NULL, iterations = NULL,

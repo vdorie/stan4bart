@@ -86,3 +86,65 @@ Full testthat suite green (NOT_CRAN=true, max_fails Inf; 338+ grows
 with new cases); factor-free seeded fit bitwise identical() to the
 pre-flip build (draws, varcount, adaptation$step_size); R CMD check
 --no-tests --no-manual --no-vignettes on the built tarball Status OK.
+
+## Landing
+
+Changed: R/lme4_functions.R:178 (the flip, comment rewritten to state
+modeling intent); R/generics.R's recompute_bart_block (a fix, see
+below); tests/testthat/test-04-factor_levels.R (reworked + new cases);
+tests/testthat/test-08-glFormula.R (one hardcoded per-level varcount
+name updated to categorical's bare-name convention); tests/testthat/
+test-15-store-trees.R (new factor-bearing store = "trees" case);
+man/stan4bart.Rd and NEWS.md (factor-handling docs).
+
+Surprise: the flip exposed a real bug, not anticipated by this plan's
+Context section. Under `factors = "categorical"`, `bartData@x` is a
+`dbartsMixedMatrix` (dbarts's sparse/dense training representation)
+INSTEAD OF a plain matrix - not only when a factor is present, but for
+every fit, including factor-free ones (`factors = "indicators"` always
+produced a plain matrix; confirmed directly against dbarts::dbartsData
+with and without a factor column). recompute_bart_block (the store =
+"trees" recompute seam) passed `bartData@x` straight into predictBART's
+C boundary, which requires a real matrix and errored ("x.test must be
+of type real") for EVERY store = "trees" fit's train-sample recompute
+under categorical splits - this broke the pre-existing (factor-free)
+test-15 suite outright, not just new factor-bearing cases. bartData@x.test
+was unaffected (already densified by makeTestModelMatrix), so test-sample
+recompute worked throughout. Fixed with a one-line R-side conversion
+(`if (inherits(X, "dbartsMixedMatrix")) X <- as.matrix(X)`, dbarts's own
+dense-conversion method, encoding factor columns the same 0-indexed-double
+way x.test already does) - no src/ or dbarts.h change. Also manually
+verified (not a permanent test) that saveRDS/readRDS round-trips a
+factor-bearing store = "trees" fit correctly, since data.bart.light@x's
+zero-row placeholder (stan4bart_fit.R:677) is also now a MixedMatrix.
+
+Gate results:
+
+- Bitwise factor-free gate: seeded continuous + random-effects fit
+  (n=200, chains=2, warmup=5, iter=15, n.trees=10, seed=99), reverted
+  the flip, reinstalled, ran and saved as the true "before"; reapplied
+  the flip, reinstalled, ran again. `identical()` TRUE component by
+  component: $stan, $bart_train, $bart_varcount, adaptation$step_size.
+- test-04 (factor-bearing, X1 with empty levels, keepTrees): varcount
+  named per factor ("X1", not "X1.a".."X1.e" - confirmed against the
+  pre-flip build, which produced "X1.a".."X1.e" for the 5 observed
+  levels only); predict(df.test) on fit-time test rows identical() to
+  extract(sample = "test"); new BART factor level at predict errors
+  with "factor X1 has new levels z"; new random-effects grouping level
+  (g.1, a random-slope block) predicts finite values under both
+  sample_new_levels settings, with the same pre-existing "longer object
+  length is not a multiple of shorter object length" warning test-01
+  documents (levelfun, unrelated to this change, left alone).
+- test-15 factor-bearing addition: store = "trees" vs store = "fits"
+  on a factor-bearing bart() component - $stan and $bart_varcount
+  identical(); extract(indiv.bart/ev, train/test) and fitted(indiv.bart/
+  ev) equal to the file's existing TOL = 1e-10.
+- Full suite: 65 test_that blocks, 358 passed expectations, 0 failures,
+  3 warnings (all expected: test-01's pre-existing one plus 2 from the
+  new test-04 sample_new_levels loop).
+- R CMD check --no-tests --no-manual --no-vignettes on the built
+  0.0-14 tarball: Status OK, no NOTEs.
+
+Off-spec noticed, not touched: none found beyond the recompute_bart_block
+fix above, which is squarely in-scope (R-only, on the seam the plan's
+Design section names).

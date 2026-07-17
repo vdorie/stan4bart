@@ -12,6 +12,15 @@ rm(generateFriedmanData)
 df_g <- with(gaussianData, data.frame(x, g.1 = as.factor(g.1), g.2 = as.factor(g.2), y, z))
 df_b <- with(binaryData,   data.frame(x, g.1 = as.factor(g.1), g.2 = as.factor(g.2), y, z))
 
+# A bart()-column factor (categorical splits), unlike df_g/df_b above where
+# g.1/g.2 are factors but excluded from bart() and only used for the random
+# effect grouping. bartData@x is then a dbartsMixedMatrix, not a plain matrix -
+# the recompute seam (recompute_bart_block, generics.R) must densify it the
+# same way makeTestModelMatrix already densifies bartData@x.test.
+df_factor <- df_g
+df_factor$X1 <- cut(df_factor$X1, quantile(df_factor$X1, seq(0, 1, 0.2)), include.lowest = TRUE)
+levels(df_factor$X1) <- letters[seq_len(nlevels(df_factor$X1))]
+
 # Formula must be written out at the call site: bart()/bar-term detection walks
 # the UNEVALUATED formula from match.call(). store is an ordinary (evaluated)
 # argument, so it can be threaded through a variable. Both stores are fit with
@@ -116,6 +125,39 @@ test_that("recomputed BART surfaces match the stored path (binary)", {
   expect_equal(extract(fit_trees, "ev"),         extract(fit_fits, "ev"),         tolerance = TOL)
   expect_equal(fitted(fit_trees, "ev"),          fitted(fit_fits, "ev"),          tolerance = TOL)
   expect_equal(fitted(fit_trees, "indiv.bart"),  fitted(fit_fits, "indiv.bart"),  tolerance = TOL)
+})
+
+test_that("recomputed BART surfaces match the stored path for a factor-bearing bart component", {
+  skip_on_cran()
+
+  fit_fits  <- stan4bart(y ~ bart(X1 + X2 + X3 + X5 + X6 + X7 + X8 + X9 + X10) + X4 + z +
+                               (1 + X4 | g.1) + (1 | g.2),
+                        data = df_factor, test = df_factor,
+                        cores = 1L, verbose = -1L, chains = 2L,
+                        warmup = 5L, iter = 30L, seed = 99L,
+                        store = "fits",
+                        bart_args = list(n.trees = 15L, keepTrees = TRUE))
+  fit_trees <- stan4bart(y ~ bart(X1 + X2 + X3 + X5 + X6 + X7 + X8 + X9 + X10) + X4 + z +
+                               (1 + X4 | g.1) + (1 | g.2),
+                        data = df_factor, test = df_factor,
+                        cores = 1L, verbose = -1L, chains = 2L,
+                        warmup = 5L, iter = 30L, seed = 99L,
+                        store = "trees",
+                        bart_args = list(n.trees = 15L, keepTrees = TRUE))
+
+  expect_true("X1" %in% rownames(fit_trees$bart_varcount))
+  expect_identical(fit_trees$stan,          fit_fits$stan)
+  expect_identical(fit_trees$bart_varcount, fit_fits$bart_varcount)
+
+  for (smp in c("train", "test")) {
+    expect_equal(extract(fit_trees, "indiv.bart", sample = smp),
+                 extract(fit_fits,  "indiv.bart", sample = smp), tolerance = TOL)
+    expect_equal(extract(fit_trees, "ev", sample = smp),
+                 extract(fit_fits,  "ev", sample = smp), tolerance = TOL)
+  }
+
+  expect_equal(fitted(fit_trees, "indiv.bart"), fitted(fit_fits, "indiv.bart"), tolerance = TOL)
+  expect_equal(fitted(fit_trees, "ev"),         fitted(fit_fits, "ev"),         tolerance = TOL)
 })
 
 test_that("a store = 'trees' fit survives saveRDS/readRDS and fitted() works after reload", {

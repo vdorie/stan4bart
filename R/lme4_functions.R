@@ -173,9 +173,12 @@ glFormula <- function(formula, data = NULL, subset, weights,
       attr(attr(fr, "terms"), "varnames.bart") <- getVariableNames(bartterms)
     }
     
-    # dbarts >= 1.0 defaults factors to single categorical columns; the
-    # prediction and factor-level machinery here is built around indicators
-    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "indicators")
+    # Factors in the bart() part get dbarts's categorical splits: one column
+    # per factor, with the tree prior choosing level subsets to split on,
+    # rather than one indicator column per level. This applies only to the
+    # bart() component; fixed effects keep model.matrix contrasts and random
+    # effects keep the lme4 grouping-factor machinery untouched.
+    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "categorical")
     if (ncol(bartData@x) == 0L)
       stop("no bart component detected in formula; consider using rstanarm package instead")
     

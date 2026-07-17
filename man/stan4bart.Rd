@@ -218,6 +218,19 @@ stan4bart(formula,
     All three components can be present in a single model, however are
     \code{bart} part must present. If you wish to fit a model without one, use
     \code{stan_glmer} in the \code{rstanarm} package instead.
+
+    Factor variables are handled differently in each component. In the
+    \code{fixed} and \code{random} components they use the usual
+    \code{\link{model.matrix}} contrasts and \code{lme4} grouping-factor
+    machinery, respectively. In the \code{bart} component a factor is encoded
+    as \link[dbarts]{dbarts}'s categorical splits: a single column whose tree
+    prior chooses level subsets to split on, rather than one indicator column
+    per level. Consequently \code{extract(type = "varcount")} reports one row
+    per factor, named by the factor's variable name, not one row per level.
+    A factor level in \code{newdata} (to \code{predict}) or \code{test} that
+    was not observed when fitting is an error for a \code{bart} factor; this
+    is unlike the \code{random} component, where an unseen grouping level is
+    handled per \code{sample_new_levels} in \code{\link{extract}}.
   }
   \subsection{Additional Arguments}{
     The \code{stan_args} and \code{bart_args} arguments to \code{stan4bart} can

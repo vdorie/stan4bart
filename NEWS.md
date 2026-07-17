@@ -137,6 +137,20 @@
 
 ## Breaking changes
 
+* Factor variables in the `bart()` part of the formula are now encoded with
+  `dbarts`'s categorical splits (`factors = "categorical"`) instead of one
+  indicator column per level (`factors = "indicators"`, the previous, port-era
+  default). A `bart()` factor is now a single design column whose tree prior
+  chooses level subsets to split on, rather than treating each level as an
+  independent 0/1 predictor - a different prior over factor structure, so
+  draws move for any fit with a factor in the `bart()` part; factor-free fits
+  are bit-identical. `extract(type = "varcount")` now has one row per factor
+  (named by the factor's variable name) instead of one row per level. An
+  unseen `bart()` factor level in `newdata` or `test` is still an error, as
+  before. Fixed-effect and random-effect factor handling - `model.matrix`
+  contrasts and the `lme4` grouping-factor machinery, including its new-level
+  semantics under `sample_new_levels` - are unchanged by this change.
+
 * The shrinkage coefficient prior families (`hs`, `hs_plus`, `lasso`,
   `laplace`, `product_normal`) are no longer supported for
   `stan_args$prior`. Supplying one now raises an informative error at fit
