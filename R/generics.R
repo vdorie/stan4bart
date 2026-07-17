@@ -2,14 +2,18 @@ combine_chains_f <- function(x) {
   if (is.array(x) && length(dim(x)) > 2L) {
     d <- dim(x)
     l_d <- length(d)
-    t_d <- seq.int(l_d - 1L, l_d)
     dn <- dimnames(x)
     if (!is.null(dn)) {
       dn <- dn[seq.int(1L, l_d - 2L)]
       dn[l_d - 1L] <- list(NULL)
       names(dn)[l_d - 1L] <- "iterations:chains"
     }
-    array(x, c(d[-t_d], prod(d[t_d])), dimnames = dn)
+    # merging the last two dims (iterations, chains) into one never reorders
+    # the underlying column-major data, so this is a pure reshape: dim<-/
+    # dimnames<- attach the new shape in place instead of array()'s copy.
+    dim(x) <- c(d[seq.int(1L, l_d - 2L)], prod(d[seq.int(l_d - 1L, l_d)]))
+    dimnames(x) <- dn
+    x
   } else if (is.matrix(x) || (!is.null(dim(x)) && length(dim(x)) == 2L)) {
     as.vector(x)
   }
@@ -522,46 +526,79 @@ extract.stan4bartFit <-
     }
   }
   
-  result <- switch(type,
-                   ev          = indiv.bart + indiv.fixef + indiv.ranef,
-                   ppd         = indiv.bart + indiv.fixef + indiv.ranef,
-                   indiv.fixef = indiv.fixef,
-                   indiv.ranef = indiv.ranef,
-                   indiv.bart  = indiv.bart,
-                   varcount    = object$bart_varcount,
-                   ranef       = object$ranef,
-                   fixef       = object$fixef,
-                   Sigma       = object$Sigma,
-                   sigma       = object$sigma,
-                   k           = object$k)
-  
-  if (type %in% c("ev", "ppd") && !is.null(offset) && offset_type == "default")
-    result <- result + offset
-  
+  if (type %in% c("ev", "ppd")) {
+    # indiv.bart/indiv.fixef/indiv.ranef (and the additive offset, when
+    # offset_type == "default") are full n x draws x chains arrays. Once dim/
+    # dimnames are attached, R's arithmetic can no longer reuse an operand's
+    # buffer for the answer, so a chain of k "+"s costs k full-size
+    # allocations. Stripping dim/dimnames before summing - same terms, same
+    # left-to-right order - lets the unbound intermediate sums be reused in
+    # place; dim/dimnames are reattached once, on the finished sum, instead of
+    # on every partial one.
+    result_dim <- dim(indiv.bart)
+    result_dimnames <- dimnames(indiv.bart)
+    dim(indiv.bart) <- dim(indiv.fixef) <- dim(indiv.ranef) <- NULL
+
+    result <- if (!is.null(offset) && offset_type == "default")
+      indiv.bart + indiv.fixef + indiv.ranef + offset
+    else
+      indiv.bart + indiv.fixef + indiv.ranef
+
+    dim(result) <- result_dim
+    dimnames(result) <- result_dimnames
+  } else {
+    result <- switch(type,
+                     indiv.fixef = indiv.fixef,
+                     indiv.ranef = indiv.ranef,
+                     indiv.bart  = indiv.bart,
+                     varcount    = object$bart_varcount,
+                     ranef       = object$ranef,
+                     fixef       = object$fixef,
+                     Sigma       = object$Sigma,
+                     sigma       = object$sigma,
+                     k           = object$k)
+  }
+
   if (type %in% c("ev", "ppd") && is_bernoulli)
     result <- pnorm(result)
   if (type %in% "ppd") {
     weights <- if (sample == "test") object$test$frame[["(weights)"]] else object$frame[["(weights)"]]
     if (is.null(weights) || length(weights) == 0L) {
       if (is_bernoulli) {
-        result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
+        # array(x, dim, dimnames) always copies x even when its length already
+        # matches; dim<-/dimnames<- attach the same shape in place.
+        rb <- rbinom(length(result), 1L, result)
+        dim(rb) <- dim(result)
+        dimnames(rb) <- dimnames(result)
+        result <- rb
       } else {
         sigma <- extract(object, "sigma", combine_chains = TRUE)
-        result <- result + 
-          array(rnorm(dim(result)[1L] * n_samples * n_chains, 0, rep(as.vector(sigma),
-                                                                     each = dim(result)[1L])),
-               c(dim(result)[1L], n_samples, n_chains))
+        noise <- rnorm(dim(result)[1L] * n_samples * n_chains, 0,
+                       rep(as.vector(sigma), each = dim(result)[1L]))
+        dim(noise) <- c(dim(result)[1L], n_samples, n_chains)
+        result <- result + noise
       }
     } else {
       if (is_bernoulli) {
-        result <- array(rbinom(length(result), 1L, result), dim(result), dimnames = dimnames(result))
+        rb <- rbinom(length(result), 1L, result)
+        dim(rb) <- dim(result)
+        dimnames(rb) <- dimnames(result)
+        result <- rb
         result <- weights * result
       } else {
         n_obs <- dim(result)[1L]
         n_total_samples <- n_samples * n_chains
         sigma <- extract(object, "sigma", combine_chains = TRUE)
         sigma <- rep_len(sigma, n_obs * n_total_samples) * rep(sqrt(1 / weights), each = n_total_samples)
-        result <- aperm(aperm(result, c(2L, 3L, 1L)) + rnorm(n_obs * n_total_samples, 0, sigma), c(3L, 1L, 2L))
+        # The rnorm draws come out in (sample:chain, obs) order to match sigma
+        # above - that order is fixed by the RNG stream position, so it is the
+        # (same-size) noise array, not `result`, that gets permuted into
+        # observation-major order. One aperm of `noise` replaces the original
+        # two aperms of `result` at the same values, measurably faster even
+        # though total bytes allocated is about the same.
+        noise <- rnorm(n_obs * n_total_samples, 0, sigma)
+        dim(noise) <- c(n_samples, n_chains, n_obs)
+        result <- result + aperm(noise, c(3L, 1L, 2L))
       }
     }
   }

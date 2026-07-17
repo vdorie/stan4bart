@@ -190,6 +190,65 @@ are ~instant - they read the small stan block, not the n x draws BART block.
    (indiv.bart/fixef/ranef) then sums (generics.R:471-539); ~7 GB transient over
    the measured sweep. Accumulate in place / trim aperm+array copies to cut wall
    and peak RSS at large n. Cost: M. Risk: LOW-MEDIUM (array-layout care).
+   LANDED (measured outcome differed from the estimate): two independent
+   changes. (a) The ev/ppd sum strips dim/dimnames from indiv.bart/fixef/ranef
+   before adding (same terms, same left-to-right order) and reattaches once on
+   the finished sum instead of on every partial one; the offset add, when
+   offset_type == "default", is folded into the same expression rather than a
+   separate "result <- result + offset" statement; the ppd rbinom/rnorm draws
+   attach shape via dim<-/dimnames<- instead of array(); the weighted-
+   continuous-ppd path aperms the (same-size) noise array once instead of
+   `result` twice. (b) combine_chains_f's trailing-dims merge (iterations x
+   chains -> one dim) switched from array() to dim<-/dimnames<-; merging
+   trailing dims never reorders the column-major data, so this is a pure
+   reshape - array() re-copies anyway, dim<- does not when unshared.
+   (a) alone gave NO measured win in the common case: indiv.bart is aliased to
+   the fit's own stored bart_train/bart_test block, so stripping its dim
+   forces the same one full-size duplicate the original's first "+" already
+   paid - moving the mandatory copy doesn't remove it. It only pays off when
+   offset_type == "default" and an offset is supplied (folds away the second
+   copy the separate offset statement cost: extract(ev) with offset,
+   n=1e4/1000 draws/2 chains, 1600.6 -> 1440.6 MB, -10%) or when weights make
+   the double-aperm path live (extract(ppd), weights+offset:
+   2400.7 -> 1920.7 MB, -20%; wall 1.235 -> 1.040 s, -16%).
+   (b) is unconditional and is what lands in the review's own sweep (n=1e4,
+   1000 kept draws, 2 chains, continuous + RE, no offset/weights; 3 reps,
+   median):
+
+     call           wall before   wall after   alloc before   alloc after
+     extract(ev)    0.317 s       0.320 s      1440.6 MB      1280.5 MB (-11%)
+     extract(ppd)   0.896 s       0.882 s      1920.6 MB      1760.6 MB (-8%)
+     fitted(ev)     0.333 s       0.313 s      1440.6 MB      1280.6 MB (-11%)
+     fitted(ppd)    0.889 s       0.903 s      1920.7 MB      1760.7 MB (-8%)
+
+   Wall deltas are within run-to-run noise (3-rep spreads of +-0.05-0.15 s on
+   these 0.3-0.9 s calls) - below the 10% bar. Allocation drops a constant
+   ~160 MB per call (one fewer combine_chains_f copy): real and reproducible,
+   8-11% here, under the 25% bar for this sweep but 20% where offset/weights
+   apply (above). Net: a small, unconditional win plus a larger conditional
+   one; not the ~7 GB-scale reduction the payoff estimate implied, since most
+   of that 7 GB is fitted_fixed's double-transpose and fitted_random's
+   crossprod/array (untouched - "do not change how the component arrays are
+   computed").
+   Trims REJECTED (bitwise constraint, or no payoff):
+     - Reordering the sum's operands (e.g. fixef+ranef before +bart) to dodge
+       indiv.bart's forced copy: changes which two floats add first, which can
+       change rounding under the bitwise gate - not done.
+     - Building the weighted-ppd noise directly in observation-major order:
+       the sd vector's position is what pairs each RNG draw with its sd, so
+       reordering it changes which z multiplies which sd at each cell - not
+       done; permuting the noise array once instead of result twice preserves
+       the same pairing and is bitwise-identical (~28% faster in isolated
+       microbenchmark, 1e4 x 1000 x 2).
+     - na.exclude's row-expansion (array(NA_real_, ...) then a subset assign)
+       is a real size change (rows inserted), not a reshape; array()<->dim<-
+       does not apply.
+   Bitwise gate: PASS - seeded continuous fit (random effects + weights +
+   default-offset + test data) and seeded binary fit (random effects):
+   extract(ev/ppd), fitted(ev/ppd), extract(ev, sample = "test") all
+   identical() before/after. Suite: 338 passed, 0 failed (NOT_CRAN = true,
+   max_fails = Inf); the one pre-existing test-01 warning (new-level
+   random-slope recycling) unchanged.
 
 6. package_samples assembly peak (minor).
    array(sapply(...)) double-copies the bart_train block at assembly
@@ -214,6 +273,11 @@ are ~instant - they read the small stan block, not the n x draws BART block.
   sum (generics.R predict newdata path, offset handling). Reproduced at
   n=1e4/keepTrees=TRUE. Extract on stored test data (sample="test") is fine.
   Robustness bug in the stan4bart R surface, unrelated to this review's scope.
+  RESOLVED by the predict formals reorder (d971058), verified 2026-07-16: a
+  fit with random effects and bart_args = list(keepTrees = TRUE),
+  predict(fit, newdata, "ev") and predict(fit, newdata, type = "ev") (and the
+  ppd variants) on held-out rows both run without error and are identical()
+  to each other.
 
 ## Recommendation
 
