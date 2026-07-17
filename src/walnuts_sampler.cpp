@@ -222,7 +222,8 @@ struct WalnutsSampler::Impl {
 };
 
 WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
-                               double init_radius, int num_warmup, bool save_raw) {
+                               double init_radius, int num_warmup,
+                               double step_accept_rate_target, bool save_raw) {
   impl_ = new Impl();
   impl_->model = buildParametricModel(dataExpr);
   impl_->model.save_raw = save_raw;
@@ -241,9 +242,13 @@ WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
   for (int i = 0; i < dim; ++i) impl_->position[i] = unif(impl_->rng);
   impl_->grad.resize(dim);
 
+  // step_accept_rate_target is the Adam acceptance-rate target (adapt_delta);
+  // its 0.8 default matches WarmupConfigBuilder's own, so an unset adapt_delta
+  // builds a bit-identical config to the historical fixed-target path.
   impl_->warmup_cfg = walnuts::WarmupConfigBuilder()
                           .min_max_iter(num_warmup > 0 ? static_cast<std::size_t>(num_warmup) : 1,
                                         num_warmup > 0 ? static_cast<std::size_t>(num_warmup) : 1)
+                          .step_accept_rate_target(step_accept_rate_target)
                           .build();
   impl_->sampling_cfg = walnuts::SamplingConfigBuilder().build();
 

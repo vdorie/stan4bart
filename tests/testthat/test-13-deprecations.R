@@ -38,8 +38,8 @@ test_that("supported coefficient priors are unaffected", {
 
 test_that("NUTS control args are accepted with a deprecation warning, not ignored silently", {
   expect_warning(
-    fit_call(stan_args = list(adapt_delta = 0.99)),
-    "'adapt_delta' is ignored by the gradient-based sampler and is deprecated"
+    fit_call(stan_args = list(adapt_gamma = 0.9)),
+    "'adapt_gamma' is ignored by the gradient-based sampler and is deprecated"
   )
   expect_warning(
     fit_call(stan_args = list(max_treedepth = 12, stepsize = 0.05)),
@@ -49,6 +49,32 @@ test_that("NUTS control args are accepted with a deprecation warning, not ignore
 
 test_that("loop-level and init_r args do not warn", {
   expect_silent(fit_call(stan_args = list(init_r = 1.5)))
+})
+
+test_that("adapt_delta is a live WALNUTS control, not a deprecated no-op", {
+  # validated to the open interval (0, 1)
+  expect_error(fit_call(stan_args = list(adapt_delta = 0)),   "adapt_delta")
+  expect_error(fit_call(stan_args = list(adapt_delta = 1)),   "adapt_delta")
+  expect_error(fit_call(stan_args = list(adapt_delta = 1.5)), "adapt_delta")
+
+  # a live control no longer warns
+  expect_silent(fit_call(stan_args = list(adapt_delta = 0.9)))
+
+  # the value reaches the sampler: different acceptance-rate targets tune a
+  # different frozen step size and move the draws, while an explicit default
+  # matches an unset fit bit for bit (the mapped WarmupConfig target is 0.8
+  # in both).
+  seeded <- function(...) fit_call(seed = 12345L, ...)
+  fit_lo      <- seeded(stan_args = list(adapt_delta = 0.6))
+  fit_hi      <- seeded(stan_args = list(adapt_delta = 0.95))
+  fit_unset   <- seeded()
+  fit_default <- seeded(stan_args = list(adapt_delta = 0.8))
+
+  expect_false(isTRUE(all.equal(fit_lo$adaptation$step_size,
+                                fit_hi$adaptation$step_size)))
+  expect_false(isTRUE(all.equal(fit_lo$stan, fit_hi$stan)))
+  expect_identical(fit_default$adaptation$step_size, fit_unset$adaptation$step_size)
+  expect_identical(fit_default$stan, fit_unset$stan)
 })
 
 test_that("a fit with no deprecated args produces no warning", {

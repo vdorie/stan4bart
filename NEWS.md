@@ -51,6 +51,14 @@
   warmup floor: if `iter` is shortened below the default, keep `warmup` at or
   above roughly 100 for large-`n` fits with many random-effect levels.
 
+* `stan_args$adapt_delta` is a live control again, mapped to WALNUTS'
+  step-size acceptance-rate target (the analog of Stan's `adapt_delta`),
+  validated to `(0, 1)`. Its default (0.8) reproduces prior behavior exactly
+  - an unset or explicit-0.8 fit is bit-identical to earlier builds - so this
+  is draw-neutral unless set. A higher value targets a smaller step size
+  (more gradient evaluations, finer geometry tracking); a lower value takes
+  larger, cheaper steps. Setting it no longer warns.
+
 ## Storage
 
 * Warmup draws are no longer stored by default (`save_warmup = FALSE`), and the
@@ -101,15 +109,16 @@
 
 ## Deprecated
 
-* The NUTS-specific `stan_args` controls - `adapt_delta`, `adapt_gamma`,
+* The NUTS-specific `stan_args` controls - `adapt_gamma`,
   `adapt_kappa`, `adapt_t0`, `adapt_init_buffer`, `adapt_term_buffer`,
   `adapt_window`, `stepsize`, `stepsize_jitter`, and `max_treedepth` - have
   no analog under WALNUTS. They are still accepted (a script that sets one
   does not break), but are now ignored, and a warning naming every supplied
   deprecated argument is issued at fit time. They will be removed in a
-  future release. `init_r` (the initial-position radius) and the loop-level
-  arguments (`iter`, `warmup`, `skip`, `chains`, `cores`, `refresh`, `seed`,
-  `verbose`) keep their exact prior meaning and do not warn.
+  future release. `init_r` (the initial-position radius), `adapt_delta` (see
+  the Sampler section), and the loop-level arguments (`iter`, `warmup`,
+  `skip`, `chains`, `cores`, `refresh`, `seed`, `verbose`) keep a live
+  meaning and do not warn.
 
 ## Removed
 

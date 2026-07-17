@@ -98,8 +98,10 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
 # (src/parametric_control.cpp) for accept-but-ignore source compatibility,
 # but never consumed by WalnutsSampler. init_r IS still consumed (it sizes
 # WALNUTS' uniform initial-position radius) and is deliberately excluded
-# here; skip/seed are loop-level and excluded as well.
-ignored_nuts_args <- c("adapt_delta", "adapt_gamma", "adapt_kappa", "adapt_t0",
+# here; adapt_delta is consumed too (it maps to WALNUTS' step-size
+# acceptance-rate target) and is likewise excluded; skip/seed are loop-level
+# and excluded as well.
+ignored_nuts_args <- c("adapt_gamma", "adapt_kappa", "adapt_t0",
                        "adapt_init_buffer", "adapt_term_buffer", "adapt_window",
                        "stepsize", "stepsize_jitter", "max_treedepth")
 

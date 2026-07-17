@@ -27,9 +27,11 @@ struct WalnutsSampler : public ParametricSampler {
   /// \param random_seed the per-chain seed (threaded exactly as Stan's was).
   /// \param init_radius unconstrained init half-width (Stan's init_r).
   /// \param num_warmup the outer loop's warmup sweep count.
+  /// \param step_accept_rate_target the Adam step-size acceptance-rate target
+  ///        (Stan's adapt_delta analog); 0.8 reproduces the prior fixed default.
   /// \param save_raw keep the raw unconstrained rows in the stored draw.
   WalnutsSampler(SEXP dataExpr, unsigned int random_seed, double init_radius,
-                 int num_warmup, bool save_raw);
+                 int num_warmup, double step_accept_rate_target, bool save_raw);
   ~WalnutsSampler() override;
 
   void run(bool isWarmup) override;

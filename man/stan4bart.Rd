@@ -249,6 +249,11 @@ stan4bart(formula,
       design matrix; sampler-agnostic.
       \item \code{init_r} - half-width of the uniform interval the sampler's
       initial unconstrained position is drawn from.
+      \item \code{adapt_delta} - the WALNUTS step-size acceptance-rate target, a
+      value in \eqn{(0, 1)} (default \code{0.8}); the analog of Stan's
+      \code{adapt_delta}. A higher value targets a smaller step size, so warmup
+      spends more gradient evaluations per transition but tracks the posterior
+      geometry more finely; a lower value takes larger, cheaper steps.
       \item \code{save_raw_parameters} - logical, default \code{FALSE}. When
       \code{FALSE} the stored parametric draw is only the transformed block
       every consumer reads (\code{beta}, \code{b}, \code{theta_L}, and
@@ -263,7 +268,7 @@ stan4bart(formula,
     the prior constructors (\code{normal}, \code{student_t}, \code{cauchy},
     \code{exponential}, \code{decov}).
 
-    The remaining \code{stan_args} - \code{adapt_gamma}, \code{adapt_delta},
+    The remaining \code{stan_args} - \code{adapt_gamma},
     \code{adapt_kappa}, \code{adapt_t0}, \code{adapt_init_buffer},
     \code{adapt_term_buffer}, \code{adapt_window}, \code{stepsize},
     \code{stepsize_jitter}, and \code{max_treedepth} - configured Stan's NUTS

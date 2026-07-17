@@ -24,10 +24,11 @@
 
 namespace {
 
-// The control vocabulary the R side passes. The NUTS-specific knobs
-// (adapt_*, stepsize*, max_treedepth) have no faithful WALNUTS analog and are
-// accepted-but-ignored (parsed, never consumed); only seed, init_r, and skip
-// reach the WALNUTS sampler.
+// The control vocabulary the R side passes. adapt_delta maps to WALNUTS'
+// step-size acceptance-rate target; the remaining NUTS-specific knobs
+// (adapt_gamma/kappa/t0/buffers/window, stepsize*, max_treedepth) have no
+// faithful WALNUTS analog and are accepted-but-ignored (parsed, never
+// consumed); seed, init_r, skip, and adapt_delta reach the WALNUTS sampler.
 const char* const controlNames[] = {
   "seed",
   "init_r",

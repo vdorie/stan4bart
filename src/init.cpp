@@ -183,6 +183,7 @@ extern "C" {
     // (test-05-rng) is preserved.
     sampler.paramSampler = new stan4bart::WalnutsSampler(stanDataExpr, sampler.stanControl.random_seed,
                                                          sampler.stanControl.init_radius, sampler.defaultWarmup,
+                                                         sampler.stanControl.adapt_delta,
                                                          sampler.stanControl.save_raw);
     sampler.paramSampler->setVerbose(sampler.verbose);
     

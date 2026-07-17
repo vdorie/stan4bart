@@ -26,10 +26,11 @@
 
 namespace stan4bart {
 
-/// \brief The parametric sampler's control knobs. Only random_seed, init_radius,
-///        and skip reach WALNUTS; the NUTS-specific fields are accepted-but-
-///        ignored (parsed from the R control list, never consumed) so scripts
-///        that set the old Stan args still run. The struct name is historical.
+/// \brief The parametric sampler's control knobs. random_seed, init_radius,
+///        skip, and adapt_delta (the step-size acceptance-rate target) reach
+///        WALNUTS; the remaining NUTS-specific fields are accepted-but-ignored
+///        (parsed from the R control list, never consumed) so scripts that set
+///        the old Stan args still run. The struct name is historical.
 struct StanControl {
   unsigned int random_seed;
   double init_radius;

@@ -546,3 +546,49 @@ Off-spec, not touched: no .lintr/air.toml exists in the repo, and
 `air format --check` fails against the pre-existing R/generics.R too
 (not just this diff), so it is not an enforced convention here; new
 code was hand-matched to the surrounding style instead.
+
+### C4 landing (2026-07-16)
+
+adapt_delta rewired from a deprecated no-op to a live control mapping to
+WALNUTS' step-size acceptance-rate target. The value was ALREADY parsed and
+validated to (0, 1) with a 0.8 default in the C++ RC layer
+(src/parametric_control.cpp:98-101, unchanged) and stored in
+StanControl.adapt_delta; it was simply never consumed. So the rewire is a pure
+threading + un-deprecation, no new validation logic (validation stays in C++
+RC, matching init_r's idiom - no redundant R check).
+
+Threaded: R stan_args$adapt_delta -> control.stan$adapt_delta
+(R/stan4bart_fit.R:561, pre-existing) -> StanControl.adapt_delta
+(parametric_control.cpp) -> new WalnutsSampler ctor param
+`step_accept_rate_target` (src/init.cpp:184-187 passes it;
+src/walnuts_sampler.hpp:31-32 declares it) ->
+`WarmupConfigBuilder().step_accept_rate_target(v)` in the ctor's warmup-config
+build (src/walnuts_sampler.cpp:244-251) -> Adam's target accept rate
+(adaptive_walnuts.hpp:216). Deprecation removed by dropping "adapt_delta" from
+`ignored_nuts_args` (R/stan4bart_fit.R:102-104). C++ comments in
+parametric_control.cpp and parametric_sampler.hpp updated to say adapt_delta
+now reaches WALNUTS.
+
+Bitwise default gate: the builder's own step_accept_rate_target default is 0.8
+and the RC default is the same literal 0.8, so an unset (or explicit-0.8) fit
+builds a bit-identical WarmupConfig. Verified: a seeded continuous 2-chain fit
+(warmup 7 / iter 13) on the rebuilt package is identical() to the pre-change
+build's $stan, $bart_train, and $adaptation$step_size (all three TRUE). Draw-
+moving only by user intent: adapt_delta 0.6 vs 0.95 tune a different frozen
+step size and move the draws (asserted in test-13).
+
+Docs: man/stan4bart.Rd gains an adapt_delta \item in the stan_args itemize and
+drops it from the "remaining ignored" paragraph. NEWS.md 0.0-14 drops
+adapt_delta from the Deprecated list and adds a Sampler-section bullet with the
+WALNUTS semantics. test-13-deprecations.R: the existing deprecation-warning
+case switched from adapt_delta to adapt_gamma (adapt_delta no longer warns),
+and a new block asserts (a) out-of-(0,1) errors, (b) the value reaches the
+sampler (different step_size + draws for 0.6 vs 0.95; explicit 0.8 == unset
+bitwise), (c) no deprecation warning.
+
+Gates: preclean install clean; unset-path bitwise gate PASS (step_size, stan,
+bart_train all identical()); full testthat 337/0/0 (337 pass, up from C3's 328
+by the new adapt_delta expectations; 0 fail, 0 error), only the known
+pre-existing test-01 new-level random-slope predict warning; R CMD check
+(--no-tests --no-manual --no-vignettes on the built tarball) Status: OK, no
+NOTEs or WARNINGs.
