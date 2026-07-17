@@ -42,3 +42,9 @@ test_that("summary returns a summary.stan4bartFit carrying the per-chain diagnos
   expect_equal(s$adaptation$mean_leapfrog, fit$adaptation$mean_leapfrog)
   expect_equal(s$adaptation$mean_leapfrog_warmup, fit$adaptation$mean_leapfrog_warmup)
 })
+
+test_that("fitted(type = 'ppd') nudges toward 'ev' once per session", {
+  rm(list = ls(stan4bart:::.message_env), envir = stan4bart:::.message_env)
+  expect_message(invisible(fitted(fit, "ppd")), "computes it exactly and faster")
+  expect_message(invisible(fitted(fit, "ppd")), NA)
+})

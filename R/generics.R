@@ -579,6 +579,8 @@ extract.stan4bartFit <-
 
 
 
+.message_env <- new.env(parent = emptyenv())
+
 fitted.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
@@ -592,6 +594,16 @@ fitted.stan4bartFit <-
 
   type <- match.arg(type)
   sample <- match.arg(sample)
+
+  # skipped for weighted binomial, where the ppd mean is the weights times the
+  # ev mean rather than the ev mean itself
+  if (type == "ppd" && !isTRUE(.message_env$ppd_mean)) {
+    weights <- if (sample == "test") object$test$frame[["(weights)"]] else object$frame[["(weights)"]]
+    if (!(object$family$family == "binomial" && !is.null(weights) && length(weights) > 0L)) {
+      .message_env$ppd_mean <- TRUE
+      message("the \"ppd\" mean equals the \"ev\" mean; fitted(type = \"ev\") computes it exactly and faster (once per session)")
+    }
+  }
 
   # store = "trees": for the BART-bearing linear surfaces, stream the posterior
   # mean in row-blocks so peak memory stays block_n x draws x chains rather than

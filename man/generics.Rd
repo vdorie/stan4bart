@@ -75,7 +75,14 @@
       distribution of the parameters given the data
       \item \code{"ppd"} - draws from the individual level posterior predictive
       distribution, generally speaking adding noise to the result for
-      \code{"ev"} or simulating new Bernoulli trials.
+      \code{"ev"} or simulating new Bernoulli trials. The mean of these draws
+      estimates the same quantity as the mean of the \code{"ev"} draws (times
+      the weights, for a weighted binomial model), so if only the
+      posterior-predictive mean is needed, \code{fitted(type = "ev")} computes
+      it exactly and faster; \code{fitted(type = "ppd")} notes this once per
+      session. \code{fitted(type = "ppd")} averages freshly drawn samples, so
+      under a fixed seed it reproduces an average of
+      \code{extract(type = "ppd")} bitwise.
       \item \code{"fixef"} - draws from the posterior of the fixed effects
       (also known as the \dQuote{unmodeled} coefficients),
       \eqn{\beta \mid Y}{\beta | Y}

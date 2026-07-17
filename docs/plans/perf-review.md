@@ -176,6 +176,14 @@ are ~instant - they read the small stan block, not the n x draws BART block.
    E[ppd]=E[ev], so the mean can short-circuit to the ev path (0.53 s -> ~0.18 s,
    skipping the 42% rnorm). Cost: S. Risk: LOW but SEMANTIC - only the ppd MEAN;
    extract(ppd) intervals still need the draws. Optional / discuss.
+   RESOLVED 2026-07-16 (VD): NO-GO on the short-circuit. fitted(ppd) is
+   implemented as extract(ppd)-then-average on the same RNG stream, so under a
+   fixed seed it reproduces an average of extract(ppd) bitwise - a load-bearing
+   reproducibility contract the short-circuit would break irreparably. Landed
+   instead: a once-per-session fitted(ppd) message pointing mean-only users at
+   type = "ev" (skipped for weighted binomial, where the ppd mean is the
+   weights times the ev mean), plus the docs note in man/generics.Rd. bartCause
+   was checked and does not call fitted(ppd) programmatically.
 
 5. extract(ev/ppd) - reduce transient arrays.
    Payoff: extract materializes three full n x draws x chains arrays

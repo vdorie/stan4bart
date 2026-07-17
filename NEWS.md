@@ -59,6 +59,12 @@
   (more gradient evaluations, finer geometry tracking); a lower value takes
   larger, cheaper steps. Setting it no longer warns.
 
+* `fitted(type = "ppd")` notes, once per session, that the posterior-predictive
+  mean equals the expected-value mean, so `type = "ev"` computes it exactly
+  and faster. The computation itself is unchanged: under a fixed seed,
+  `fitted(type = "ppd")` still reproduces an average of
+  `extract(type = "ppd")` bitwise.
+
 ## Storage
 
 * Warmup draws are no longer stored by default (`save_warmup = FALSE`), and the
