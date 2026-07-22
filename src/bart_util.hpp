@@ -36,8 +36,13 @@ namespace stan4bart {
         trainingSamples(numObservations_ * numSamples_),
         testSamples(numTestObservations_ * numSamples_),
         kSamples(kIsSampled_ ? numSamples_ : 0),
-        variableCountSamples(numPredictors_ * numSamples_), position(0)
+        variableCountSamples(numPredictors_ * numSamples_), position(0),
+        current{}
     {
+      // dbarts_sampler_run fills only fields within structSize and skips
+      // everything at zero; the trailing pointers stay null from the {}
+      // value-init so they are never written.
+      current.structSize = sizeof(dbarts_results);
       setCurrentPointers();
     }
 

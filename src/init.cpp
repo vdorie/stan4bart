@@ -262,6 +262,7 @@ extern "C" {
     // draw once before running; only the training fits are needed
     std::vector<double> firstDraw(n);
     dbarts_results firstResults = {};
+    firstResults.structSize = sizeof(firstResults);
     firstResults.train = firstDraw.data();
     bartFunctions.run(sampler.bartSampler, 0, 1, &firstResults);
     
