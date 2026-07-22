@@ -15,8 +15,13 @@ combine_chains_f <- function(x) {
   }
 }
 
-as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...) 
+as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...)
 {
+  # get_samples()'s warmup-expression rewriter only recognizes an object
+  # literally named 'object' (matching extract.stan4bartFit's argument);
+  # alias so include_warmup actually reaches x$warmup$stan instead of
+  # silently re-reading the post-warmup samples
+  object <- x
   include_warmup_orig <- include_warmup
   if (is.character(include_warmup)) {
     if (length(include_warmup) != 1L || include_warmup != "only")
@@ -29,7 +34,7 @@ as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...)
     only_warmup <- FALSE
   }
 
-  result <- get_samples(x$stan[grep("^(?:gamma|beta|b|aux)\\.", dimnames(x$stan)[[1L]], perl = TRUE),,,drop = FALSE], include_warmup, only_warmup)
+  result <- get_samples(object$stan[grep("^(?:gamma|beta|b|aux)\\.", dimnames(object$stan)[[1L]], perl = TRUE),,,drop = FALSE], include_warmup, only_warmup)
   
   par_names <- dimnames(result)[[1L]]
   if ("gamma.1" %in% par_names) {
@@ -104,11 +109,15 @@ as.array.stan4bartFit <- function (x, include_warmup = FALSE, ...)
   aperm(result, c(2L, 3L, 1L))
 }
 
-as.matrix.stan4bartFit <- function (x, ...) 
+as.matrix.stan4bartFit <- function (x, ...)
 {
   result <- as.array(x, ...)
-  
-  as.matrix(result, ncol = dim(result)[3L])
+  d <- dim(result)
+
+  result <- matrix(result, d[1L] * d[2L], d[3L],
+                    dimnames = list(NULL, dimnames(result)[[3L]]))
+  names(dimnames(result)) <- c("iterations:chains", "parameters")
+  result
 }
 
 array_bind_samples <- function(x, y) {
@@ -372,7 +381,7 @@ extract.stan4bartFit <-
   
   indiv.fixef <- indiv.ranef <- indiv.bart <- 0
   if (type %in% c("ev", "ppd", "indiv.fixef") && n_fixef > 0L) {
-    if (!is.null(offset) && offset_type %in% c("fixed", "parametric") && type != "indiv.fixef")
+    if (!is.null(offset) && offset_type %in% c("fixef", "parametric") && type != "indiv.fixef")
       indiv.fixef <- offset
     else
       indiv.fixef <- fitted_fixed(object, X, include_warmup_orig)
@@ -384,7 +393,7 @@ extract.stan4bartFit <-
     }
   }
   if (type %in% c("ev", "ppd", "indiv.ranef") && n_ranef_levels > 0L) {
-    if (!is.null(offset) && offset_type %in% c("random", "parametric") && type != "indiv.ranef") {
+    if (!is.null(offset) && offset_type %in% c("ranef", "parametric") && type != "indiv.ranef") {
       if (offset_type == "parametric")
         indiv.ranef <- 0
       else
@@ -553,7 +562,7 @@ fitted_fixed <- function(object, x, include_warmup)
 fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
 {
   # quick version if the new data have the same form as that fitted in the model
-  if (identical(reTrms$cnms, object$reTrms$cnms) && all(row.names(reTrms$Zt) == row.names(object$reTrms$Zt))) {
+  if (identical(reTrms$cnms, object$reTrms$cnms) && identical(row.names(reTrms$Zt), row.names(object$reTrms$Zt))) {
     b_rows <- grep("^b\\.", dimnames(object$stan)[[1L]])
     b_mat <- matrix(object$stan[b_rows,,], length(b_rows), prod(dim(object$stan)[-1L]))
     return(array(

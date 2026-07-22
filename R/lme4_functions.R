@@ -1351,23 +1351,25 @@ levelfun <- function (x, nl.n, sample_new_levels, Sigma)
     
     if (sample_new_levels) {
       new_levels <- nl.n.comb[!(nl.n.comb %in% old_levels)]
-      L <- apply(Sigma, c(3L, 4L), function(x) t(base::chol(x)))
       n_predictors <- d[1L]
       n_groups  <- length(new_levels)
       n_samples <- d[3L]
       n_chains  <- d[4L]
       L <- array(Sigma, c(n_predictors, n_predictors, n_samples * n_chains))
-      L <- bdiag(lapply(seq_len(n_samples * n_chains), function(i) t(base::chol(L[,,i,drop = FALSE]))))
+      L <- bdiag(lapply(seq_len(n_samples * n_chains), function(i)
+        t(base::chol(matrix(L[,,i], n_predictors, n_predictors)))))
       
-      # L: block diagonal where each block is a sample of the covariance
-      #    matrix for the random effects at that level
-      #    (p x p) x (n_samp x n_chain)
-      u <- matrix(rnorm(n_predictors * n_predictors * n_groups * n_samples * n_chains),
-                  n_predictors * n_predictors * n_samples * n_chains,
+      # L: block diagonal where each block is a lower Cholesky factor of the
+      #    covariance matrix for the random effects at that level, for a
+      #    given sample and chain; (p x n_samp x n_chain) x (p x n_samp x n_chain)
+      u <- matrix(rnorm(n_predictors * n_groups * n_samples * n_chains),
+                  n_predictors * n_samples * n_chains,
                   n_groups)
-      
-      # L %*% u: (n_predictors x n_samp x n_chain) x n_groups
-      newx[,new_levels,,] <- aperm(array(as.vector(Matrix::crossprod(L, u)), c(n_predictors, n_samples, n_chains, n_groups)), c(1L, 4L, 2L, 3L))
+
+      # L %*% u: (n_predictors x n_samp x n_chain) x n_groups; using L (not
+      # its transpose/crossprod) so that each new draw has covariance
+      # L %*% t(L) == Sigma, as required for the lower Cholesky factor
+      newx[,new_levels,,] <- aperm(array(as.vector(L %*% u), c(n_predictors, n_samples, n_chains, n_groups)), c(1L, 4L, 2L, 3L))
     }
     x <- newx
     names(dimnames(x)) <- dnn
