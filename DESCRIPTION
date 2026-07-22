@@ -66,7 +66,7 @@ LinkingTo:
   RcppParallel (>= 5.1.1),
   dbarts (>= 1.0-0)
 Suggests:
-  testthat (>= 2.0-0),
+  tinytest,
   lme4,
   reformulas
 Description: Fits semiparametric linear and multilevel models with non-parametric additive Bayesian additive regression tree (BART; Chipman, George, and McCulloch (2010) <doi:10.1214/09-AOAS285>) components and Stan (Stan Development Team (2021) <https://mc-stan.org/>) sampled parametric ones. Multilevel models can be expressed using 'lme4' syntax (Bates, Maechler, Bolker, and Walker (2015) <doi:10.18637/jss.v067.i01>).
