@@ -223,7 +223,7 @@ extract.stan4bartFit <-
   if (type == "k" && is.null(object$k))
     stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
   
-  fixef_parameters <- grep("^beta|gamma", dimnames(object$stan)[[1L]])
+  fixef_parameters <- grep("^(beta|gamma)\\.", dimnames(object$stan)[[1L]])
   ranef_parameters <- startsWith(dimnames(object$stan)[[1L]], "b.")
   Sigma_parameters <- startsWith(dimnames(object$stan)[[1L]], "theta_L.")
   sigma_parameters <- dimnames(object$stan)[[1L]] %in% "aux.1"
@@ -640,7 +640,7 @@ predict.stan4bartFit <-
   n_samples <- dim(object$bart_train)[2L]
   n_chains  <- dim(object$bart_train)[3L]
   n_obs     <- dim(testData$X.bart)[1L]
-  n_fixef <- sum(grepl("^beta|gamma", dimnames(object$stan)[[1L]]))
+  n_fixef <- sum(grepl("^(beta|gamma)\\.", dimnames(object$stan)[[1L]]))
   n_warmup  <- if (!is.null(object$warmup$bart_train)) dim(object$warmup$bart_train)[2L] else 0L
   n_bart_vars <- dim(object$bart_varcount)[1L]
   is_bernoulli <- object$family$family == "binomial"
