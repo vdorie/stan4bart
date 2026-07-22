@@ -455,8 +455,8 @@ stan4bart_fit <-
   control.bart@binary <- !is_continuous
   evalEnv <- sys.frame(sys.nframe())
   
-  cgm <- normal <- fixed <- parsePriors <- NULL # R CMD check
-  prior_call <- quote(parsePriors(control.bart, data.bart, cgm, normal, fixed(1), evalEnv))
+  cgm <- normal <- fixed <- gaussian <- parsePriors <- NULL # R CMD check
+  prior_call <- quote(parsePriors(control.bart, data.bart, cgm, normal, fixed(1), gaussian, parentEnv = evalEnv))
   prior_call[[1L]] <- quoteInNamespace(parsePriors)
   prior_call[[1L]][[2L]] <- quote(dbarts)
   
