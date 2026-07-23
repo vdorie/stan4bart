@@ -2,5 +2,6 @@
 ^.git$
 ^.github$
 ^.gitignore$
+^.claude$
 ^readme.md$
 TODO
