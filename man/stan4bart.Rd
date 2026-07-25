@@ -2,7 +2,7 @@
 
 \alias{stan4bart}
 
-\title{Semiparametric Models Using Stan and BART}
+\title{Semiparametric Models Using a Gradient-Based Sampler and BART}
 \description{
   This function fits semi-parametric linear and probit models that have a
   non-parametric, BART component and one or more of a parametric fixed
@@ -40,6 +40,8 @@ stan4bart(formula,
           offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
           seed = NA_integer_,
           keep_fits = TRUE,
+          save_warmup = FALSE,
+          store = c("fits", "trees"),
           callback = NULL,
           stan_args = NULL,
           bart_args = NULL)
@@ -74,7 +76,15 @@ stan4bart(formula,
   draw and return. Includes warmup samples.}
   \item{warmup}{non-negative integer indicating number of posterior samples to
   draw and throw away. Also controls the number of iterations for which
-  adaptation is run.}
+  adaptation is run. The default (half of \code{iter}) is ample for the
+  parametric sampler's step size and mass tuning to converge. If \code{iter}
+  is shortened, keep \code{warmup} at or above roughly 100 for large-\eqn{n}
+  fits with many random-effect levels: under-warming leaves the tuning poor
+  and can roughly double the per-iteration cost of the parametric step. The
+  diagnostic is \code{fit$adaptation$mean_leapfrog} (mean leapfrog steps per
+  transition during sampling; see \sQuote{Value} below) - a high value
+  relative to a well-tuned fit indicates under-warming, and \code{print} and
+  \code{summary} warn when it looks poor.}
   \item{skip}{one or two positive integers. Every \code{skip} sample will be
   kept, while every other sample will be discarded. If argument is length two,
   an attempt will be made to use he named element \code{"bart"} for BART and
@@ -102,11 +112,44 @@ stan4bart(formula,
   below.}
   \item{keep_fits}{Logical that, when false, prevents the sampler from
   storing each draw. Intended to be used with \code{callback}.}
+  \item{save_warmup}{Logical; when \code{FALSE} (the default) the warmup draws
+  are not stored. In their place, per chain, the frozen sampler tuning (step
+  size and diagonal inverse mass), a warmup-end position snapshot, and a
+  thinned trace of the monitored scalars are recorded in the \code{adaptation}
+  component of the fit; this is what the 2026 Stan/mixed-model toolchain does
+  and cuts the fit object roughly in half at scale (see the storage-policy
+  note in \code{docs/design/walnuts.md}). When \code{TRUE}, the full per-draw
+  warmup is stored under \code{warmup} as before, and
+  \code{include_warmup = TRUE} accessors work; on a default fit those
+  accessors raise an informative error.}
+  \item{store}{character; how the fitted BART component is retained.
+  \code{"fits"} (the default) stores the full \eqn{n \times}{n x}
+  draws \eqn{\times}{x} chains \code{bart_train} (and \code{bart_test})
+  blocks, as in prior releases. \code{"trees"} instead stores only the kept
+  trees and recomputes those blocks on demand through the \code{dbarts}
+  predict path; it implies \code{keepTrees} (and errors if \code{bart_args}
+  contradicts it with \code{keepTrees = FALSE}). This is an opt-in memory/time
+  trade: at rest the fit no longer carries the \code{bart_train} block, which is
+  94-98\% of a large fit object (\code{n >= 10000}); in exchange every reader of
+  the BART fits pays a recompute cost on access. \code{fitted} streams the
+  posterior mean in row blocks, so its peak memory stays bounded, but
+  \code{extract} must materialize the whole block (unavoidable) - roughly 15 s
+  per call at \code{n = 10000} with 4 chains x 1000 draws, and over a minute at
+  \code{n = 50000}. Storing trees costs essentially nothing during sampling. The
+  saving only exists above a crossover near \code{n = 550}: below it the kept
+  trees cost as much as the fits they replace and add latency, so \code{"fits"}
+  remains the default and the recommended choice at small \code{n}. Under
+  \code{"trees"} the \code{bart_train}/\code{bart_test} components are absent;
+  read the BART fits through \code{\link[=stan4bart-generics]{extract}},
+  \code{\link[=stan4bart-generics]{fitted}}, or
+  \code{\link[=stan4bart-generics]{predict}} instead - those generics work
+  unchanged under either setting. A \code{"fits"} fit retaining more than a
+  gigabyte of per-draw blocks notes this alternative once per session.}
   \item{callback}{A function that will be called at each iteration, accepting
   three arguments: \code{yhat.train}, \code{yhat.test}, \code{stan_pars}.
   See details for more information.}
-  \item{stan_args}{optional list, specifying further arguments to Stan. See
-  details below.}
+  \item{stan_args}{optional list, specifying further arguments to the
+  parametric (gradient-sampled) component. See details below.}
   \item{bart_args}{optional list, specifying further arguments to BART. See
   details below.}
 }
@@ -177,27 +220,78 @@ stan4bart(formula,
     All three components can be present in a single model, however are
     \code{bart} part must present. If you wish to fit a model without one, use
     \code{stan_glmer} in the \code{rstanarm} package instead.
+
+    Factor variables are handled differently in each component. In the
+    \code{fixed} and \code{random} components they use the usual
+    \code{\link{model.matrix}} contrasts and \code{lme4} grouping-factor
+    machinery, respectively. In the \code{bart} component a factor is encoded
+    as \link[dbarts]{dbarts}'s categorical splits: a single column whose tree
+    prior chooses level subsets to split on, rather than one indicator column
+    per level. Consequently \code{extract(type = "varcount")} reports one row
+    per factor, named by the factor's variable name, not one row per level.
+    A factor level in \code{newdata} (to \code{predict}) or \code{test} that
+    was not observed when fitting is an error for a \code{bart} factor; this
+    is unlike the \code{random} component, where an unseen grouping level is
+    handled per \code{sample_new_levels} in \code{\link{extract}}.
   }
   \subsection{Additional Arguments}{
     The \code{stan_args} and \code{bart_args} arguments to \code{stan4bart} can
-    be used to pass further arguments to \code{stan} and \code{bart}
-    respectively. These are similar to the functions \code{stan} in the
-    \code{rstan} package and \code{\link[dbarts]{bart}}, but not identical as
-    \code{stan4bart} constructs its own model internally.
-    
-    Stan arguments include:
+    be used to pass further arguments to the parametric and BART components
+    respectively. \code{stan_args} is named for historical reasons - the
+    parametric component was originally sampled with Stan's NUTS; it is now
+    sampled with a gradient-based WALNUTS sampler driven by a hand-derived
+    analytic log-posterior gradient, and \code{stan_args} configures that
+    sampler and its priors. \code{bart_args} is similar to
+    \code{\link[dbarts]{bart}}, but not identical, as \code{stan4bart}
+    constructs its own model internally.
+
+    Prior- and model-related \code{stan_args} include:
     \itemize{
-      \item \code{prior_covariance}
-      \item \code{prior}, \code{prior_intercept}, \code{prior_aux}, \code{QR}
-      \item \code{init_r}, \code{adapt_gamma}, \code{adapt_delta},
-      \code{adapt_kappa} - see the help page for \code{stan} in the \code{rstan}
-      package.
+      \item \code{prior_covariance} - always a \code{decov()} prior on the
+      random effect covariance.
+      \item \code{prior} - the fixed effect coefficient prior; supports
+      \code{normal}, \code{student_t}, and \code{cauchy}. The shrinkage
+      families (\code{hs}, \code{hs_plus}, \code{lasso}, \code{laplace},
+      \code{product_normal}) are not supported by the gradient-based sampler
+      and raise an error if supplied.
+      \item \code{prior_aux} - the residual sd prior (continuous responses
+      only); supports \code{normal}, \code{student_t}, \code{cauchy}, and
+      \code{exponential}.
+      \item \code{prior_intercept} - accepted for backwards compatibility, but
+      a warning is raised and it is dropped; BART already carries the
+      intercept.
+      \item \code{QR} - whether to use a QR decomposition of the fixed effect
+      design matrix; sampler-agnostic.
+      \item \code{init_r} - half-width of the uniform interval the sampler's
+      initial unconstrained position is drawn from.
+      \item \code{adapt_delta} - the WALNUTS step-size acceptance-rate target, a
+      value in \eqn{(0, 1)} (default \code{0.8}); the analog of Stan's
+      \code{adapt_delta}. A higher value targets a smaller step size, so warmup
+      spends more gradient evaluations per transition but tracks the posterior
+      geometry more finely; a lower value takes larger, cheaper steps.
+      \item \code{save_raw_parameters} - logical, default \code{FALSE}. When
+      \code{FALSE} the stored parametric draw is only the transformed block
+      every consumer reads (\code{beta}, \code{b}, \code{theta_L}, and
+      \code{aux}) plus the two live diagnostics (\code{lp__}, \code{stepsize__});
+      the raw unconstrained rows (\code{z_beta}, \code{z_b}, \code{z_T},
+      \code{rho}, \code{zeta}, \code{tau}, \code{aux_unscaled}) and the five
+      constant-zero placeholder diagnostic rows are dropped. Set \code{TRUE} to
+      restore the full historical Stan-layout rows, e.g. as funnel coordinates
+      for forensics on the decov covariance prior.
     }
-    For reference on the first two sets of options, see the help page for
-    \code{stan_glmer} in the \code{rstanarm} package; for reference on
-    the third set, see the help page for \code{stan} in the \code{rstan}
-    package.
-    
+    See the help page for \code{stan_glmer} in the \code{rstanarm} package for
+    the prior constructors (\code{normal}, \code{student_t}, \code{cauchy},
+    \code{exponential}, \code{decov}).
+
+    The remaining \code{stan_args} - \code{adapt_gamma},
+    \code{adapt_kappa}, \code{adapt_t0}, \code{adapt_init_buffer},
+    \code{adapt_term_buffer}, \code{adapt_window}, \code{stepsize},
+    \code{stepsize_jitter}, and \code{max_treedepth} - configured Stan's NUTS
+    adaptation and have no analog under WALNUTS. They are still accepted so
+    that existing scripts do not error, but are ignored, and a warning naming
+    each supplied argument is raised at fit time; they are deprecated and will
+    be removed in a future release.
+
     BART arguments include:
     \itemize{
       \item further arguments to \code{\link[dbarts]{dbartsControl}} that are not
@@ -233,8 +327,8 @@ stan4bart(formula,
       training data, conditioned on the Stan parameters
       \item \code{yhat.test} - when applicable, the same values as above but
       for the test data; \code{NULL} otherwise
-      \item \code{stan_pars} - named vector of Stan samples, including fixed
-      and random effects and variance parameters
+      \item \code{stan_pars} - named vector of parametric-component samples,
+      including fixed and random effects and variance parameters
     }
     It is expected that the callback will return a vector of the same length
     each time. If not, invalid memory writes will likely result. If the
@@ -273,9 +367,10 @@ stan4bart(formula,
   
   Results, better accessed using \code{\link[=stan4bart-generics]{extract}}:
   \item{\code{bart_train}}{samples of individual posterior predictions for BART
-  component}
+  component; absent (recomputed from the kept trees on access) when
+  \code{store = "trees"}}
   \item{\code{bart_test}}{predicted test values for BART component, when
-  applicable}
+  applicable; likewise absent under \code{store = "trees"}}
   \item{\code{bart_varcount}}{BART variable counts}
   \item{\code{sigma}}{samples of residual standard error; not present for
   binary outcomes}
@@ -290,9 +385,18 @@ stan4bart(formula,
   
   Other items:
   \item{\code{warmup}}{a list of warmup samples, containing the same objects in
-  the results subsection}
-  \item{\code{diagnostics}}{Stan sampler produced diagnostic information,
-  include tree depth and divergent transitions}
+  the results subsection; present only when \code{save_warmup = TRUE}}
+  \item{\code{adaptation}}{present when warmup was run and \code{save_warmup} is
+  \code{FALSE}. A list with, per chain, the frozen \code{step_size}, the diagonal
+  \code{inv_mass}, the mean number of leapfrog (gradient evaluation) steps per
+  transition during the sampling phase (\code{mean_leapfrog}) and during
+  warmup (\code{mean_leapfrog_warmup}) - the runtime-relevant tuning
+  diagnostic; a high \code{mean_leapfrog} relative to a well-tuned fit
+  indicates under-warming (see the \code{warmup} argument above) - a
+  warmup-end \code{snapshot} of the parametric draw, and a \code{trace} (a
+  thinned warmup trace of the monitored scalars: the parametric \code{stan}
+  rows and the BART \code{sigma}) for a qualitative where-did-it-stabilize
+  plot}
   \item{\code{sampler.bart}}{external points to BART samplers; used only for
   \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
   \item{\code{range.bart}}{internal scale used by BART samplers, used by 

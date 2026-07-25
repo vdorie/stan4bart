@@ -1,4 +1,4 @@
-This package is an implementation of a C++ sampler that uses [BART](https://cran.r-project.org/package=dbarts) for non-parametric mean components and [Stan](https://mc-stan.org) for multilevel/parametric ones.
+This package is an implementation of a C++ sampler that uses [BART](https://cran.r-project.org/package=dbarts) for non-parametric mean components and a gradient-based [WALNUTS](https://github.com/flatironinstitute/walnuts) sampler, driven by a hand-derived analytic log-posterior gradient, for multilevel/parametric ones.
 
 ## Installation
 

@@ -173,9 +173,12 @@ glFormula <- function(formula, data = NULL, subset, weights,
       attr(attr(fr, "terms"), "varnames.bart") <- getVariableNames(bartterms)
     }
     
-    # dbarts >= 1.0 defaults factors to single categorical columns; the
-    # prediction and factor-level machinery here is built around indicators
-    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "indicators")
+    # Factors in the bart() part get dbarts's categorical splits: one column
+    # per factor, with the tree prior choosing level subsets to split on,
+    # rather than one indicator column per level. This applies only to the
+    # bart() component; fixed effects keep model.matrix contrasts and random
+    # effects keep the lme4 grouping-factor machinery untouched.
+    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "categorical")
     if (ncol(bartData@x) == 0L)
       stop("no bart component detected in formula; consider using rstanarm package instead")
     
@@ -1356,20 +1359,28 @@ levelfun <- function (x, nl.n, sample_new_levels, Sigma)
       n_samples <- d[3L]
       n_chains  <- d[4L]
       L <- array(Sigma, c(n_predictors, n_predictors, n_samples * n_chains))
-      L <- bdiag(lapply(seq_len(n_samples * n_chains), function(i)
-        t(base::chol(matrix(L[,,i], n_predictors, n_predictors)))))
-      
-      # L: block diagonal where each block is a lower Cholesky factor of the
-      #    covariance matrix for the random effects at that level, for a
-      #    given sample and chain; (p x n_samp x n_chain) x (p x n_samp x n_chain)
+      # L[,,i] is n_predictors x n_predictors for n_predictors > 1L, but
+      # drops to a bare scalar when n_predictors == 1L; matrix() restores
+      # the shape chol() requires in both cases (drop = FALSE would instead
+      # keep a length-1 3rd dimension, leaving a 3-D array that as.matrix()
+      # flattens into a column vector rather than a square matrix).
+      # base::chol() returns the upper-triangular R with t(R) %*% R == Sigma;
+      # crossprod(L, u) below applies that transpose, so blocks are stored
+      # untransposed here (an extra t() would instead yield draws with
+      # covariance R %*% t(R), which only coincides with Sigma when Sigma is
+      # diagonal, i.e. n_predictors == 1L).
+      L <- bdiag(lapply(seq_len(n_samples * n_chains),
+                         function(i) base::chol(matrix(L[,,i], n_predictors, n_predictors))))
+
+      # L: block diagonal where each block is a sample of the covariance
+      #    matrix for the random effects at that level
+      #    (p x p) x (n_samp x n_chain)
       u <- matrix(rnorm(n_predictors * n_groups * n_samples * n_chains),
                   n_predictors * n_samples * n_chains,
                   n_groups)
 
-      # L %*% u: (n_predictors x n_samp x n_chain) x n_groups; using L (not
-      # its transpose/crossprod) so that each new draw has covariance
-      # L %*% t(L) == Sigma, as required for the lower Cholesky factor
-      newx[,new_levels,,] <- aperm(array(as.vector(L %*% u), c(n_predictors, n_samples, n_chains, n_groups)), c(1L, 4L, 2L, 3L))
+      # crossprod(L, u) == t(L) %*% u: (n_predictors x n_samp x n_chain) x n_groups
+      newx[,new_levels,,] <- aperm(array(as.vector(Matrix::crossprod(L, u)), c(n_predictors, n_samples, n_chains, n_groups)), c(1L, 4L, 2L, 3L))
     }
     x <- newx
     names(dimnames(x)) <- dnn

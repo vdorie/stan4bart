@@ -19,11 +19,14 @@ stan4bart <-
            offset_type = c("default", "fixef", "ranef", "bart", "parametric"),
            seed = NA_integer_,
            keep_fits = TRUE,
+           save_warmup = FALSE,
+           store = c("fits", "trees"),
            callback = NULL,
            stan_args = NULL,
            bart_args = NULL)
 {
   call <- match.call(expand.dots = TRUE)
+  store <- match.arg(store)
   mc <- match.call(expand.dots = FALSE)
   if (!is.null(data)) {
     data <- as.data.frame(data)
@@ -208,7 +211,19 @@ stan4bart <-
   }
   
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)
-  
+
+  # store = "trees" recomputes the BART fits on demand from the kept trees
+  # instead of retaining the n x draws x chains bart_train/bart_test blocks, so
+  # it needs keepTrees on. Force it, but refuse a contradictory explicit
+  # keepTrees = FALSE rather than silently overriding the user.
+  if (store == "trees") {
+    if (is.null(bart_args)) bart_args <- list()
+    if (!is.null(bart_args[["keepTrees"]]) && !isTRUE(bart_args[["keepTrees"]]))
+      stop("store = \"trees\" recomputes the BART fits from the kept trees and so ",
+           "requires keepTrees; drop keepTrees = FALSE from bart_args", call. = FALSE)
+    bart_args[["keepTrees"]] <- TRUE
+  }
+
   callbackEnv <- NULL
   if (!is.null(callback))
     callbackEnv <- list2env(result, parent = baseenv())
@@ -227,12 +242,13 @@ stan4bart <-
                                  refresh,
                                  seed,
                                  keep_fits,
+                                 save_warmup,
                                  callback,
                                  callbackEnv,
                                  stan_args,
                                  bart_args)
   
-  samples <- package_samples(chain_results, colnames(bartData@x))
+  samples <- package_samples(chain_results, colnames(bartData@x), store)
   for (name in names(samples)) 
     result[[name]] <- samples[[name]]
   
@@ -254,49 +270,21 @@ stan4bart <-
 
 check_sampler_diagnostics <- function(object, stan_args, n_upars)
 {
-  n_d <- if ("divergent__" %in% dimnames(object$diagnostics)$diagnostic)
-    sum(object$diagnostics["divergent__",,])
-  else
-    0L
-  if (n_d > 0) {
-    ad <- stan_args$adapt_delta %ORifNULL% 0.8
-    
-    warning("There were ", n_d, " divergent transitions after warmup. See\n",
-            "http://mc-stan.org/misc/warnings.html#divergent-transitions-after-warmup\n", 
-            "to find out why this is a problem and how to eliminate them.", call. = FALSE)
-  }
-  
-  max_td <- stan_args$max_treedepth %ORifNULL% 10
-  n_m <- if ("treedepth__" %in% dimnames(object$diagnostics)$diagnostic)
-    sum(object$diagnostics["treedepth__",,] >= max_td)
-  else
-    0
-  
-  if (n_m > 0)
-    warning("There were ", n_m,
-            " transitions after warmup that exceeded the maximum treedepth.",
-            " Increase max_treedepth above ", max_td, ". See\n",
-            "http://mc-stan.org/misc/warnings.html#maximum-treedepth-exceeded", call. = FALSE)
-  
-  
-  n_e <- 0L
-  if ("energy__" %in% dimnames(object$diagnostics)$diagnostic) {
-    E <- as.matrix(object$diagnostics["energy__",,,drop = TRUE])
-    threshold <- 0.2
-    if (nrow(E) > 1) {
-      EBFMI <- n_upars / apply(E, 2, var)
-      n_e <- sum(EBFMI < threshold, na.rm = TRUE)
-    }
-    else n_e <- 0L
-    if (n_e > 0)
-      warning("There were ", n_e, 
-              " chains where the estimated Bayesian Fraction of Missing Information",
-              " was low. See\n", 
-              "http://mc-stan.org/misc/warnings.html#bfmi-low", call. = FALSE)
-  }
+  # NUTS diagnostics (divergent transitions, max-treedepth transitions, low
+  # E-BFMI) have no WALNUTS analog: the vendored ChainHandler concept
+  # (inst/include/walnuts/concepts.hpp) surfaces only position/lp/step_size/
+  # diag_inv_mass, so divergent__/treedepth__/energy__ are written as
+  # constant-zero Stan-layout placeholders by WalnutsSampler::run
+  # (src/walnuts_sampler.cpp) purely so result$stan keeps its Stan-era row
+  # names; they carry no signal to check. object$diagnostics (the field this
+  # function historically read) was never actually populated even under
+  # Stan, so every check below was already unreachable dead code. Dropped
+  # (docs/design/walnuts.md); kept as a documented no-op call site
+  # rather than removed, in case WALNUTS grows real diagnostics upstream.
+  invisible(NULL)
 }
 
-package_samples <- function(chain_results, bart_var_names) {
+package_samples <- function(chain_results, bart_var_names, store = "fits") {
   result <- list()
   warmup <- list()
   n_chains  <- length(chain_results)
@@ -342,34 +330,47 @@ package_samples <- function(chain_results, bart_var_names) {
   
   chain_names <- paste0("chain:", seq_len(n_chains))
   
-  # grab the bart bits
+  # grab the bart bits. store = "trees" drops the n x draws x chains
+  # bart_train/bart_test accumulation (and its warmup analog) from the fit
+  # object; the kept trees reproduce it on demand (getBartSampler ->
+  # predictBART, generics.R). The draw/chain counts still come off the per-chain
+  # blocks, which the C sampler returns regardless, so the rest of the assembly
+  # is unchanged; varcount and the parametric "stan" block are always kept.
   if (!is.null(chain_results[[1L]]$sample$bart$train)) {
     n_obs <- dim(chain_results[[1L]]$sample$bart$train)[1L]
     n_samples <- dim(chain_results[[1L]]$sample$bart$train)[2L]
-    result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
-                                 chain_results[[i_chains]]$sample$bart$train),
-                               dim = c(n_obs, n_samples, n_chains),
-                               dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
-    if (!is.na(n_warmup) && n_warmup > 0L) {
-       warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
-                                   chain_results[[i_chains]]$warmup$bart$train),
-                                 dim = c(n_obs, n_warmup, n_chains),
+    if (store == "fits") {
+      result$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
+                                   chain_results[[i_chains]]$sample$bart$train),
+                                 dim = c(n_obs, n_samples, n_chains),
                                  dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      if (!is.na(n_warmup) && n_warmup > 0L) {
+         warmup$bart_train <- array(sapply(seq_len(n_chains), function(i_chains)
+                                     chain_results[[i_chains]]$warmup$bart$train),
+                                   dim = c(n_obs, n_warmup, n_chains),
+                                   dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      }
     }
   }
   if (!is.null(chain_results[[1L]]$sample$bart$test)) {
     n_obs_test <- dim(chain_results[[1L]]$sample$bart$test)[1L]
     n_samples <- dim(chain_results[[1L]]$sample$bart$test)[2L]
-    result$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
-                                chain_results[[i_chains]]$sample$bart$test),
-                              dim = c(n_obs_test, n_samples, n_chains),
-                              dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
-    if (!is.na(n_warmup) && n_warmup > 0L) {
-      warmup$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
-                                  chain_results[[i_chains]]$warmup$bart$test),
-                                dim = c(n_obs_test, n_warmup, n_chains),
+    if (store == "fits") {
+      result$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
+                                  chain_results[[i_chains]]$sample$bart$test),
+                                dim = c(n_obs_test, n_samples, n_chains),
                                 dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      if (!is.na(n_warmup) && n_warmup > 0L) {
+        warmup$bart_test <- array(sapply(seq_len(n_chains), function(i_chains)
+                                    chain_results[[i_chains]]$warmup$bart$test),
+                                  dim = c(n_obs_test, n_warmup, n_chains),
+                                  dimnames = list(observation = NULL, iterations = NULL, chain = chain_names))
+      }
     }
+  }
+  if (store == "fits") {
+    nudge_if_bart_store_large(8 * (length(result$bart_train) + length(result$bart_test) +
+                                   length(warmup$bart_train) + length(warmup$bart_test)))
   }
   if (!is.null(chain_results[[1L]]$sample$bart$varcount)) {
     n_bart_vars <- dim(chain_results[[1L]]$sample$bart$varcount)[1L]
@@ -442,10 +443,63 @@ package_samples <- function(chain_results, bart_var_names) {
   
   if (!is.na(n_warmup) && n_warmup > 0L)
     result$warmup <- warmup
-  
-  if (!is.null(attr(chain_results, "sampler.bart")))
+
+  # Adaptation summaries, captured per chain at the adaptation freeze: the
+  # frozen step size and diagonal inverse mass, a warmup-end snapshot, and a
+  # thinned trace of the monitored scalars (parametric rows + BART sigma).
+  # These replace full warmup storage as the sampler-tuning attribution
+  # record when save_warmup = FALSE. The single non-"warmup"-prefixed
+  # $adaptation slot avoids `$warmup` partial-matching. See
+  # docs/design/walnuts.md (storage policy).
+  if (!is.null(chain_results[[1L]]$adaptation)) {
+    step_size <- vapply(chain_results, function(cr) cr$adaptation$step_size, numeric(1L))
+    inv_mass  <- sapply(chain_results, function(cr) cr$adaptation$inv_mass)
+    dimnames(inv_mass) <- list(parameter = NULL, chain = chain_names)
+    adaptation <- list(step_size = setNames(step_size, chain_names), inv_mass = inv_mass)
+
+    # Mean leapfrog (eval) steps per transition, per chain, for each phase - the
+    # leapfrog-count diagnostic (docs/plans/walnuts-warmup.md C0). $mean_leapfrog
+    # is the sampling phase (the runtime-relevant one, high when the frozen
+    # tuning is poor); $mean_leapfrog_warmup is the warmup phase.
+    if (!is.null(chain_results[[1L]]$adaptation$mean_leapfrog)) {
+      adaptation$mean_leapfrog <- setNames(
+        vapply(chain_results, function(cr) cr$adaptation$mean_leapfrog, numeric(1L)), chain_names)
+      adaptation$mean_leapfrog_warmup <- setNames(
+        vapply(chain_results, function(cr) cr$adaptation$mean_leapfrog_warmup, numeric(1L)), chain_names)
+    }
+
+    if (!is.null(chain_results[[1L]]$snapshot)) {
+      snapshot <- sapply(chain_results, function(cr) cr$snapshot)
+      dimnames(snapshot) <- list(parameters = names(chain_results[[1L]]$snapshot),
+                                 chain = chain_names)
+      adaptation$snapshot <- snapshot
+    }
+
+    if (!is.null(chain_results[[1L]]$trace)) {
+      tr_stan <- chain_results[[1L]]$trace$stan
+      n_tr <- ncol(tr_stan)
+      adaptation$trace <- list(stan = array(
+        sapply(seq_len(n_chains), function(i_chains) chain_results[[i_chains]]$trace$stan),
+        dim = c(nrow(tr_stan), n_tr, n_chains),
+        dimnames = list(parameters = rownames(tr_stan), iterations = NULL, chain = chain_names)))
+      if (!is.null(chain_results[[1L]]$trace$sigma)) {
+        adaptation$trace$sigma <- matrix(
+          sapply(seq_len(n_chains), function(i_chains) chain_results[[i_chains]]$trace$sigma),
+          n_tr, n_chains, dimnames = list(iterations = NULL, chain = chain_names))
+      }
+    }
+    result$adaptation <- adaptation
+  }
+
+  if (!is.null(attr(chain_results, "sampler.bart"))) {
     result$sampler.bart <- attr(chain_results, "sampler.bart")
-  
+    # Retained for lazy pointer rebuild after reload; bart_env is a reference
+    # cell that caches the rebuilt pointer so a reloaded fit rebuilds at most
+    # once per session (getBartSampler(), generics.R).
+    result$state.bart <- attr(chain_results, "state.bart")
+    result$bart_env <- new.env(parent = emptyenv())
+  }
+
   result
 }
 

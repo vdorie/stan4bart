@@ -1,0 +1,8 @@
+"metric","fit","value","commit","date"
+"install_wall_s",NA,15.129,"967a1c6","2026-07-15"
+"per_iteration_s","continuous_nc2",0.000459999999999994,"967a1c6","2026-07-15"
+"peak_rss_bytes","continuous_nc2",271237120,"967a1c6","2026-07-15"
+"per_iteration_s","binary_multilevel",0.000540000000000003,"967a1c6","2026-07-15"
+"peak_rss_bytes","binary_multilevel",273743872,"967a1c6","2026-07-15"
+"per_iteration_s","weighted_continuous",0.000609999999999999,"967a1c6","2026-07-15"
+"peak_rss_bytes","weighted_continuous",272793600,"967a1c6","2026-07-15"

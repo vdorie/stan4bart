@@ -1,0 +1,174 @@
+# stan4bart 0.0-14
+
+## Sampler
+
+* The parametric conditional (fixed effects, lme4-style random effects, and
+  the residual sd for continuous responses) is now drawn with a hand-derived
+  analytic log-posterior gradient and the WALNUTS sampler (vendored from
+  <https://github.com/flatironinstitute/walnuts>, commit 5854be8; MIT
+  licensed, (c) 2025 Bob Carpenter), replacing the embedded Stan/NUTS
+  sampler for both continuous and binary response families. This is a
+  sampler swap only: the outer BART-vs-parametric Gibbs alternation, the R
+  formula/data-prep surface (`glFormula`, lme4 grouping syntax, priors), and
+  the posterior targeted are unchanged, verified by a pre-registered
+  distributional-equivalence gate against the Stan-era posterior on
+  reference fits spanning every gradient tier (nc=1/nc=2/nc>=3 random-effect
+  structures, weighted, and binary). See `docs/design/walnuts.md` for the
+  full design record, including the gate design and results.
+
+* Measured payoff (one quiet window, arm64 macOS, reference fits spanning
+  continuous/binary/weighted-continuous): whole-fit per-iteration wall time
+  dropped 12-39x (15.5/8.1/13.5 ms down to 0.4-0.7 ms). Deleting the Stan/
+  StanHeaders/sundials/rstan machinery dropped `R CMD INSTALL` time from
+  42.1s to 15.1s (2.8x) and compile-time peak RSS from 2.21 GB to 0.47 GB
+  (4.7x); peak *sampling* RSS was never Stan-dominated at these reference
+  sizes and is unchanged (~273 MB throughout).
+
+* Dependencies: StanHeaders, BH, and RcppParallel are no longer linked to or
+  imported. C++20 is now required (`SystemRequirements: C++20`). WALNUTS
+  (MIT license, Bob Carpenter) is vendored under `inst/include/walnuts`.
+
+* The warmup-phase initial mass is now seeded from the log-posterior gradient
+  at each chain's initial unconstrained position (`(1 - s) * |grad| + s`, a
+  Nutpie-style heuristic; `s` is the existing mass-smoothing constant),
+  replacing the previous identity (unit-mass) start; the initial step size is
+  unchanged. Sampled values for a given seed change as a result - this is a
+  draw-moving change, verified to stay within the pre-registered
+  distributional-equivalence band against the Stan-era baseline on all
+  reference tiers. It improves tuning at short warmup, especially for
+  large-`n` fits with many random-effect levels.
+
+* `fit$adaptation` gains `mean_leapfrog` and `mean_leapfrog_warmup`: the mean
+  number of leapfrog (gradient evaluation) steps per transition, per chain,
+  during the sampling and warmup phases respectively. This is the
+  runtime-relevant tuning diagnostic - a high `mean_leapfrog` relative to a
+  well-tuned fit signals under-warming - and is exact and draw-neutral (an
+  eval counter, not a new sampling path).
+
+* New `print` and `summary` methods for `stan4bartFit` fits. Both warn when
+  the sampling-phase `mean_leapfrog` looks poor ("parametric sampler tuning
+  looks poor ...; consider increasing warmup"), and `?stan4bart` documents a
+  warmup floor: if `iter` is shortened below the default, keep `warmup` at or
+  above roughly 100 for large-`n` fits with many random-effect levels.
+
+* `stan_args$adapt_delta` is a live control again, mapped to WALNUTS'
+  step-size acceptance-rate target (the analog of Stan's `adapt_delta`),
+  validated to `(0, 1)`. Its default (0.8) reproduces prior behavior exactly
+  - an unset or explicit-0.8 fit is bit-identical to earlier builds - so this
+  is draw-neutral unless set. A higher value targets a smaller step size
+  (more gradient evaluations, finer geometry tracking); a lower value takes
+  larger, cheaper steps. Setting it no longer warns.
+
+* `fitted(type = "ppd")` notes, once per session, that the posterior-predictive
+  mean equals the expected-value mean, so `type = "ev"` computes it exactly
+  and faster. The computation itself is unchanged: under a fixed seed,
+  `fitted(type = "ppd")` still reproduces an average of
+  `extract(type = "ppd")` bitwise.
+
+## Storage
+
+* Warmup draws are no longer stored by default (`save_warmup = FALSE`), and the
+  returned parametric ("stan") store keeps only the transformed rows every
+  consumer reads (`beta`, `b`, `theta_L`, `aux`) plus the two live diagnostics
+  (`lp__`, `stepsize__`). The raw unconstrained rows (`z_beta`, `z_b`, `z_T`,
+  `rho`, `zeta`, `tau`, `aux_unscaled`) and the five constant-zero placeholder
+  diagnostic rows (`accept_stat__`, `treedepth__`, `n_leapfrog__`,
+  `divergent__`, `energy__`) - none of which is read by any computed surface -
+  are dropped from default storage. Not storing warmup roughly halves the fit
+  object at scale (`bart_train` is ~50% of the object and its warmup copy is the
+  same again); every quantitative convergence diagnostic in the 2026 toolchain
+  is defined on post-warmup draws only, matching cmdstanr/rstanarm/brms
+  defaults. In place of full warmup the fit gains an `adaptation` component: per
+  chain the frozen step size and diagonal inverse mass (which WALNUTS tuned and
+  the previous build discarded), a warmup-end position snapshot, and a thinned
+  warmup trace of the monitored scalars. Recomputing `bart_train` from stored
+  trees was considered and left out of scope; `bart_train` and the derivable
+  `f` functionals are unchanged. See `docs/plans/sample-storage.md` for the
+  measurements and rationale.
+
+* Two opt-ins restore the old behavior: `save_warmup = TRUE` stores the full
+  per-draw warmup under `warmup` (and re-enables the `include_warmup = TRUE`
+  accessors; on a default fit they now error informatively), and
+  `stan_args = list(save_raw_parameters = TRUE)` restores the raw unconstrained
+  rows (funnel forensics). The stored draws themselves are unchanged - the
+  sampler path is untouched - so posterior summaries are identical to prior
+  releases regardless of the storage flags.
+
+* New `store` argument (`c("fits", "trees")`, default `"fits"`). `store =
+  "trees"` keeps only the sampled trees and recomputes the `bart_train` /
+  `bart_test` blocks on demand through the `dbarts` predict path, instead of
+  retaining the `n x draws x chains` blocks in the fit. It implies `keepTrees`
+  (and errors on a contradictory `bart_args = list(keepTrees = FALSE)`), keeps
+  the parametric `stan` and `bart_varcount` blocks, and leaves `bart_train` /
+  `bart_test` absent - read the BART fits through `extract`, `fitted`, or
+  `predict`, all of which route through the recompute seam. This is an opt-in
+  memory/time trade: the `bart_train` block is 94-98% of a large fit object
+  (`n >= 10000`), so dropping it is a large saving above a crossover near
+  `n = 550`; in exchange `extract` materializes the whole block on each call
+  (~15 s at `n = 10000`, 4 chains x 1000 draws) while `fitted` streams the
+  posterior mean in row blocks to stay memory-bounded. The recomputed values
+  match the stored path to a tight tolerance (~1e-13; the stored block carries
+  an extra offset round-trip and is the noisier quantity), and sampling is
+  untouched, so parametric draws are bit-identical to a `store = "fits"` fit
+  with the same seed. `store = "fits"` remains the default (no silent change);
+  a `store = "fits"` fit retaining more than a gigabyte of per-draw BART blocks
+  notes the alternative once per session. A size-adaptive default was
+  considered and rejected: storage semantics should not depend on data size.
+  See `docs/plans/bart-train-recompute.md`.
+
+## Deprecated
+
+* The NUTS-specific `stan_args` controls - `adapt_gamma`,
+  `adapt_kappa`, `adapt_t0`, `adapt_init_buffer`, `adapt_term_buffer`,
+  `adapt_window`, `stepsize`, `stepsize_jitter`, and `max_treedepth` - have
+  no analog under WALNUTS. They are still accepted (a script that sets one
+  does not break), but are now ignored, and a warning naming every supplied
+  deprecated argument is issued at fit time. They will be removed in a
+  future release. `init_r` (the initial-position radius), `adapt_delta` (see
+  the Sampler section), and the loop-level arguments (`iter`, `warmup`,
+  `skip`, `chains`, `cores`, `refresh`, `seed`, `verbose`) keep a live
+  meaning and do not warn.
+
+## Removed
+
+* Sampler diagnostics tied to NUTS - divergent transitions, max-treedepth
+  transitions, and low E-BFMI, previously warned on by
+  `check_sampler_diagnostics` - are gone. The vendored WALNUTS sampler
+  reports no analog of any of the three (it exposes only position, log
+  density, step size, and the diagonal mass estimate), so the corresponding
+  warnings no longer fire.
+
+## Breaking changes
+
+* Factor variables in the `bart()` part of the formula are now encoded with
+  `dbarts`'s categorical splits (`factors = "categorical"`) instead of one
+  indicator column per level (`factors = "indicators"`, the previous, port-era
+  default). A `bart()` factor is now a single design column whose tree prior
+  chooses level subsets to split on, rather than treating each level as an
+  independent 0/1 predictor - a different prior over factor structure, so
+  draws move for any fit with a factor in the `bart()` part; factor-free fits
+  are bit-identical. `extract(type = "varcount")` now has one row per factor
+  (named by the factor's variable name) instead of one row per level. An
+  unseen `bart()` factor level in `newdata` or `test` is still an error, as
+  before. Fixed-effect and random-effect factor handling - `model.matrix`
+  contrasts and the `lme4` grouping-factor machinery, including its new-level
+  semantics under `sample_new_levels` - are unchanged by this change.
+
+* The shrinkage coefficient prior families (`hs`, `hs_plus`, `lasso`,
+  `laplace`, `product_normal`) are no longer supported for
+  `stan_args$prior`. Supplying one now raises an informative error at fit
+  setup ("prior families hs, hs_plus, lasso, laplace, and product_normal are
+  not supported by the gradient-based sampler; use normal, student_t, or
+  cauchy"); previously this reached the sampler and crashed the R session
+  with an uncaught C++ exception. Use `normal`, `student_t`, or `cauchy`
+  instead; the residual-sd (`prior_aux`) and covariance (`prior_covariance`)
+  priors are unaffected - they were already restricted to non-shrinkage
+  families.
+
+## Bug fixes
+
+* Fixed `dbarts_results.structSize` never being set by the dbarts 1.0
+  flat-C-API port, which caused the versioned-struct field gate to skip
+  populating every run's output buffers (usually masked by the buffers
+  otherwise reading as zero). Found and fixed while recording this arc's
+  Stan-era baselines.

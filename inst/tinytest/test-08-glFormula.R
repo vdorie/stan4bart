@@ -94,7 +94,8 @@ local({
   expect_warning(glResult <- eval(glCall))
 
   expect_true(setequal(attr(glResult$terms, "varnames.bart"), paste0("X", c(1:3, 5:10))))
-  expect_true(setequal(colnames(glResult$bartData@x), c(paste0("X", c(1:3, 5:9)), paste0("X10.", levels(df$X10)))))
+  # categorical splits: X10 is one bart column, not one indicator per level
+  expect_true(setequal(colnames(glResult$bartData@x), paste0("X", c(1:3, 5:10))))
 
   expect_equal(attr(glResult$terms, "varnames.fixed"), "X10")
   expect_true(setequal(colnames(glResult$X), paste0("X10", levels(df$X10)[-1L])))

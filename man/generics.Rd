@@ -33,10 +33,11 @@
   \dots)
 
 \method{predict}{stan4bartFit}(
-  object, newdata, offset,
+  object, newdata,
   type = c("ev", "ppd", "indiv.fixef", "indiv.ranef", "indiv.bart"),
   combine_chains = TRUE,
   sample_new_levels = TRUE,
+  offset,
   \dots)
 }
 \arguments{
@@ -74,7 +75,14 @@
       distribution of the parameters given the data
       \item \code{"ppd"} - draws from the individual level posterior predictive
       distribution, generally speaking adding noise to the result for
-      \code{"ev"} or simulating new Bernoulli trials.
+      \code{"ev"} or simulating new Bernoulli trials. The mean of these draws
+      estimates the same quantity as the mean of the \code{"ev"} draws (times
+      the weights, for a weighted binomial model), so if only the
+      posterior-predictive mean is needed, \code{fitted(type = "ev")} computes
+      it exactly and faster; \code{fitted(type = "ppd")} notes this once per
+      session. \code{fitted(type = "ppd")} averages freshly drawn samples, so
+      under a fixed seed it reproduces an average of
+      \code{extract(type = "ppd")} bitwise.
       \item \code{"fixef"} - draws from the posterior of the fixed effects
       (also known as the \dQuote{unmodeled} coefficients),
       \eqn{\beta \mid Y}{\beta | Y}
@@ -93,8 +101,10 @@
       error
       \item \code{"Sigma"} - when applicable, the covariance matrices of the
       random effects
-      \item \code{"stan"} - raw matrix or array of Stan sampled transformed
-      parameters.
+      \item \code{"stan"} - raw matrix or array of the parametric component's
+      sampled transformed parameters (named \code{"stan"} for historical
+      reasons; the parametric component is now sampled with a gradient-based
+      WALNUTS sampler rather than Stan's NUTS).
       \item \code{"trees"} - a data frame of flatted trees; see the subsection
       on extracted trees in \code{\link[dbarts]{bart}} and note that stan4bart variable
       names can be found in the \code{bartData@x} element of a fitted stan4bart

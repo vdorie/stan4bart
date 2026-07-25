@@ -6,12 +6,12 @@
 #include <sstream> // ostringstream
 #include <vector>
 
-#include <stan/callbacks/writer.hpp>
-
-// TODO: remove context and names
+// De-Stanned draw store: formerly derived from stan::callbacks::writer so
+// Stan's NUTS could stream draws in; now a plain row buffer the WALNUTS
+// sampler writes directly and createStanResultsExpr reads back out.
 namespace stan4bart {
 
-struct double_writer : public stan::callbacks::writer {
+struct double_writer {
   size_t num_pars;
   size_t num_samples;
   const char* context;

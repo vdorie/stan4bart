@@ -1,0 +1,22 @@
+stan4bart is licensed under GPL (>= 3).
+
+It bundles third-party components under compatible terms:
+
+WALNUTS sampler headers
+  Location:  inst/include/walnuts/*, inst/include/walnuts.hpp
+  License:   MIT (see inst/include/WALNUTS_LICENSE)
+  Copyright: (c) 2025 Bob Carpenter
+  Provenance: vendored from https://github.com/flatironinstitute/walnuts
+              at commit 5854be888e5432a103275466d7d0be95c7c5c67a
+              (see inst/include/WALNUTS_VERSION).
+  The MIT license permits redistribution within a GPL-licensed work; the
+  copyright notice and permission notice are retained in WALNUTS_LICENSE.
+
+Other bundled sources retain their upstream terms:
+  R/rstanarm_functions.R   derived from rstanarm (GPL-3)
+  R/lme4_functions.R       derived from lme4 (GPL-2 | GPL-3)
+  tools/build-aux/config.guess, config.sub   (GPL with the autoconf exception)
+  tools/m4/ax_*.m4         (FSF All-Permissive / autoconf-macro terms)
+
+The embedded Stan sampler and the vendored StanHeaders, sundials (CVODES), and
+rstan trees were removed; the parametric conditional is now drawn with WALNUTS.

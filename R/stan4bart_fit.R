@@ -48,11 +48,42 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   if (control.common$verbose > 0L)
     .Call(C_stan4bart_printInitialSummary, sampler)
   results <- list()
-  if (control.common$warmup > 0L)
-    results$warmup  <- .Call(C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
+  if (control.common$warmup > 0L) {
+    warmup_run <- .Call(C_stan4bart_run, sampler, control.common$warmup, TRUE, "both")
+    if (isTRUE(control.common$save_warmup)) {
+      # opt-in: keep the full per-draw warmup, historical behavior
+      results$warmup <- warmup_run
+    } else if (!is.null(warmup_run$stan)) {
+      # default: a thinned trace of the monitored scalars (parametric rows +
+      # BART sigma) plus a warmup-end snapshot; the n x warmup bart_train block
+      # is discarded. k thins to ~50-100 surviving rows. Slot names avoid the
+      # "warmup" prefix so `$warmup` cannot partial-match them.
+      n_warmup <- dim(warmup_run$stan)[2L]
+      keep_cols <- seq.int(1L, n_warmup, by = ceiling(n_warmup / 100))
+      results$trace <- list(
+        stan  = warmup_run$stan[, keep_cols, drop = FALSE],
+        sigma = if (!is.null(warmup_run$bart$sigma)) warmup_run$bart$sigma[keep_cols] else NULL)
+      results$snapshot <- warmup_run$stan[, n_warmup]
+    }
+    rm(warmup_run)
+  }
   .Call(C_stan4bart_disengageAdaptation, sampler)
+  # frozen tuning summaries, captured at the adaptation freeze
+  if (control.common$warmup > 0L)
+    results$adaptation <- .Call(C_stan4bart_getAdaptationInfo, sampler)
+  # Cumulative leapfrog eval count at the warmup/sampling boundary; differenced
+  # after the sampling run below it gives mean leapfrog per transition per phase
+  # (the runtime diagnostic, docs/plans/walnuts-warmup.md C0). Draw-neutral.
+  evals_warmup <- .Call(C_stan4bart_getEvalCount, sampler)
   results$sample <- .Call(C_stan4bart_run, sampler, control.common$iter - control.common$warmup,
                           FALSE, "both")
+  if (control.common$warmup > 0L && !is.null(results$adaptation)) {
+    evals_total <- .Call(C_stan4bart_getEvalCount, sampler)
+    n_sample <- control.common$iter - control.common$warmup
+    results$adaptation$mean_leapfrog <-
+      if (n_sample > 0L) (evals_total - evals_warmup) / n_sample else NA_real_
+    results$adaptation$mean_leapfrog_warmup <- evals_warmup / control.common$warmup
+  }
   
   # predictions from a restored sampler arrive on the original response
   # scale (the state carries the fit's transform), so only the state exports
@@ -62,7 +93,44 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   results
 }
 
-stan4bart_fit <- 
+# The NUTS control vocabulary that the WALNUTS sampler accepts-but-ignores
+# (docs/design/walnuts.md): parsed into StanControl at the C++ level
+# (src/parametric_control.cpp) for accept-but-ignore source compatibility,
+# but never consumed by WalnutsSampler. init_r IS still consumed (it sizes
+# WALNUTS' uniform initial-position radius) and is deliberately excluded
+# here; adapt_delta is consumed too (it maps to WALNUTS' step-size
+# acceptance-rate target) and is likewise excluded; skip/seed are loop-level
+# and excluded as well.
+ignored_nuts_args <- c("adapt_gamma", "adapt_kappa", "adapt_t0",
+                       "adapt_init_buffer", "adapt_term_buffer", "adapt_window",
+                       "stepsize", "stepsize_jitter", "max_treedepth")
+
+warn_ignored_nuts_args <- function(stan_args) {
+  ignored <- intersect(names(stan_args), ignored_nuts_args)
+  if (length(ignored) > 0L) {
+    warning(paste0(sprintf(
+      "'%s' is ignored by the gradient-based sampler and is deprecated; it will be removed in a future release",
+      ignored), collapse = "\n"), call. = FALSE)
+  }
+}
+
+# The shrinkage coefficient priors (docs/design/walnuts.md) carry
+# global/local/caux/mix/one_over_lambda latents that the WALNUTS target
+# (src/parametric_model.hpp) never implements; ParametricModel::finalize()
+# throws a raw C++ exception (uncaught across the .Call boundary - a hard
+# process abort, not a catchable R error) if one of their prior_dist codes
+# reaches it. Refuse them here, at the R level, before any C++ is invoked.
+unsupported_shrinkage_dists <- c("hs", "hs_plus", "lasso", "laplace", "product_normal")
+
+refuse_shrinkage_prior <- function(prior) {
+  if (is.list(prior) && isTRUE(prior$dist %in% unsupported_shrinkage_dists)) {
+    stop("prior families hs, hs_plus, lasso, laplace, and product_normal are not ",
+        "supported by the gradient-based sampler; use normal, student_t, or cauchy",
+        call. = FALSE)
+  }
+}
+
+stan4bart_fit <-
   function(object,
            family,
            bart_offset_init,
@@ -76,11 +144,12 @@ stan4bart_fit <-
            refresh,
            seed,
            keep_fits,
+           save_warmup,
            callback,
            callbackEnv,
            stan_args,
            bart_args)
-{  
+{
   matched_call <- match.call()
   
   supported_families <- c("binomial", "gaussian")
@@ -101,6 +170,7 @@ stan4bart_fit <-
   
   if (is.null(stan_args))
     stan_args <- list()
+  warn_ignored_nuts_args(stan_args)
   if (is.null(stan_args[["prior_covariance"]]))
     stan_args$prior_covariance <- decov()
   decov <- stan_args[["prior_covariance"]]
@@ -129,11 +199,13 @@ stan4bart_fit <-
     assign(i, x_stuff[[i]])
   nvars.fixef <- ncol(xtemp)
   
-  ok_dists <- nlist("normal", student_t = "t", "cauchy", "hs", "hs_plus", 
+  ok_dists <- nlist("normal", student_t = "t", "cauchy", "hs", "hs_plus",
                     "laplace", "lasso", "product_normal")
   ok_intercept_dists <- ok_dists[1:3]
   ok_aux_dists <- c(ok_dists[1:3], exponential = "exponential")
-  
+
+  refuse_shrinkage_prior(stan_args$prior)
+
   prior_stuff <- handle_glm_prior(
     stan_args$prior,
     nvars = nvars.fixef,
@@ -427,6 +499,8 @@ stan4bart_fit <-
 
   if (!is.logical(keep_fits) || length(keep_fits) != 1L || is.na(keep_fits))
     stop("'keep_fits' must be TRUE or FALSE")
+  if (!is.logical(save_warmup) || length(save_warmup) != 1L || is.na(save_warmup))
+    stop("'save_warmup' must be TRUE or FALSE")
   if (!is.null(callback)) {
     if (!is.function(callback)) stop("callback must be a function")
     if (length(formals(callback)) != 3L) stop("callback function must take exactly 3 arguments")
@@ -487,13 +561,16 @@ stan4bart_fit <-
     skip = skip.stan,
     adapt_gamma = stan_args[["adapt_gamma"]],
     adapt_delta = stan_args[["adapt_delta"]],
-    adapt_kappa = stan_args[["adapt_kappa"]]
+    adapt_kappa = stan_args[["adapt_kappa"]],
+    # opt-in raw unconstrained rows for funnel forensics; default off, so the
+    # stored parametric draw is only the transformed block consumers read
+    save_raw_parameters = as.integer(isTRUE(stan_args[["save_raw_parameters"]]))
   )
-  
+
   control.common <- nlist(iter, warmup, verbose, refresh, is_binary = is_bernoulli,
                           offset, offset_type,
                           bart_offset_init, sigma_init,
-                          keep_fits, callback, callbackEnv)
+                          keep_fits, save_warmup, callback, callbackEnv)
   
   chainResults <- vector("list", chains)
   runSingleThreaded <- cores <= 1L || chains <= 1L
@@ -564,9 +641,15 @@ stan4bart_fit <-
     fixef_rows <- dimnames(chainResults[[1L]]$sample$stan)[[1L]]
     fixef_rows <- startsWith(fixef_rows, "beta.")
     if (any(fixef_rows) && exists("R_inv")) for (chainNum in seq_len(chains)) {
-      if (!is.null(chainResults[[chainNum]]$warmup))
+      if (!is.null(chainResults[[chainNum]][["warmup"]]))
         chainResults[[chainNum]]$warmup$stan[fixef_rows,] <-
           R_inv %*% chainResults[[chainNum]]$warmup$stan[fixef_rows,]
+      if (!is.null(chainResults[[chainNum]]$trace))
+        chainResults[[chainNum]]$trace$stan[fixef_rows,] <-
+          R_inv %*% chainResults[[chainNum]]$trace$stan[fixef_rows,]
+      if (!is.null(chainResults[[chainNum]]$snapshot))
+        chainResults[[chainNum]]$snapshot[fixef_rows] <-
+          as.vector(R_inv %*% chainResults[[chainNum]]$snapshot[fixef_rows])
       chainResults[[chainNum]]$sample$stan[fixef_rows,] <-
         R_inv %*% chainResults[[chainNum]]$sample$stan[fixef_rows,]
     }
@@ -582,8 +665,20 @@ stan4bart_fit <-
     control.bart@n.chains <- chains
     control.bart@keepTrees <- TRUE
     control.bart@n.samples <- as.integer(iter - warmup)
-    attr(chainResults, "sampler.bart") <- 
+    attr(chainResults, "sampler.bart") <-
       .Call(C_stan4bart_createStoredBARTSampler, control.bart, data.bart, model.bart, all_state)
+
+    # Retain the SERIALIZABLE inputs so the stored-tree external pointer can be
+    # rebuilt lazily after saveRDS/readRDS (the live pointer dies on reload).
+    # The big training design matrix (@x/@x.test) is dropped here and
+    # re-spliced from the fit's $bartData at rebuild, so the retained bundle is
+    # n-independent (dominated by the kept-tree state, tens of MB).
+    data.bart.light <- data.bart
+    data.bart.light@x <- data.bart.light@x[integer(0L), , drop = FALSE]
+    data.bart.light@x.test <- data.bart.light@x.test[integer(0L), , drop = FALSE]
+    attr(chainResults, "state.bart") <-
+      list(state = all_state, control = control.bart,
+           model = model.bart, data = data.bart.light)
   }
   
   chainResults

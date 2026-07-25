@@ -12,9 +12,11 @@ n.chains <- 2L
 n.warmup <- 3L
 n.iter   <- 8L
 
+# save_warmup so the include_warmup pass-through below has warmup draws to
+# read; warmup is not stored by default
 fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                  cores = 1, verbose = -1L, chains = n.chains, warmup = n.warmup, iter = n.iter,
-                 bart_args = list(n.trees = 5))
+                 bart_args = list(n.trees = 5), save_warmup = TRUE)
 
 arr <- as.array(fit)
 mat <- as.matrix(fit)
