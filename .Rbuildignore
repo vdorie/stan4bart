@@ -5,6 +5,7 @@
 ^.github$
 ^.gitignore$
 ^.claude$
+^CLAUDE\.local\.md$
 ^readme.md$
 ^autom4te\.cache$
 ^config\.log$
