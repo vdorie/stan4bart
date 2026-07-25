@@ -138,6 +138,18 @@
   density, step size, and the diagonal mass estimate), so the corresponding
   warnings no longer fire.
 
+## New features
+
+* New `mvbart()` jointly fits BART to two or more continuous outcomes that
+  share a predictor set but have correlated residuals - the seemingly-
+  unrelated-regressions (SUR) analogue of BART. Each outcome gets its own
+  sum-of-trees mean surface; the surfaces are coupled through a residual
+  covariance matrix with a conjugate inverse-Wishart prior, sampled jointly,
+  which calibrates the joint predictive distribution better than one
+  independent BART per outcome. Composed from existing machinery - no engine
+  support was required. Results are `mvbartFit` objects with a `print`
+  method; see `?mvbart`.
+
 ## Breaking changes
 
 * Factor variables in the `bart()` part of the formula are now encoded with
@@ -172,3 +184,40 @@
   populating every run's output buffers (usually masked by the buffers
   otherwise reading as zero). Found and fixed while recording this arc's
   Stan-era baselines.
+
+* Fixed `extract`/`fitted` returning a dimensionless result for `type = "ev"`
+  and `"ppd"` when the fit was made with `offset_type = "bart"`. Composing
+  those types reads the result's shape from the BART component, but that
+  `offset_type` substitutes the length-n offset vector for it, leaving the
+  composed draws without dimensions.
+
+* Fixed `extract(type = "ev")` and `type = "ppd"` silently ignoring
+  `offset_type = "fixef"` and `"ranef"`: the stored values were compared
+  against the internally-checked spellings `"fixed"` and `"random"`, so
+  neither ever matched and the offset was dropped from the composition.
+
+* Fixed three defects in drawing random effects for brand-new grouping
+  levels under `sample_new_levels = TRUE`, all of which required a grouping
+  factor with more than one predictor (a random slope); intercept-only
+  factors were unaffected. The per-draw covariance was sliced with
+  `drop = FALSE`, leaving a 3-D array where `chol()` requires a square
+  matrix, so the path errored outright; the standard normal draws were
+  allocated with `n_predictors^2` rows instead of `n_predictors`; and the
+  Cholesky factor was both transposed at construction and applied with
+  `crossprod`, so the draws carried covariance `R R'` rather than the
+  target `Sigma` (equal only when `Sigma` is diagonal).
+
+* Fixed `predict` capturing a positionally-supplied `type` as `offset`:
+  `predict(fit, newdata, "ev")` either errored on a non-numeric addition or,
+  for the `indiv.*` types, quietly returned the default `"ev"` component.
+
+* Fixed `as.matrix` collapsing the whole draw array into a single column
+  instead of reshaping it to (iterations x chains) by parameters.
+
+* Fixed `as.array`'s `include_warmup` silently returning the post-warmup
+  draws: the internal warmup-expression rewriter recognized only an object
+  literally named `object`, and `as.array`'s argument is named `x`.
+
+* Fixed a spurious length-recycling warning whenever a grouping factor
+  gained new levels, from comparing random-effect row names with `==`
+  rather than `identical()`.

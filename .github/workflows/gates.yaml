@@ -1,0 +1,118 @@
+# The package's own sampling gates, beyond what R CMD check runs.
+#
+# Split by kind, the way a gate's failure mode should decide its cadence:
+#
+#   exactness (recompute-exactness.R) is DETERMINISTIC - a store = "trees" fit
+#     recomputes its BART surfaces to within 1e-10 of the stored ones, or it
+#     does not. It cannot flake, so it gates every push.
+#   posterior (compare-posterior.R) is STATISTICAL - it compares tier
+#     summaries against recorded baselines within a multiple of their combined
+#     MCSE. A true regression fails it, but so, occasionally, will chance. It
+#     runs nightly and on demand, where a human reads the result, rather than
+#     blocking a push on a coin flip.
+#
+# Both need the same non-CRAN dbarts as R-CMD-check; see the note there.
+name: gates
+
+on:
+  push:
+    branches: [bartcore]
+    paths-ignore:
+      - 'docs/**'
+      - 'TODO'
+      - '**.md'
+  pull_request:
+    branches: [main, master, bartcore]
+    paths-ignore:
+      - 'docs/**'
+      - 'TODO'
+      - '**.md'
+  schedule:
+    # nightly, for the statistical leg
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  exactness:
+    runs-on: ubuntu-latest
+    name: recompute exactness (store = "trees")
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      # TEMPORARY until dbarts 1.0-0 is on CRAN; see check-standard.yaml
+      - name: Install dbarts from the release branch
+        shell: Rscript {0}
+        run: |
+          install.packages("remotes", repos = "https://cloud.r-project.org")
+          remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never")
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          needs: check
+
+      - name: Install stan4bart
+        run: R CMD INSTALL --preclean .
+
+      - name: Recompute-exactness gate
+        run: Rscript benchmarks/R/recompute-exactness.R all
+
+  posterior:
+    # statistical: nightly and on demand only, never blocking a push
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    name: posterior comparison vs baselines
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: release
+          use-public-rspm: true
+
+      # TEMPORARY until dbarts 1.0-0 is on CRAN; see check-standard.yaml
+      - name: Install dbarts from the release branch
+        shell: Rscript {0}
+        run: |
+          install.packages("remotes", repos = "https://cloud.r-project.org")
+          remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never")
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          needs: check
+
+      - name: Install stan4bart
+        run: R CMD INSTALL --preclean .
+
+      - name: Read the current baseline from the manifest
+        id: baseline
+        shell: bash
+        run: |
+          # the MANIFEST's "current" row is authoritative for which baseline a
+          # comparison runs against; do not hard-code the hash here. Skip
+          # comment lines (the role legend also contains the word) and require
+          # the posterior prefix (bench-perf carries its own "current" row).
+          file=$(awk '!/^#/ && $2 == "current" && $1 ~ /^posterior-baselines-/ { print $1 }' \
+                   benchmarks/baselines/MANIFEST | head -1)
+          if [ -z "$file" ]; then
+            echo "::error::no baseline marked 'current' in benchmarks/baselines/MANIFEST"
+            exit 1
+          fi
+          echo "path=benchmarks/baselines/$file" >> "$GITHUB_OUTPUT"
+
+      - name: Posterior comparison
+        run: Rscript benchmarks/R/compare-posterior.R compare-all ${{ steps.baseline.outputs.path }}

@@ -1,0 +1,86 @@
+# ASAN + UBSAN over the compiled Gibbs loop, the WALNUTS sampler, and the
+# .Call bridge, on an r-hub sanitizer container (instrumented R-devel build).
+#
+# This package is exactly the shape that CRAN's clang-san rebuild bites:
+# hand-written pointer arithmetic into R-allocated buffers, a two-block Gibbs
+# loop that hands raw double* between two samplers, and Eigen maps over
+# borrowed storage. dbarts's own ASAN leg caught a heap-use-after-free that
+# its full test battery and exact gates both read through silently, so the
+# instrumented run is the authoritative memory-safety gate here too.
+#
+# One container rather than dbarts's clang+gcc pair: this package must build
+# dbarts from source under instrumentation as well, so a leg costs roughly
+# twice what dbarts's does. clang-asan is the one that matches CRAN's own
+# sanitizer rebuild most closely.
+name: sanitizers
+
+on:
+  push:
+    branches: [bartcore]
+    paths-ignore:
+      - 'docs/**'
+      - 'TODO'
+      - '**.md'
+      - 'benchmarks/**'
+  pull_request:
+    branches: [main, master, bartcore]
+    paths-ignore:
+      - 'docs/**'
+      - 'TODO'
+      - '**.md'
+      - 'benchmarks/**'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: read-all
+
+jobs:
+  asan-ubsan:
+    runs-on: ubuntu-latest
+    name: clang ASAN+UBSAN
+    container:
+      image: ghcr.io/r-hub/containers/clang-asan:latest
+    env:
+      # leak detection is noisy against an uninstrumented R runtime; the
+      # target here is memory-access errors and undefined behavior
+      ASAN_OPTIONS: detect_leaks=0
+      UBSAN_OPTIONS: print_stacktrace=1
+      NOT_CRAN: true
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        shell: Rscript {0}
+        run: |
+          need <- setdiff(c("tinytest", "Matrix", "Rcpp", "RcppEigen", "remotes"),
+                          rownames(installed.packages()))
+          if (length(need)) install.packages(need, repos = "https://cloud.r-project.org")
+          # dbarts is built from source here, so it is instrumented too - which
+          # matters, since this package drives its engine through the C API and
+          # a finding could land on either side of that boundary
+          remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never")
+
+      - name: Install stan4bart under sanitizers
+        run: R CMD INSTALL --preclean .
+
+      - name: Unit tests under ASAN+UBSAN
+        shell: bash
+        run: |
+          set -eo pipefail
+          # a test failure quits non-zero (via the return value, not by parsing
+          # test_package's printed summary); pipefail + set -e propagate it
+          Rscript -e '
+            res <- tinytest::test_package("stan4bart", at_home = TRUE)
+            print(res)
+            ok <- vapply(res, function(t) isTRUE(as.logical(t)[1]), logical(1))
+            if (length(ok) == 0L || !all(ok)) quit(status = 1L, save = "no")
+          ' 2>&1 | tee sanitizer-tests.log
+          # a sanitizer finding that does not fail an assertion (e.g. a UBSAN
+          # "runtime error:" printed during an otherwise-passing test) still fails
+          if grep -Eq "runtime error:|AddressSanitizer|SUMMARY: .*Sanitizer" sanitizer-tests.log; then
+            echo "::error::sanitizer reported a finding"; exit 1
+          fi
