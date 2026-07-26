@@ -62,6 +62,13 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           needs: check
+          # TEMPORARY, same cause as the dbarts step above: with no pandoc on
+          # the PATH the action re-solves DESCRIPTION from the repositories
+          # alone to decide whether it needs one, and that solve cannot see
+          # the already-installed dbarts 1.0-0, so it fails the job. The
+          # package has no vignettes; skip the question. DELETE with the
+          # dbarts step when 1.0-0 is on CRAN.
+          install-pandoc: false
 
       - name: Install stan4bart
         run: R CMD INSTALL --preclean .
@@ -94,6 +101,13 @@ jobs:
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
           needs: check
+          # TEMPORARY, same cause as the dbarts step above: with no pandoc on
+          # the PATH the action re-solves DESCRIPTION from the repositories
+          # alone to decide whether it needs one, and that solve cannot see
+          # the already-installed dbarts 1.0-0, so it fails the job. The
+          # package has no vignettes; skip the question. DELETE with the
+          # dbarts step when 1.0-0 is on CRAN.
+          install-pandoc: false
 
       - name: Install stan4bart
         run: R CMD INSTALL --preclean .

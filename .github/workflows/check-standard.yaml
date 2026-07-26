@@ -74,6 +74,9 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
+          # check-r-package below calls rcmdcheck::rcmdcheck; nothing else
+          # installs it, so it has to be named here
+          extra-packages: any::rcmdcheck
           needs: check
 
       - uses: r-lib/actions/check-r-package@v2
