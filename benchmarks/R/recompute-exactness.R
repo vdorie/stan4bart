@@ -89,6 +89,11 @@ run_scale <- function(label, n, n_levels, warmup, iter, chains, n.trees,
 
   stored <- fit$bart_train                       # n x S x C, the block we replace
   X.bart <- fit$bartData@x                        # the training design matrix
+  # bartData@x is a dbartsMixedMatrix - dbarts's sparse/dense TRAINING
+  # representation, not a plain matrix - and predictBART requires a real one.
+  # as.matrix() is dbarts's own dense conversion, the same densify the package
+  # applies at the recompute seam (recompute_bart_block, generics.R).
+  if (inherits(X.bart, "dbartsMixedMatrix")) X.bart <- as.matrix(X.bart)
 
   t_rec <- system.time(
     recomputed <- .Call(stan4bart:::C_stan4bart_predictBART, fit$sampler.bart, X.bart, NULL)
