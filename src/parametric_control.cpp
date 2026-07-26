@@ -53,14 +53,6 @@ namespace stan4bart {
 // The rc bounds vocabulary ORs distinct enum types (RC_VALUE | RC_GEQ, ...),
 // which C++20 deprecates; suppress it exactly as the deleted stan_sampler.cpp
 // did around this same code.
-#ifdef __clang__
-#  if __has_warning("-Wenum-enum-conversion")
-#    define SUPPRESS_ENUM_CONVERSION_WARNING 1
-#    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wenum-enum-conversion"
-#  endif
-#endif
-
 void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
 {
   SEXP controlNamesExpr = rc_getNames(controlExpr);
@@ -127,11 +119,6 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
 
   misc_stackFree(matchPos);
 }
-
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic pop
-#  undef SUPPRESS_ENUM_CONVERSION_WARNING
-#endif
 
 SEXP createStanResultsExpr(const double_writer& sample_writer)
 {

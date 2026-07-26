@@ -82,6 +82,23 @@ typedef enum {
 
 #ifdef __cplusplus
 }
+
+// The constraint idiom above ORs two DIFFERENT enumeration types
+// (RC_VALUE | RC_GT, RC_NA | RC_YES), which C++20 deprecates: clang calls it
+// -Wenum-enum-conversion, gcc -Wdeprecated-enum-enum-conversion, and R CMD
+// check reads the latter as an install WARNING. These keep the documented
+// idiom well formed on every compiler rather than silencing it per compiler
+// at each call site. The result is the same int the varargs callee reads, so
+// the generated code is unchanged.
+constexpr int operator|(rc_constraintType constraint, rc_boundType bound) noexcept
+{
+  return static_cast<int>(constraint) | static_cast<int>(bound);
+}
+
+constexpr int operator|(rc_constraintType constraint, rc_naAllowableType naAllowable) noexcept
+{
+  return static_cast<int>(constraint) | static_cast<int>(naAllowable);
+}
 #endif
 
 #endif // RC_BOUNDS_H

@@ -147,14 +147,6 @@ extern "C" {
   static void samplerFinalizer(SEXP samplerExpr);
   static void storedBARTSamplerFinalizer(SEXP samplerExpr);
   
-#ifdef __clang__
-#  if __has_warning("-Wenum-enum-conversion")
-#    define SUPPRESS_ENUM_CONVERSION_WARNING 1
-#    pragma clang diagnostic push
-#    pragma clang diagnostic ignored "-Wenum-enum-conversion"
-#  endif
-#endif
-  
   static SEXP createSampler(SEXP bartControlExpr, SEXP bartDataExpr, SEXP bartModelExpr,
                             SEXP stanDataExpr, SEXP stanControlExpr,
                             SEXP commonControlExpr)
@@ -272,10 +264,6 @@ extern "C" {
     return result;
   }
   
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic pop
-#endif
-  
   static SEXP getParametricMean(SEXP samplerExpr)
   {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
@@ -292,11 +280,6 @@ extern "C" {
     
     return result;
   }
-  
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
-#endif
   
   static SEXP predictBART(SEXP storedBARTSamplerExpr, SEXP x_testExpr, SEXP offset_testExpr)
   {
@@ -350,10 +333,6 @@ extern "C" {
     
     return result;
   }
-  
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic pop
-#endif
   
   static SEXP exportBARTState(SEXP samplerExpr)
   {
@@ -509,11 +488,6 @@ extern "C" {
     
     return resultExpr;
   }
-  
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
-#endif
   
   static SEXP run(SEXP samplerExpr, SEXP numIterExpr, SEXP isWarmupExpr, SEXP resultsTypeExpr)
   {
@@ -796,10 +770,6 @@ extern "C" {
     return(resultExpr);
   }
   
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic pop
-#endif
-  
   static SEXP printInitialSummary(SEXP samplerExpr) {
     Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
     if (samplerPtr == NULL) Rf_error("printInitialSummary called on NULL external pointer");
@@ -878,11 +848,6 @@ extern "C" {
 
 namespace {
 
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic push
-#  pragma clang diagnostic ignored "-Wenum-enum-conversion"
-#endif
-
 void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
 {
   sampler.defaultWarmup = rc_getInt(rc_getListElement(commonControlExpr, "warmup"), "warmup",
@@ -920,11 +885,6 @@ void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr)
   if (sampler.callbackEnv != R_NilValue && !Rf_isEnvironment(sampler.callbackEnv))
     Rf_error("callbackEnv must be an environment or NULL");
 }
-
-#ifdef SUPPRESS_ENUM_CONVERSION_WARNING
-#  pragma clang diagnostic pop
-#  undef SUPPRESS_ENUM_CONVERSION_WARNING
-#endif
 
 }
 
