@@ -16,13 +16,6 @@ items
     refinements - assembled response-scale ev to the callback, warmup
     gating, documenting the seam - are consumer-gated and land with
     adoption).
-  dbarts-spec-adoption: adopt dbarts 1.0-0's exported dbartsSpec() in
-    stan4bart_fit.R, replacing the hand-built dbartsModel and the
-    dbarts:::parsePriors quoteInNamespace shim, and widen bart_args to
-    the model-level knobs it makes reachable (family, monotone,
-    interactions, blocks, variance, missing) rather than only names
-    matching dbartsControl formals. Prerequisite for most of the items
-    below; the shim already broke once at the 1.0 port.
   ordinal-outcomes: ordered-categorical responses via dbarts's
     cumulative probit. Structurally the existing binary path -
     getLatents into the parametric response, cutpoints drawn
@@ -33,13 +26,19 @@ items
     parametric mean, so what it reports is the joint conditional
     likelihood) as a log_lik extract type plus loo/waic methods.
     Storage opt-in, same discipline as store=.
-  dbarts-passthroughs: wire, document, and test the features needing no
-    new dbarts surface once dbarts-spec-adoption lands -
-    storage="single", missing="incorporate" (MIA on BART-only
-    covariates), monotone, sparse columns, warm starts, and
-    interactions()/blocks(). The last is also the cheap R-side
+  dbarts-passthroughs: wire, document, and test the features that
+    dbarts-spec-adoption only made REACHABLE - storage="single", sparse
+    columns, warm starts, and the substantive use of monotone and
+    interactions()/blocks() (the last is also the cheap R-side
     mitigation of the forest-ranef confounding dbarts investigated and
-    declined to fix in the engine.
+    declined to fix in the engine). missing="incorporate" (MIA on
+    BART-only covariates) is the one item here that is NOT a knob:
+    dbartsSpec does not take it, it is a dbartsData argument, and the
+    lme4 ingestion in lme4_functions.R drops NA rows through
+    model.frame's na.action before dbartsData ever sees them and again
+    through the union na.action.all. Reaching it means teaching the
+    ingestion to keep NA rows for the bart frame alone while the fixed
+    and random frames stay complete - an arc, not a forwarded name.
   per-observation-variance: robust-t residuals and a heteroscedastic
     variance forest, as ONE arc - both need per-observation precision
     to flow BART -> parametric, reversing today's scalar setSigma

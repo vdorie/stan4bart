@@ -298,7 +298,26 @@ stan4bart(formula,
       specified by \code{stan4bart}, such as \code{keepTrees} or
       \code{n.trees}; keeping trees can be costly in terms of memory, but is
       required to use \code{\link[=stan4bart-generics]{predict}}
+      \item further arguments to \code{\link[dbarts]{dbartsSpec}}, the
+      model-level half of a \code{\link[dbarts]{dbarts}} specification:
+      \code{tree.prior}, \code{node.prior}, \code{proposal.probs},
+      \code{monotone}, \code{interactions}, \code{blocks}, and \code{seed}.
+      These are resolved in \code{dbarts}'s own prior vocabulary, so bare
+      expressions such as \code{node.prior = normal(k = chi(1.25, Inf))}
+      resolve whether or not \code{dbarts} is attached
+      \item \code{k}, \code{power}, \code{base}, and \code{split.probs},
+      shorthand for the corresponding \code{node.prior} and \code{tree.prior}
+      arguments; supplying both a shorthand and the prior it writes into is
+      an error
     }
+    \code{sigma}, \code{resid.prior}, \code{resid.dist}, and \code{variance}
+    are \emph{not} accepted: the parametric component draws the residual
+    standard deviation and the BART component conditions on it, so the forest
+    holds its own error scale fixed and has no residual model to configure.
+    Neither is \code{family}, beyond naming the one the response already
+    implies (\code{"gaussian"} or \code{"probit"}) - the response family
+    follows the fitted data, and the remaining \code{dbarts} families are not
+    wired into the two-block sampler.
   }
   \subsection{Reproducibility}{
     Behavior differs when running multi- and single-threaded, as the pseudo random

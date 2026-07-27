@@ -141,6 +141,26 @@
 
 ## New features
 
+* `bart_args` now reaches the whole model-level half of a `dbarts`
+  specification, not just `dbartsControl`'s formals plus a hand-wired
+  `k`/`power`/`base`/`split.probs`. The BART component's control/model/data
+  triple is built by `dbarts::dbartsSpec()`, exported by dbarts 1.0-0 for
+  exactly this purpose, in place of a hand-assembled `dbartsModel` and a
+  `dbarts:::parsePriors` call through a `:::` shim, so `tree.prior`,
+  `node.prior`, `proposal.probs`, `monotone`, `interactions()`, `blocks()`,
+  and `seed` all pass through and are validated by dbarts itself. Priors are
+  resolved in dbarts's own vocabulary, so `node.prior = normal(k = chi(1.25,
+  Inf))` works whether or not dbarts is attached, and `k`/`power`/`base`/
+  `split.probs` remain as shorthand for the priors they write into (giving
+  both a shorthand and its prior is now an error). Draws for every previously
+  expressible `bart_args` are bit-identical.
+
+  `sigma`, `resid.prior`, `resid.dist`, and `variance` are refused: the
+  parametric component draws the residual standard deviation and the BART
+  component conditions on it each sweep, so the forest has no residual model
+  of its own to configure. `family` is refused unless it names the one the
+  response already implies.
+
 * New `mvbart()` jointly fits BART to two or more continuous outcomes that
   share a predictor set but have correlated residuals - the seemingly-
   unrelated-regressions (SUR) analogue of BART. Each outcome gets its own

@@ -37,6 +37,11 @@ priors and nothing else.
    attribute reachable in one change instead of one per feature. Also widens
    `bart_args`, which today forwards only names matching `dbartsControl`
    formals plus hand-wired k/power/base/split.probs.
+   LANDED - docs/plans/dbarts-spec-adoption.md. Note for the items below:
+   `missing` turned out not to be a knob this reaches (it is a `dbartsData`
+   argument, and the lme4 ingestion drops NA rows before `dbartsData` sees
+   them), and `variance` is refused here rather than forwarded - it belongs
+   to item 5, whose channel does not exist yet.
 2. ORDINAL responses. Structurally the existing binary path: `getLatents` ->
    the parametric block's response, with dbarts drawing the cutpoints
    internally. Multilevel ordinal regression is bread-and-butter for this

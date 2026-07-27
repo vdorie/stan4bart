@@ -526,35 +526,66 @@ stan4bart_fit <-
   if (length(weights) > 0L) data.bart@weights <- weights
   
   data.bart@n.cuts <- rep_len(attr(control.bart, "n.cuts"), ncol(data.bart@x))
-  control.bart@binary <- !is_continuous
   evalEnv <- sys.frame(sys.nframe())
-  
-  cgm <- normal <- fixed <- gaussian <- parsePriors <- NULL # R CMD check
-  prior_call <- quote(parsePriors(control.bart, data.bart, cgm, normal, fixed(1), gaussian, parentEnv = evalEnv))
-  prior_call[[1L]] <- quoteInNamespace(parsePriors)
-  prior_call[[1L]][[2L]] <- quote(dbarts)
-  
+
+  # dbarts::dbartsSpec resolves the control/model/data triple and the family
+  # token exactly as dbarts() does, so every model-level knob it understands -
+  # the priors, monotone, interactions(), blocks() - rides through bart_args
+  # instead of being hand-wired here one name at a time.
+  #
+  # Some of its arguments are this package's to set, not the caller's. The
+  # parametric block draws the residual standard deviation and pushes it into
+  # the forest with setSigma every sweep, so dbarts holds sigma fixed at 1 and
+  # can carry neither a residual prior nor a residual distribution nor a
+  # variance forest of its own; and the response family follows stan4bart's
+  # own 'family' argument.
+  reserved <- intersect(names(bart_args), c("sigma", "resid.prior", "resid.dist", "variance"))
+  if (length(reserved) > 0L)
+    stop("bart_args cannot set ", paste0("'", reserved, "'", collapse = ", "),
+         "; the parametric component draws the residual standard deviation and ",
+         "the BART component conditions on it", call. = FALSE)
+
+  bart_family <- if (is_continuous) "gaussian" else "probit"
+  if (!is.null(bart_args[["family"]]) && !identical(bart_args[["family"]], bart_family))
+    stop("bart_args$family must be \"", bart_family, "\" for a ", famname,
+         " response; the other dbarts families are not wired into the Gibbs loop",
+         call. = FALSE)
+
+  spec_call <- quote(dbarts::dbartsSpec(data = data.bart, control = control.bart,
+                                        resid.prior = fixed(1), family = bart_family,
+                                        parentEnv = evalEnv))
+  for (name in intersect(names(bart_args),
+                         setdiff(names(formals(dbarts::dbartsSpec)), names(spec_call))))
+  {
+    spec_call[[name]] <- bart_args[[name]]
+  }
+
+  # 'k' and the cgm parameters remain spellable at the top level of bart_args,
+  # as they were before the priors themselves were reachable
   if (!is.null(bart_args[["k"]])) {
-    end_node_pos <- which(as.character(prior_call) == "normal")
+    if (!is.null(bart_args[["node.prior"]]))
+      stop("bart_args cannot set both 'k' and 'node.prior'", call. = FALSE)
     end_node_prior <- quote(normal(k = k))
     end_node_prior[[2L]] <- bart_args[["k"]]
-    prior_call[[end_node_pos]] <- end_node_prior
+    spec_call[["node.prior"]] <- end_node_prior
   }
   tree_pars <- c("power", "base", "split.probs")
   tree_pars <- tree_pars[tree_pars %in% names(bart_args)]
   if (length(tree_pars) > 0L) {
-    tree_pos <- which(as.character(prior_call) == "cgm")
+    if (!is.null(bart_args[["tree.prior"]]))
+      stop("bart_args cannot set both 'tree.prior' and ",
+           paste0("'", tree_pars, "'", collapse = ", "), call. = FALSE)
     tree_prior <- quote(cgm())
     tree_prior[1L + seq_along(tree_pars)] <- bart_args[tree_pars]
     names(tree_prior)[1 + seq_along(tree_pars)] <- tree_pars
-    prior_call[[tree_pos]] <- tree_prior
+    spec_call[["tree.prior"]] <- tree_prior
   }
-  
-  bart_priors <- eval(prior_call)
-  model.bart <- new("dbartsModel", bart_priors$tree.prior, bart_priors$node.prior,
-                    bart_priors$node.hyperprior, bart_priors$resid.prior,
-                    node.scale = if (!is_continuous) 3.0 else 0.5)
-  
+
+  bart_spec <- eval(spec_call)
+  control.bart <- bart_spec$control
+  model.bart   <- bart_spec$model
+  data.bart    <- bart_spec$data
+
   
   control.stan <- list(
     init_r = stan_args[["init_r"]] %ORifNULL% 2.0,

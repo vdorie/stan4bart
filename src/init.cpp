@@ -12,6 +12,7 @@ using std::snprintf;
 #endif
 
 #include <cstdint>
+#include <cstring> // strcmp
 #include <exception>
 #include <memory> // unique_ptr
 #include <set> // external pointers set
@@ -137,6 +138,19 @@ namespace {
   };
   
   void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr);
+
+  // dbartsSpec resolves the family and parks the token on the model; it is what
+  // dbarts_sampler_create's fourth argument wants. "" asks the library to
+  // dispatch on the shape of the response instead, which is right for the two
+  // families this package fits and is the fallback for a model built before the
+  // slot existed (a state restored from an older saved fit).
+  const char* getBARTFamily(SEXP modelExpr)
+  {
+    SEXP familyExpr = Rf_getAttrib(modelExpr, Rf_install("family"));
+    if (!Rf_isString(familyExpr) || Rf_length(familyExpr) == 0) return "";
+    const char* family = CHAR(STRING_ELT(familyExpr, 0));
+    return std::strcmp(family, "auto") == 0 ? "" : family;
+  }
 }
 
 extern "C" {
@@ -182,7 +196,7 @@ extern "C" {
       RC_NA | RC_NO, RC_END);
     sampler.bartSampler = dbarts_sampler_create(bartControlExpr,
                                                bartModelExpr, bartDataExpr,
-                                               "");
+                                               getBARTFamily(bartModelExpr));
     dbarts_sampler_setVerbose(sampler.bartSampler, 0, 100);
     dbarts_sampler_setTreeStorage(sampler.bartSampler, 0, 0);
     sampler.kIsSampled = dbarts_sampler_kIsSampled(sampler.bartSampler) != 0;
@@ -347,7 +361,8 @@ extern "C" {
     // the R side sizes the control for restoration (n.chains matching the
     // state, keepTrees with n.samples at the saved capacity); the state
     // carries the fit's response transform, so no scale pokes remain
-    sampler.fit = dbarts_sampler_create(controlExpr, modelExpr, dataExpr, "");
+    sampler.fit = dbarts_sampler_create(controlExpr, modelExpr, dataExpr,
+                                        getBARTFamily(modelExpr));
     dbarts_sampler_setVerbose(sampler.fit, 0, 100);
     dbarts_sampler_setState(sampler.fit, stateExpr);
     

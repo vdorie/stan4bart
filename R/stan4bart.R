@@ -203,13 +203,15 @@ stan4bart <-
   }
    
   # Some trickery to allow calls like bart_args = list(k = chi(2, Inf))
-  # to work. Since 'chi' is never defined, use a function that returns
-  # a quoted version of the call.
+  # to work. dbarts's prior vocabulary is not exported - it is a list that
+  # dbarts::parsePriors binds into the environment it evaluates the prior
+  # arguments in - so a bare 'chi' or 'cgm' here would not resolve. Bind each
+  # name to a function that returns the quoted call instead, and let
+  # dbartsSpec's own evaluation resolve it downstream.
   defn_env <- new.env(parent = parent.frame())
-  defn_env$chi <- function(degreesOfFreedom = 1.25, scale = Inf) {
-    match.call()
-  }
-  
+  for (prior_name in names(dbarts::dbartsPriors))
+    assign(prior_name, function(...) match.call(), envir = defn_env)
+
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)
 
   # store = "trees" recomputes the BART fits on demand from the kept trees
