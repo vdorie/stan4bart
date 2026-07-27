@@ -1,4 +1,6 @@
-An unordered backlog; history lives in docs/plans/, docs/design/, and git.
+An unordered backlog: what is still to do, plus the negative findings that
+would otherwise be paid for twice. Completed work is not logged here -
+its history lives in docs/plans/, docs/design/, and git.
 
 The ranked survey behind the dbarts-capability items - what the seam is,
 what each costs, and which need dbarts to grow first - is
@@ -56,86 +58,37 @@ items
     here, and what bartCause would consume. Needs a new dbarts.h entry
     point: BCF is built by its own path inside dbarts and is not
     exposed through the flat C API at all. decision-gated.
-  vendored-header-refresh: DONE 2026-07-26. src/include/ and the rc
-    sources are vendored from dbarts by copying the file and rewriting
-    external/ -> ext/ (this package names that directory ext, dbarts
-    names it external). rc_util.c, rc_bounds.c, rc/bounds.h, ext/R.h,
-    ext/Rinternals.h, and ext/io.h all now match upstream, the ones
-    with an external/ include modulo that line. Nothing left to sync.
-    misc/ is down to stddef.h, which is deliberately NOT vendored:
+  vendored-headers: when syncing a file from dbarts, copy it and
+    rewrite external/ -> ext/ (this package names that directory ext,
+    dbarts names it external); that one line is the only permitted
+    divergence. Do NOT re-vendor misc/intrinsic.h or the AX_EXT
+    configure machinery deleted with the radix tree. A dbarts source
+    wanting intrinsic.h also wants upstream's AX_COMPILER_EXT configure
+    side, and the two must move together - the macro names look
+    cosmetic and are not (COMPILER_SUPPORTS_SSE2 asks whether the
+    compiler accepts -msse2; the old HAVE_SSE2 asked whether the build
+    host's cpuid reported it). misc/ is deliberately down to stddef.h:
     misc_index_t is a dbarts kernel type this package does not use.
-    The misc/intrinsic.h question this entry used to hold open is
-    closed by deletion, mirroring dbarts 091ffb9. The header was only
-    ever reached through misc_adaptiveRadixTree.c, whose only caller
-    parsed sampler control argument names, so the tree and the misc
-    members it carried (string, memalign, intrinsic, alloca) are gone
-    and the name matching is a direct scan in parametric_control.cpp.
-    Nothing SIMD, aligned, or alloca-shaped is left in this package,
-    and no translation unit includes config.h, so AX_EXT, the vendored
-    m4 macros, AC_CONFIG_HEADERS, config.h.in/.win, and configure.win
-    went with it. Do not re-vendor any of them: if a future sync pulls
-    in a dbarts source that wants misc/intrinsic.h, it will also want
-    upstream's AX_COMPILER_EXT configure side, and the two must move
-    together - the macro names look cosmetic and are not
-    (COMPILER_SUPPORTS_SSE2 asks whether the compiler accepts -msse2;
-    the old HAVE_SSE2 asked whether the build host's cpuid reported
-    it).
-  bench-perf-rerecord: DONE 2026-07-27, bench-perf-3e2036b.csv is
-    current. install 15.1s -> 11.8s, which is what the radix-tree
-    deletion bought (9 translation units to 7). The negative
-    per-iteration times that blocked the first attempt were NOT a
-    quiet-machine problem - the machine was 83% idle by top's
-    instantaneous sample, and load average and ps %CPU both misread it
-    because they decay. The spread was widened from 100/300 to 200/2000
-    in 3e2036b. The under-resolution diagnosis recorded here was only
-    half of it, and the smaller half - see walnuts-periter-4x, which
-    found the estimator biased, not merely noisy.
-  walnuts-periter-4x: RESOLVED 2026-07-27. There was no speedup. Per-
-    iteration cost is FLAT across 174b369..3e2036b at ~150 us/iter, and
-    the 0.5 -> 0.13 ms "4x" was manufactured by bench-perf.R itself,
-    which differenced two COLD subprocesses. A cold process pays
-    page-in and allocator warm-up on the sample-storage arrays; that
-    cost scales with iter, so it lands almost entirely on the long run
-    and is read back as per-iteration compute. It is a reproducible
-    bias, not jitter, and it shrinks as the stored-sample footprint
-    shrinks - which is what made it look like a win over a range that
-    cut storage (275853e, 2bd83a1).
-    Evidence, all against the installed dbarts, the pre-merge commits
-    given only the two dbarts-1.0 adapters (parsePriors signature,
-    initial-draw structSize), neither on the per-iteration path:
-      - warm in-process differencing, per commit: 174b369 163, 275853e
-        152, 2bd83a1 157, 16880d7 151, d2ab8f6 136, 62fba2b 147,
-        2f42a12 146, 206bcdb 146, f0db13f 146, 3e2036b 151 us/iter. No
-        step anywhere. d2ab8f6's scratch-buffer reuse is the only
-        visible move, ~10%.
-      - whole-fit wall at iter=2000 is 0.55-0.59s at every one of those
-        commits, with identical step_size and mean_leapfrog.
-      - the bias reproduces on demand: on 174b369, true warm cost 163
-        us/iter, the old estimator returns 700 us/iter at the 100/300
-        spread (tight, 635-760 over five reps) and 247 at 200/2000.
-      - not dbarts either. 174b369 against dbarts 68bcda1 (2026-07-16,
-        before its 07-17 leaf-map/journaling arc) reads 162.8 us/iter
-        against 161.1 on 1.0-0. That arc targets large n; at n=400 and
-        50 trees it is a wash.
-      - all three reference fits, 174b369 -> 3e2036b: 163->160,
-        136->133, 147->114 us/iter.
-    Nothing goes in NEWS.md. bench-perf.R's per_iteration_time now runs
-    both fits in one warm subprocess after a discarded first fit and
-    reports the median of three; per_iteration_time's own comment
-    carries the numbers above.
-    Corollary, unchanged in direction but now for a different reason:
-    NEWS.md's 12-39x sampler-swap payoff is UNDERSTATED. Its WALNUTS
-    denominators (0.4/0.7/0.6 ms) carry this bias, while the Stan-era
-    numerators (15.5/8.1/13.5 ms) are barely touched by an absolute
-    error of this size. Shipping as-is: correcting it needs a Stan-era
-    re-measure with the fixed estimator, and understating is safe.
-  bench-perf-rerecord2: re-record bench-perf on a quiet machine with
-    the fixed estimator. Every per_iteration_s in baselines/ was
-    measured by the biased one and reads high; MANIFEST now says so per
-    row, but the numbers in the CSVs are still the old ones. Blocked
-    2026-07-27 only on quiet: a VM was taking ~29% CPU (70% idle by
-    top, against 83% when 3e2036b was recorded). Expect ~150/133/116
-    us/iter, and peak RSS to rise ~15 MB because the timing subprocess
-    now holds seven fits instead of one.
+  perf-measurement: two traps, kept because both were expensive to find
+    and neither leaves a trace once the wrong number is written down.
+    (1) Per-iteration cost must be differenced between two fits IN ONE
+    WARM PROCESS. Differencing two cold subprocesses charges the long
+    run for page-in on the sample-storage arrays, a cost that scales
+    with iter and reads back as compute. The error is not a constant
+    offset - it grows with the per-draw storage footprint, so it does
+    not cancel across commits: it reported 700 us/iter on 174b369
+    against a warm truth of 163, and 137 on 3e2036b against 144. That
+    gradient was the whole of a "4x per-iteration speedup" chased
+    across 174b369..3e2036b, where cost is in fact flat; no stan4bart
+    or dbarts commit in that window moved it. Fixed in bench-perf.R at
+    412df11, whose comment carries the numbers.
+    (2) Quiet is top's INSTANTANEOUS idle sample. Load average and ps
+    %CPU both decay, so they read a just-finished benchmark as load and
+    a genuinely idle machine as busy.
+    Live consequence: NEWS.md's 12-39x sampler-swap payoff is a FLOOR,
+    not an estimate - its WALNUTS denominators carry trap (1) while the
+    Stan-era numerators, at 8-16 ms/iter, barely feel it. A real figure
+    needs a Stan-era rebuild re-measured warm. Understating is safe, so
+    it ships as-is; revisit only if the true multiple is wanted.
   release: stan4bart 0.0-14, in lockstep with dbarts 1.0-0. dbarts
     ships first; its TODO owns the ordered procedure. LAST.

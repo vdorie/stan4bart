@@ -165,11 +165,14 @@ for (r in seq_len(%dL))
 ## run and is read back as per-iteration compute. The bias is large and
 ## reproducible, not jitter. Measured on 174b369, whose true warm cost is
 ## 163 us/iter: cold subprocesses returned 700 us/iter at a 100/300 spread
-## (tight, 635-760 over five reps) and 247 us/iter at 200/2000. Because the
-## bias shrinks as the stored-sample footprint shrinks, it also fabricated a
-## ~4x "speedup" across 174b369..3e2036b that a per-commit bisect showed does
-## not exist - per-iteration cost is flat at ~150 us/iter across that whole
-## range (TODO walnuts-periter-4x).
+## (tight, 635-760 over five reps) and 247 us/iter at 200/2000. Nor is it a
+## constant offset that would cancel when two recordings are differenced: it
+## grows with the per-draw storage footprint, and on 3e2036b, whose footprint
+## is far smaller, it read 137 us/iter against a warm truth of 144. That
+## gradient fabricated a ~4x "speedup" across 174b369..3e2036b which a
+## per-commit bisect showed does not exist - per-iteration cost is flat across
+## that whole range, and no stan4bart or dbarts commit in the window moved it
+## (TODO perf-measurement).
 ##
 ## The spread stays 200/2000: warm, that difference is a ~0.3 s signal against
 ## sub-ms noise. `reps` fits are timed and the MEDIAN slope reported, since the
