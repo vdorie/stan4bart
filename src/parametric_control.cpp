@@ -14,10 +14,7 @@
 #include <R_ext/Print.h>  // Rprintf
 
 #include <misc/stddef.h>  // size_t
-#include <cstring>        // memcpy, strerror
-
-#include <misc/alloca.h>  // misc_stackAllocate
-#include <misc/string.h>  // misc_str_matchAllInArray
+#include <cstring>        // memcpy, strcmp
 
 #include <rc/util.h>
 #include <rc/bounds.h>
@@ -46,6 +43,12 @@ const char* const controlNames[] = {
   "save_raw_parameters"
 };
 
+constexpr size_t numControlNames = sizeof(controlNames) / sizeof(controlNames[0]);
+
+// Any index at or past the list's length reads as absent to the rc_get*At
+// accessors, which is how an unsupplied name reaches its RC_DEFAULT.
+constexpr size_t NO_MATCH = static_cast<size_t>(-1);
+
 }  // anonymous namespace
 
 namespace stan4bart {
@@ -59,23 +62,22 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
   if (Rf_isNull(controlNamesExpr))
     Rf_error("names for stanControl object cannot be NULL");
 
-  size_t numControlNames = sizeof(controlNames) / sizeof(controlNames[0]);
-  size_t* matchPos = misc_stackAllocate(numControlNames, size_t);
-
+  // A direct scan; this used to run through misc_str_matchAllInArray, which
+  // built an adaptive radix tree to match a fixed list of fourteen names once
+  // per fit. R hands us a freshly built literal list (control.stan in
+  // R/stan4bart_fit.R), so the names are always unique and the quadratic scan
+  // is over at most 14x7. Assigning without breaking still reproduces the
+  // tree's duplicate handling - insert replaced, so the last occurrence won.
   size_t numInputControlNames = rc_getLength(controlNamesExpr);
-  const char** inputControlNames = misc_stackAllocate(numInputControlNames, const char*);
-  for (size_t i = 0; i < numInputControlNames; ++i)
-    inputControlNames[i] = CHAR(STRING_ELT(controlNamesExpr, i));
-
-  int errorCode = misc_str_matchAllInArray(controlNames, numControlNames, inputControlNames, numInputControlNames, matchPos);
-  misc_stackFree(inputControlNames);
-
-  if (errorCode != 0) {
-    misc_stackFree(matchPos);
-    Rf_error("error matching names: %s", std::strerror(errorCode));
+  size_t matchPos[numControlNames];
+  for (size_t i = 0; i < numControlNames; ++i) {
+    matchPos[i] = NO_MATCH;
+    for (size_t j = 0; j < numInputControlNames; ++j)
+      if (std::strcmp(controlNames[i], CHAR(STRING_ELT(controlNamesExpr, j))) == 0)
+        matchPos[i] = j;
   }
 
-  if (matchPos[0] == MISC_STR_NO_MATCH)
+  if (matchPos[0] == NO_MATCH)
     Rf_error("stanControl requires 'seed' to be specified");
 
   control.random_seed = static_cast<unsigned int>(rc_getInt0(VECTOR_ELT(controlExpr, matchPos[0]), "seed"));
@@ -116,8 +118,6 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
     RC_VALUE | RC_DEFAULT, 10, RC_END);
   control.save_raw = rc_getIntAt(controlExpr, matchPos[13], "save_raw_parameters",
     RC_VALUE | RC_DEFAULT, 0, RC_END) != 0;
-
-  misc_stackFree(matchPos);
 }
 
 SEXP createStanResultsExpr(const double_writer& sample_writer)
