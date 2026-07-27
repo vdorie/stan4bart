@@ -80,20 +80,24 @@ items
     (COMPILER_SUPPORTS_SSE2 asks whether the compiler accepts -msse2;
     the old HAVE_SSE2 asked whether the build host's cpuid reported
     it).
-  bench-perf-rerecord: the radix-tree deletion took two translation
-    units and ~1500 lines of C out of the build, so the install-wall
-    row of bench-perf-174b369.csv (15.1s) is stale. Attempted
-    2026-07-27 and NOT recorded: the machine was not quiet (load ~4.2
-    of 10 cores, a VM at ~30% CPU) and the per-iteration estimator,
-    which differences two runs at different iter counts, returned
-    NEGATIVE times in two of three runs - its noise floor now exceeds
-    the ~0.5ms/iter it is trying to measure. Indicative numbers from
-    that attempt, for whoever re-runs: install 12.3-13.4s across three
-    runs (vs 15.1s), peak RSS 266-277 MB (vs 271-274, i.e. unchanged,
-    and the one metric that stayed trustworthy). The install drop is
-    the expected direction and if anything understated, since load
-    inflates compile time. Re-run on a quiet machine, then update
-    MANIFEST; do not promote a run whose per-iteration rows are
-    negative.
+  bench-perf-rerecord: DONE 2026-07-27, bench-perf-3e2036b.csv is
+    current. install 15.1s -> 11.8s, which is what the radix-tree
+    deletion bought (9 translation units to 7). The negative
+    per-iteration times that blocked the first attempt were NOT a
+    quiet-machine problem - the machine was 83% idle by top's
+    instantaneous sample, and load average and ps %CPU both misread it
+    because they decay. The estimator was under-resolved: its 100/300
+    iter spread was sized for ~0.5 ms/iter and sampling is now ~0.13
+    ms/iter, so the signal fell under subprocess jitter. Widened to
+    200/2000 in 3e2036b, which reproduces to ~10%.
+    Left open by this, worth someone's attention: per-iteration cost
+    dropped ~4x (0.5 -> 0.13 ms) somewhere between 2026-07-15 and
+    2026-07-27 and nothing claims credit. It is not the deletion,
+    which cannot affect per-iteration cost. Either a real improvement
+    landed unremarked and should be documented, or the old 0.5 ms
+    figure was itself partly noise from the same under-resolved
+    estimator - the 174b369 recording used the narrow spread too. The
+    second is the likelier of the two and would mean the sampler-swap
+    payoff row in bench-perf-2ee6048.csv is overstated as well.
   release: stan4bart 0.0-14, in lockstep with dbarts 1.0-0. dbarts
     ships first; its TODO owns the ordered procedure. LAST.
