@@ -11,7 +11,7 @@
 
 // for older versions of R we attempt to not include unnecessary headers,
 // which assists in checking namespace and inclusion correctness
-#if R_VERSION <= R_Version(3,3,1)
+#if R_VERSION <= R_Version(3, 3, 1)
 #  define NO_C_HEADERS
 #  ifdef __cplusplus
 #    include <cstddef>
@@ -21,14 +21,18 @@ using std::size_t;
 #  endif
 #endif
 
-#include <R.h>
-
 // prevents R_ext/Error.h from mapping Rf_error -> error and Rf_warning -> warning
-#define R_NO_REMAP
+#ifndef R_NO_REMAP
+#  define UNMAP_R_NO_REMAP
+#  define R_NO_REMAP
+#endif
 #include <R.h>
 
 #undef NO_C_HEADERS
-#undef R_NO_REMAP
+#ifdef UNMAP_R_NO_REMAP
+#  undef R_NO_REMAP
+#  undef UNMAP_R_NO_REMAP
+#endif
 #undef USE_FC_LEN_T
 
 #endif // EXTERNAL_R_H

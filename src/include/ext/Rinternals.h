@@ -1,5 +1,5 @@
-#ifndef __RINTERNALS_H
-#define __RINTERNALS_H
+#ifndef EXTERNAL_RINTERNALS_H
+#define EXTERNAL_RINTERNALS_H
 
 // imports Rinternals.h while doing the least to pollute namespaces
 
@@ -9,7 +9,7 @@
 #define USE_FC_LEN_T
 #endif
 
-#if R_VERSION <= R_Version(3,3,1)
+#if R_VERSION <= R_Version(3, 3, 1)
 // Rinternals.h includes R_ext/Memory.h and R_ext/Utils.h which reference size_t
 // Rinternals.h also references FILE from stdio.h
 #  define NO_C_HEADERS
@@ -27,12 +27,18 @@ using std::FILE;
 #endif
 
 // prevents R_ext/Error.h from mapping Rf_error -> error and Rf_warning -> warning
-#define R_NO_REMAP
+#ifndef R_NO_REMAP
+#  define UNMAP_R_NO_REMAP
+#  define R_NO_REMAP
+#endif
 #include <Rinternals.h>
 
 #undef NO_C_HEADERS
-#undef R_NO_REMAP
+#ifdef UNMAP_R_NO_REMAP
+#  undef R_NO_REMAP
+#  undef UNMAP_R_NO_REMAP
+#endif
 #undef USE_FC_LEN_T
 
-#endif // __RINTERNALS_H
+#endif // EXTERNAL_RINTERNALS_H
 
