@@ -62,40 +62,23 @@ items
     names it external). rc_util.c, rc_bounds.c, rc/bounds.h, ext/R.h,
     ext/Rinternals.h, and ext/io.h all now match upstream, the ones
     with an external/ include modulo that line. Nothing left to sync.
-    Two files are deliberately NOT vendored, and should stay that way:
-      misc/stddef.h - misc_index_t is a dbarts kernel type this
-        package does not use.
-      misc/intrinsic.h - upstream's is keyed to a different configure.
-        HAVE_SSE2 here comes from AX_EXT and means "the build host's
-        cpuid reports SSE2"; COMPILER_SUPPORTS_SSE2 / _NEON / _AVX2
-        there come from AX_COMPILER_EXT and mean "the compiler accepts
-        -msse2". Copying upstream's header without also moving
-        configure.ac, tools/m4, and config.h.in leaves every
-        COMPILER_SUPPORTS_* undefined, so emmintrin.h is never
-        included - but __SSE2__ is still predefined on x86, so the
-        SIMD blocks in misc_adaptiveRadixTree.c still compile and
-        reference _mm_* with no header. That is a hard build failure
-        on every x86 platform, not a silent loss of SIMD.
-        The ARM64 NEON restructuring is not a feature gap for this
-        package. Upstream's intrinsic.h serves per-ISA kernel
-        translation units (linearAlgebra_neon.c, partition_sse2.c,
-        ...) built with per-file -m flags and dispatched at runtime by
-        misc/simd.c; dbarts has no adaptiveRadixTree at all. Here the
-        sole consumer of intrinsic.h is misc_adaptiveRadixTree.c,
-        whose sole consumer is misc_str_matchAllInArray, called once
-        per fit from parametric_control.cpp to match ~20 fixed control
-        names. The SIMD path is a 16-byte key compare in node16
-        lookup. On arm64 it already compiles out to the scalar
-        fallback and costs microseconds once per fit. Writing the NEON
-        counterpart (which neither repo has) would buy nothing.
-    Loose end, deliberately left: the coupling here is HAVE_SSE2 gates
-    the include while __SSE2__ gates the code, so they are independent
-    in principle. They agree in practice - x86_64 always predefines
-    __SSE2__ and AX_EXT's cpuid always finds it on such a host, and
-    config.h.win force-defines __SSE2__ alongside HAVE_SSE2 to lock
-    them together. A cross-compile whose build host and target
-    disagree could split them. Tightening it is a one-liner entirely
-    inside this package (guard the ART code on HAVE_SSE2 too, or have
-    config.h mirror config.h.win), unrelated to upstream. Not done.
+    misc/ is down to stddef.h, which is deliberately NOT vendored:
+    misc_index_t is a dbarts kernel type this package does not use.
+    The misc/intrinsic.h question this entry used to hold open is
+    closed by deletion, mirroring dbarts 091ffb9. The header was only
+    ever reached through misc_adaptiveRadixTree.c, whose only caller
+    parsed sampler control argument names, so the tree and the misc
+    members it carried (string, memalign, intrinsic, alloca) are gone
+    and the name matching is a direct scan in parametric_control.cpp.
+    Nothing SIMD, aligned, or alloca-shaped is left in this package,
+    and no translation unit includes config.h, so AX_EXT, the vendored
+    m4 macros, AC_CONFIG_HEADERS, config.h.in/.win, and configure.win
+    went with it. Do not re-vendor any of them: if a future sync pulls
+    in a dbarts source that wants misc/intrinsic.h, it will also want
+    upstream's AX_COMPILER_EXT configure side, and the two must move
+    together - the macro names look cosmetic and are not
+    (COMPILER_SUPPORTS_SSE2 asks whether the compiler accepts -msse2;
+    the old HAVE_SSE2 asked whether the build host's cpuid reported
+    it).
   release: stan4bart 0.0-14, in lockstep with dbarts 1.0-0. dbarts
     ships first; its TODO owns the ordered procedure. LAST.
