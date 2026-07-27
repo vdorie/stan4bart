@@ -89,10 +89,20 @@ Four decisions worth recording:
 Worth recording, since adopting dbartsSpec is what first made any of
 this reachable from here. `parsePriors` binds `control`, `data`,
 `num.vars`, and `numvars` into its evaluation environment alongside the
-prior constructors, so a prior expression can reference them. Only
-`num.vars` is documented (`?dbartsPriors` Details); `control`, `data`,
-and `numvars` are undocumented, which is the inverse of the collision
-risk - the documented name is the one nobody would ever shadow.
+prior constructors, so a prior expression can reference them.
+
+Two of the four are load-bearing in dbarts itself, not just available:
+`bart2()` and `rbart_vi()` carry `split.probs = 1 / num.vars` as a
+DEFAULT ARGUMENT, and `bart()` carries `splitprobs = 1 / numvars`;
+those defaults are lazily evaluated in exactly this environment, so
+removing either binding breaks the default equiprobable split prior.
+Both are documented too - `?dbartsPriors` Details for `num.vars`, and
+`?bart`/`?bart2` under `splitprobs` ("'numvars' and 'num.vars' symbols
+will be rebound before execution to the number of columns in the model
+matrix"). `control` and `data` are the only two that are neither
+documented nor referenced by any prior default, which is the inverse of
+the collision risk - the names that carry real collision risk are the
+ones nothing appears to use.
 
 It is live through this package as of this arc, via the prior arguments
 but NOT via the shorthands. Verified:
