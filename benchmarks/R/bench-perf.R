@@ -138,7 +138,15 @@ if (shape == "nc1") {
 ## (data marshalling, Stan model construction) from the per-iteration
 ## estimate. warmup is short (50) since only the SLOPE across two `iter`
 ## values is used, not the warmup phase's own cost.
-per_iteration_time <- function(tier_name, warmup = 50L, iter_short = 100L, iter_long = 300L) {
+## iter_long - iter_short must be wide enough that the wall-clock difference
+## clears subprocess-to-subprocess jitter (R startup, library load, data
+## simulation), which runs to a few tens of ms. The original 100/300 spread
+## was sized when a fit cost ~0.5 ms/iter, giving a ~100 ms signal. Sampling
+## is now ~0.13 ms/iter, which shrank that signal to ~20 ms and put it under
+## the noise: measured back-to-back, 100/300 returned a 3x spread and
+## occasional NEGATIVE per-iteration times, while 200/2000 reproduces to
+## within ~10% on the same machine in the same window.
+per_iteration_time <- function(tier_name, warmup = 50L, iter_short = 200L, iter_long = 2000L) {
   short <- run_timed_subprocess(build_fit_script(tier_name, warmup, iter_short))
   long <- run_timed_subprocess(build_fit_script(tier_name, warmup, iter_long))
   list(per_iteration_s = (long$elapsed - short$elapsed) / (iter_long - iter_short),
@@ -164,7 +172,14 @@ record_perf <- function(outfile, pkg_path = "/Users/vdorie/Repositories/stan4bar
                                             value = res$peak_rss_bytes)
   }
   result <- do.call(rbind, rows)
-  result$commit <- "967a1c6"
+  # Stamp the commit actually measured. This was hardcoded to 967a1c6, which
+  # is why bench-perf-174b369.csv carries a commit column disagreeing with its
+  # own filename; MANIFEST's column was right and the file's was not.
+  result$commit <- tryCatch({
+    sha <- system2("git", c("-C", SELF_DIR, "rev-parse", "--short", "HEAD"),
+                   stdout = TRUE, stderr = FALSE)
+    if (length(sha) == 1L && nzchar(sha)) sha else NA_character_
+  }, error = function(e) NA_character_)
   result$date <- as.character(Sys.Date())
   write.csv(result, outfile, row.names = FALSE)
   cat("wrote", outfile, "\n")
