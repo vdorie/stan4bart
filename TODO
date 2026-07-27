@@ -86,34 +86,56 @@ items
     per-iteration times that blocked the first attempt were NOT a
     quiet-machine problem - the machine was 83% idle by top's
     instantaneous sample, and load average and ps %CPU both misread it
-    because they decay. The estimator was under-resolved: its 100/300
-    iter spread was sized for ~0.5 ms/iter and sampling is now ~0.13
-    ms/iter, so the signal fell under subprocess jitter. Widened to
-    200/2000 in 3e2036b, which reproduces to ~10%.
-  walnuts-periter-4x: per-iteration cost dropped ~4x (0.5 -> 0.13 ms
-    across all three reference fits) somewhere between 174b369
-    (2026-07-15) and 3e2036b (2026-07-27), and nothing claims credit.
-    Not the radix-tree deletion, which cannot touch per-iteration cost
-    - the estimator differences two iter counts, so per-fit setup
-    cancels.
-    A REAL SPEEDUP IS THE LIKELIER EXPLANATION, not measurement error,
-    even though the estimator was under-resolved by then. Size the
-    error: today's narrow readings scatter over 45-155 us, so jitter
-    is about +/-55 us/iter, which against the old 0.5 ms/iter regime
-    is 10-20% - it cannot manufacture a 4x gap. The narrow spread was
-    adequate at 0.5 ms/iter (a ~100 ms signal) and only broke once the
-    cost fell far enough to leave ~20 ms.
-    Corollary, and the reverse of what this entry said first: the
-    12-39x sampler-swap payoff in bench-perf-2ee6048.csv is if
-    anything UNDERSTATED. It divides Stan-era cb809b1 (15.5/8.1/13.5
-    ms/iter) by WALNUTS 2ee6048, and at 15.5 ms/iter the Stan side is
-    a 3.1 SECOND signal - thousands of times clear of the jitter that
-    broke the WALNUTS side. Only the denominator was ever fragile, and
-    shrinking a denominator grows the ratio: at today's resolved
-    figures the same comparison is 66-125x. NEWS.md's 12-39x is
-    therefore safe to ship as-is.
-    To close: bisect 174b369..3e2036b with the widened 200/2000
-    spread. It is a short range and the win, if real, belongs in
-    NEWS.md.
+    because they decay. The spread was widened from 100/300 to 200/2000
+    in 3e2036b. The under-resolution diagnosis recorded here was only
+    half of it, and the smaller half - see walnuts-periter-4x, which
+    found the estimator biased, not merely noisy.
+  walnuts-periter-4x: RESOLVED 2026-07-27. There was no speedup. Per-
+    iteration cost is FLAT across 174b369..3e2036b at ~150 us/iter, and
+    the 0.5 -> 0.13 ms "4x" was manufactured by bench-perf.R itself,
+    which differenced two COLD subprocesses. A cold process pays
+    page-in and allocator warm-up on the sample-storage arrays; that
+    cost scales with iter, so it lands almost entirely on the long run
+    and is read back as per-iteration compute. It is a reproducible
+    bias, not jitter, and it shrinks as the stored-sample footprint
+    shrinks - which is what made it look like a win over a range that
+    cut storage (275853e, 2bd83a1).
+    Evidence, all against the installed dbarts, the pre-merge commits
+    given only the two dbarts-1.0 adapters (parsePriors signature,
+    initial-draw structSize), neither on the per-iteration path:
+      - warm in-process differencing, per commit: 174b369 163, 275853e
+        152, 2bd83a1 157, 16880d7 151, d2ab8f6 136, 62fba2b 147,
+        2f42a12 146, 206bcdb 146, f0db13f 146, 3e2036b 151 us/iter. No
+        step anywhere. d2ab8f6's scratch-buffer reuse is the only
+        visible move, ~10%.
+      - whole-fit wall at iter=2000 is 0.55-0.59s at every one of those
+        commits, with identical step_size and mean_leapfrog.
+      - the bias reproduces on demand: on 174b369, true warm cost 163
+        us/iter, the old estimator returns 700 us/iter at the 100/300
+        spread (tight, 635-760 over five reps) and 247 at 200/2000.
+      - not dbarts either. 174b369 against dbarts 68bcda1 (2026-07-16,
+        before its 07-17 leaf-map/journaling arc) reads 162.8 us/iter
+        against 161.1 on 1.0-0. That arc targets large n; at n=400 and
+        50 trees it is a wash.
+      - all three reference fits, 174b369 -> 3e2036b: 163->160,
+        136->133, 147->114 us/iter.
+    Nothing goes in NEWS.md. bench-perf.R's per_iteration_time now runs
+    both fits in one warm subprocess after a discarded first fit and
+    reports the median of three; per_iteration_time's own comment
+    carries the numbers above.
+    Corollary, unchanged in direction but now for a different reason:
+    NEWS.md's 12-39x sampler-swap payoff is UNDERSTATED. Its WALNUTS
+    denominators (0.4/0.7/0.6 ms) carry this bias, while the Stan-era
+    numerators (15.5/8.1/13.5 ms) are barely touched by an absolute
+    error of this size. Shipping as-is: correcting it needs a Stan-era
+    re-measure with the fixed estimator, and understating is safe.
+  bench-perf-rerecord2: re-record bench-perf on a quiet machine with
+    the fixed estimator. Every per_iteration_s in baselines/ was
+    measured by the biased one and reads high; MANIFEST now says so per
+    row, but the numbers in the CSVs are still the old ones. Blocked
+    2026-07-27 only on quiet: a VM was taking ~29% CPU (70% idle by
+    top, against 83% when 3e2036b was recorded). Expect ~150/133/116
+    us/iter, and peak RSS to rise ~15 MB because the timing subprocess
+    now holds seven fits instead of one.
   release: stan4bart 0.0-14, in lockstep with dbarts 1.0-0. dbarts
     ships first; its TODO owns the ordered procedure. LAST.
