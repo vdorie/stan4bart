@@ -11,6 +11,5 @@ all: $(SHLIB)
 
 clean:
 		rm -rf *.so *.o
-		rm -rf config.h
 
 .phony: all clean

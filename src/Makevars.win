@@ -12,6 +12,5 @@ all: $(SHLIB)
 
 clean:
 		RM -rf *.so *.o
-		RM -rf config.h
 
 .phony: all clean

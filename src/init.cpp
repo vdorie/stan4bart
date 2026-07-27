@@ -30,15 +30,11 @@ using std::snprintf;
 // by tests/testthat/test-12-gradient.R.
 extern "C" SEXP stan4bart_logdensity_grad(SEXP dataExpr, SEXP parExpr);
 
-#if __cplusplus < 201112L
-#  if defined(_WIN64) || SIZEOF_SIZE_T == 8
-#    define SIZE_T_SPECIFIER "%lu"
-#  else
-#    define SIZE_T_SPECIFIER "%u"
-#  endif
-#else
-#  define SIZE_T_SPECIFIER "%zu"
-#endif
+// Both Makevars pin CXX_STD = CXX20, so the C99 length modifier is always
+// available. This used to branch on SIZEOF_SIZE_T for pre-C++11 compilers,
+// which was doubly dead: the branch was unreachable, and init.cpp never
+// included config.h, so SIZEOF_SIZE_T would have preprocessed to 0 anyway.
+#define SIZE_T_SPECIFIER "%zu"
 
 namespace {
   // stuff to handle external pointers
