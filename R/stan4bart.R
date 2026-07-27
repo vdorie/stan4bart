@@ -208,8 +208,15 @@ stan4bart <-
   # arguments in - so a bare 'chi' or 'cgm' here would not resolve. Bind each
   # name to a function that returns the quoted call instead, and let
   # dbartsSpec's own evaluation resolve it downstream.
+  #
+  # Only names actually CALLED in the expression, though. dbarts binds the
+  # vocabulary to evaluate one prior ARGUMENT at a time; this evaluates the
+  # whole bart_args list in it, so an unconditional binding would also shadow
+  # a caller's own 'fixed' or 'normal' passed as a value. In call position a
+  # prior name has no competing reading.
   defn_env <- new.env(parent = parent.frame())
-  for (prior_name in names(dbarts::dbartsPriors))
+  for (prior_name in intersect(names(dbarts::dbartsPriors),
+                               called_names(mc[["bart_args"]])))
     assign(prior_name, function(...) match.call(), envir = defn_env)
 
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)

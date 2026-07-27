@@ -54,6 +54,22 @@ Four decisions worth recording:
   there. Consequence, unchanged from `chi`: a prior must be spelled
   INLINE in the `stan4bart` call, since `bart_args` is evaluated from
   the matched call.
+
+  SHADOWING, and how it differs from dbarts. dbarts binds the
+  vocabulary to evaluate ONE PRIOR ARGUMENT at a time -
+  `parsePriors` evaluates only `matchedCall$tree.prior`,
+  `$node.prior`, `$resid.prior`, `$resid.dist` in it (and `xbart`
+  only `$node.prior`, with four names bound) - so the shadow never
+  reaches an argument whose vocabulary is anything else. This package
+  has no such seam: `bart_args` is one list expression carrying both
+  priors and plain values, evaluated whole. Binding all eight names
+  unconditionally would therefore shadow a caller's own `fixed` or
+  `normal` used as a VALUE (`bart_args = list(monotone = fixed)`),
+  which the previous single `chi` binding was too obscure a name to
+  hit. Resolved by binding only names appearing in CALL position in
+  the expression (`called_names`, misc.R): a prior name called as a
+  function has no competing reading, and a bare symbol keeps the
+  caller's binding. This also narrows the pre-existing `chi` shadow.
 - SHORTHANDS KEPT. `k`, `power`, `base`, `split.probs` still write into
   `node.prior` / `tree.prior`. Supplying both a shorthand and the prior
   it writes into is now an error instead of a silent win for the

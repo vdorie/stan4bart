@@ -103,3 +103,16 @@ for (reserved in c("sigma", "resid.prior", "resid.dist", "variance"))
 # the response family follows the response, not bart_args
 expect_error(fitWith(list(n.trees = 3, family = "logistic")),
              "must be \"gaussian\"")
+
+# a caller's own variable that happens to be named for a dbarts prior is only
+# shadowed where the prior vocabulary is the only reading - in call position
+fixed <- 3
+set.seed(21)
+fit.shadowed <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
+                          cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
+                          bart_args = list(n.trees = fixed))
+set.seed(21)
+fit.literal <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
+                         cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
+                         bart_args = list(n.trees = 3))
+expect_equal(fit.shadowed$bart_train, fit.literal$bart_train)

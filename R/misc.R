@@ -1,5 +1,12 @@
 "%not_in%" <- function(x, table) match(x, table, nomatch = 0L) <= 0L
 
+# Every symbol appearing in function position anywhere in an expression.
+called_names <- function(expr) {
+  if (!is.call(expr)) return(character())
+  c(if (is.symbol(expr[[1L]])) as.character(expr[[1L]]),
+    unlist(lapply(as.list(expr), called_names)))
+}
+
 quoteInNamespace <- function(name, character.only = FALSE) {
   result <- quote(a + b)
   result[[1L]] <- as.symbol(":::")
