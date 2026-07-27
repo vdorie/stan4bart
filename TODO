@@ -94,10 +94,11 @@ items
     (2) Quiet is top's INSTANTANEOUS idle sample. Load average and ps
     %CPU both decay, so they read a just-finished benchmark as load and
     a genuinely idle machine as busy.
-    Live consequence: NEWS.md's 12-39x sampler-swap payoff is a FLOOR,
-    not an estimate - its WALNUTS denominators carry trap (1) while the
-    Stan-era numerators, at 8-16 ms/iter, barely feel it. A real figure
-    needs a Stan-era rebuild re-measured warm. Understating is safe, so
-    it ships as-is; revisit only if the true multiple is wanted.
+    (3) Compare two samplers only with dbarts pinned to ONE version.
+    Neither side can run against both - the pre-merge line predates the
+    parsePriors and structSize changes 1.0-0 requires - so a rebuild of
+    the older side against the older dbarts is the only honest pairing.
+    This is how NEWS.md's 53-95x was derived; see the cb809b1 MANIFEST
+    row.
   release: stan4bart 0.0-14, in lockstep with dbarts 1.0-0. dbarts
     ships first; its TODO owns the ordered procedure. LAST.

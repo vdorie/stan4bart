@@ -17,12 +17,13 @@
   full design record, including the gate design and results.
 
 * Measured payoff (one quiet window, arm64 macOS, reference fits spanning
-  continuous/binary/weighted-continuous): whole-fit per-iteration wall time
-  dropped 12-39x (15.5/8.1/13.5 ms down to 0.4-0.7 ms). Deleting the Stan/
-  StanHeaders/sundials/rstan machinery dropped `R CMD INSTALL` time from
-  42.1s to 15.1s (2.8x) and compile-time peak RSS from 2.21 GB to 0.47 GB
-  (4.7x); peak *sampling* RSS was never Stan-dominated at these reference
-  sizes and is unchanged (~273 MB throughout).
+  continuous/binary/weighted-continuous, with dbarts held at one version so
+  the comparison isolates the sampler): whole-fit per-iteration wall time
+  dropped 53-95x (15.4/7.5/11.9 ms down to 0.16/0.14/0.16 ms). Deleting
+  the Stan/StanHeaders/sundials/rstan machinery dropped `R CMD INSTALL`
+  time from 42.1s to 15.1s (2.8x) and compile-time peak RSS from 2.21 GB
+  to 0.47 GB (4.7x); peak *sampling* RSS was never Stan-dominated at these
+  reference sizes and is unchanged (~273 MB throughout).
 
 * Dependencies: StanHeaders, BH, and RcppParallel are no longer linked to or
   imported. C++20 is now required (`SystemRequirements: C++20`). WALNUTS
