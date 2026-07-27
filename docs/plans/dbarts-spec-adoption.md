@@ -84,6 +84,34 @@ Four decisions worth recording:
   token is now in hand. `"auto"` and an absent slot both fall back to
   `""`, so a model restored from a pre-1.0 saved fit still creates.
 
+## The prior evaluation environment, and one asymmetry left alone
+
+Worth recording, since adopting dbartsSpec is what first made any of
+this reachable from here. `parsePriors` binds `control`, `data`,
+`num.vars`, and `numvars` into its evaluation environment alongside the
+prior constructors, so a prior expression can reference them. Only
+`num.vars` is documented (`?dbartsPriors` Details); `control`, `data`,
+and `numvars` are undocumented, which is the inverse of the collision
+risk - the documented name is the one nobody would ever shadow.
+
+It is live through this package as of this arc, via the prior arguments
+but NOT via the shorthands. Verified:
+
+    bart_args = list(tree.prior = cgm(split.probs = rep(1/num.vars, num.vars)))   # fits
+    bart_args = list(split.probs = rep(1/num.vars, num.vars))   # object 'num.vars' not found
+
+The reason is structural: the `cgm` stub returns its own `match.call()`
+without forcing arguments, so the inner expression survives unevaluated
+to `parsePriors`, while `k`/`power`/`base`/`split.probs` are values
+`bart_args` evaluated in the caller's frame before any prior call is
+built. NOT levelled, deliberately: the only way to make the shorthand
+see `num.vars` is to bind it in `defn_env`, which re-widens exactly the
+shadow the call-position fix above narrowed, in service of a dbarts
+feature whose future is undecided (VD 2026-07-27: the bindings were
+intentional, current usage unknown). Documented instead - `?stan4bart`
+now says the prior arguments are expressions and the shorthands are
+values.
+
 ## Not in scope, and why
 
 `missing = "incorporate"` is listed with the other knobs in the survey

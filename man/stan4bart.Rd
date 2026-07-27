@@ -298,17 +298,26 @@ stan4bart(formula,
       specified by \code{stan4bart}, such as \code{keepTrees} or
       \code{n.trees}; keeping trees can be costly in terms of memory, but is
       required to use \code{\link[=stan4bart-generics]{predict}}
-      \item further arguments to \code{\link[dbarts]{dbartsSpec}}, the
-      model-level half of a \code{\link[dbarts]{dbarts}} specification:
-      \code{tree.prior}, \code{node.prior}, \code{proposal.probs},
+      \item the prior arguments of \code{\link[dbarts]{dbartsSpec}} -
+      \code{tree.prior} and \code{node.prior}. These are \emph{expressions},
+      not values: \code{dbarts} resolves them in its own prior vocabulary
+      (see \code{\link[dbarts]{dbartsPriors}}), so a bare
+      \code{node.prior = normal(k = chi(1.25, Inf))} works whether or not
+      \code{dbarts} is attached. They must be written literally in the
+      \code{stan4bart} call, since \code{bart_args} is read off it
+      unevaluated; a prior assembled beforehand has to be built with
+      \code{dbarts::dbartsPriors$...} instead
+      \item the remaining model-level arguments of
+      \code{\link[dbarts]{dbartsSpec}} - \code{proposal.probs},
       \code{monotone}, \code{interactions}, \code{blocks}, and \code{seed}.
-      These are resolved in \code{dbarts}'s own prior vocabulary, so bare
-      expressions such as \code{node.prior = normal(k = chi(1.25, Inf))}
-      resolve whether or not \code{dbarts} is attached
+      Unlike the priors these are ordinary values, evaluated in the caller's
+      frame like any other argument
       \item \code{k}, \code{power}, \code{base}, and \code{split.probs},
       shorthand for the corresponding \code{node.prior} and \code{tree.prior}
-      arguments; supplying both a shorthand and the prior it writes into is
-      an error
+      arguments. These are values too, not expressions, so they do not see
+      \code{dbarts}'s prior-evaluation environment; write the prior out in
+      full when that matters. Supplying both a shorthand and the prior it
+      writes into is an error
     }
     \code{sigma}, \code{resid.prior}, \code{resid.dist}, and \code{variance}
     are \emph{not} accepted: the parametric component draws the residual
