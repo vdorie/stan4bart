@@ -61,14 +61,23 @@ items
   vendored-headers: when syncing a file from dbarts, copy it and
     rewrite external/ -> ext/ (this package names that directory ext,
     dbarts names it external); that one line is the only permitted
-    divergence. Do NOT re-vendor misc/intrinsic.h or the AX_EXT
-    configure machinery deleted with the radix tree. A dbarts source
-    wanting intrinsic.h also wants upstream's AX_COMPILER_EXT configure
-    side, and the two must move together - the macro names look
-    cosmetic and are not (COMPILER_SUPPORTS_SSE2 asks whether the
-    compiler accepts -msse2; the old HAVE_SSE2 asked whether the build
-    host's cpuid reported it). misc/ is deliberately down to stddef.h:
-    misc_index_t is a dbarts kernel type this package does not use.
+    divergence, and vendor only what is reached from this package's own
+    sources. As of 412df11 the vendored set is ext/Rinternals.h,
+    rc/{bounds,util}.h, rc_{bounds,util}.c - all byte-identical to
+    dbarts modulo that rewrite - plus misc/stddef.h, which is the one
+    deliberate exception: it omits upstream's misc_index_t, a dbarts
+    kernel type this package does not use. Do NOT vendor upstream's
+    external/{random,stats}.h or ext/{io,R}.h; io.h declares
+    ext_printMessage/ext_throwError/ext_issueWarning, which live in
+    dbarts's external.a, a library this package does not link, so the
+    header is unusable here rather than merely unused. Do NOT
+    re-vendor misc/intrinsic.h or the AX_EXT configure machinery
+    deleted with the radix tree - a dbarts source wanting intrinsic.h
+    also wants upstream's AX_COMPILER_EXT configure side, and the two
+    must move together, since the macro names look cosmetic and are not
+    (COMPILER_SUPPORTS_SSE2 asks whether the compiler accepts -msse2;
+    the old HAVE_SSE2 asked whether the build host's cpuid reported
+    it).
   perf-measurement: two traps, kept because both were expensive to find
     and neither leaves a trace once the wrong number is written down.
     (1) Per-iteration cost must be differenced between two fits IN ONE
