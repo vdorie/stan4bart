@@ -90,14 +90,30 @@ items
     iter spread was sized for ~0.5 ms/iter and sampling is now ~0.13
     ms/iter, so the signal fell under subprocess jitter. Widened to
     200/2000 in 3e2036b, which reproduces to ~10%.
-    Left open by this, worth someone's attention: per-iteration cost
-    dropped ~4x (0.5 -> 0.13 ms) somewhere between 2026-07-15 and
-    2026-07-27 and nothing claims credit. It is not the deletion,
-    which cannot affect per-iteration cost. Either a real improvement
-    landed unremarked and should be documented, or the old 0.5 ms
-    figure was itself partly noise from the same under-resolved
-    estimator - the 174b369 recording used the narrow spread too. The
-    second is the likelier of the two and would mean the sampler-swap
-    payoff row in bench-perf-2ee6048.csv is overstated as well.
+  walnuts-periter-4x: per-iteration cost dropped ~4x (0.5 -> 0.13 ms
+    across all three reference fits) somewhere between 174b369
+    (2026-07-15) and 3e2036b (2026-07-27), and nothing claims credit.
+    Not the radix-tree deletion, which cannot touch per-iteration cost
+    - the estimator differences two iter counts, so per-fit setup
+    cancels.
+    A REAL SPEEDUP IS THE LIKELIER EXPLANATION, not measurement error,
+    even though the estimator was under-resolved by then. Size the
+    error: today's narrow readings scatter over 45-155 us, so jitter
+    is about +/-55 us/iter, which against the old 0.5 ms/iter regime
+    is 10-20% - it cannot manufacture a 4x gap. The narrow spread was
+    adequate at 0.5 ms/iter (a ~100 ms signal) and only broke once the
+    cost fell far enough to leave ~20 ms.
+    Corollary, and the reverse of what this entry said first: the
+    12-39x sampler-swap payoff in bench-perf-2ee6048.csv is if
+    anything UNDERSTATED. It divides Stan-era cb809b1 (15.5/8.1/13.5
+    ms/iter) by WALNUTS 2ee6048, and at 15.5 ms/iter the Stan side is
+    a 3.1 SECOND signal - thousands of times clear of the jitter that
+    broke the WALNUTS side. Only the denominator was ever fragile, and
+    shrinking a denominator grows the ratio: at today's resolved
+    figures the same comparison is 66-125x. NEWS.md's 12-39x is
+    therefore safe to ship as-is.
+    To close: bisect 174b369..3e2036b with the widened 200/2000
+    spread. It is a short range and the win, if real, belongs in
+    NEWS.md.
   release: stan4bart 0.0-14, in lockstep with dbarts 1.0-0. dbarts
     ships first; its TODO owns the ordered procedure. LAST.
