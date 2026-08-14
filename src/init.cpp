@@ -337,7 +337,9 @@ extern "C" {
     
     // predictions arrive on the original response scale: the restored state
     // carries the fit's transform, so no R-side rescaling remains
-    dbarts_sampler_predict(fit, REAL(x_testExpr), numTestObservations, testOffset, REAL(result));
+    dbarts_predictor_source x_test = dbarts_dense_predictor_source(
+      REAL(x_testExpr), numTestObservations, dbarts_sampler_numPredictors(fit));
+    dbarts_sampler_predict(fit, &x_test, testOffset, REAL(result));
     
     UNPROTECT(1);
     
@@ -387,7 +389,9 @@ extern "C" {
     
     size_t numChains  = dbarts_sampler_numChains(fit);
     size_t numSamples = dbarts_sampler_numSavedSamples(fit);
-    size_t numTrees   = dbarts_sampler_numTrees(fit);
+    // the BART component is a single forest, so every forest-indexed entry
+    // below names forest 0
+    size_t numTrees   = dbarts_sampler_numTrees(fit, 0);
 
     size_t numChainIndices  = Rf_isNull(chainIndicesExpr)  ? numChains  : rc_getLength(chainIndicesExpr);
     size_t numSampleIndices = Rf_isNull(sampleIndicesExpr) ? numSamples : rc_getLength(sampleIndicesExpr);
@@ -425,7 +429,7 @@ extern "C" {
       for (size_t i = 0; i < numTreeIndices; ++i) treeIndices[i] = static_cast<size_t>(i_treeIndices[i] - 1);
     }
     
-    dbarts_sampler_printTrees(fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices);
+    dbarts_sampler_printTrees(fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices, 0);
 
     delete [] treeIndices;
     delete [] sampleIndices;
@@ -449,7 +453,8 @@ extern "C" {
      
     size_t numChains  = dbarts_sampler_numChains(fit);
     size_t numSamples = treatAsSaved ? dbarts_sampler_numSavedSamples(fit) : 0;
-    size_t numTrees   = dbarts_sampler_numTrees(fit);
+    // single forest, as in printTrees above
+    size_t numTrees   = dbarts_sampler_numTrees(fit, 0);
 
     size_t numChainIndices  = Rf_isNull(chainIndicesExpr)  ? numChains  : rc_getLength(chainIndicesExpr);
     size_t numSampleIndices = Rf_isNull(sampleIndicesExpr) ? numSamples : rc_getLength(sampleIndicesExpr);
@@ -489,7 +494,7 @@ extern "C" {
         
     SEXP resultExpr = PROTECT(dbarts_sampler_getTrees(
       fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices,
-      treeIndices, numTreeIndices, useLiveTrees ? 1 : 0));
+      treeIndices, numTreeIndices, useLiveTrees ? 1 : 0, 0));
     
     delete [] treeIndices;
     delete [] sampleIndices;
@@ -958,10 +963,17 @@ namespace {
   {
     int major = dbarts_apiMajorVersion();
     int minor = dbarts_apiMinorVersion();
-    if (major != DBARTS_C_API_MAJOR || minor < DBARTS_C_API_MINOR)
+    // Pre-release lockstep check: the version constants do not move before
+    // 1.0-0, so the major/minor handshake alone can never fire and only the
+    // exact signature token catches a stale binary. Remove or downgrade it at
+    // the 1.0-0 freeze - post-release a legitimate minor append moves the hash
+    // and a hard equality would refuse every consumer until it is rebuilt.
+    if (major != DBARTS_C_API_MAJOR || minor < DBARTS_C_API_MINOR ||
+        dbarts_apiHash() != DBARTS_C_API_HASH)
       Rf_error("stan4bart was built against dbarts C API version %d.%d but the "
-               "installed dbarts provides %d.%d; reinstall or rebuild stan4bart "
-               "against the installed dbarts",
+               "installed dbarts provides %d.%d, or the two carry different "
+               "entry-point signatures; reinstall or rebuild stan4bart against "
+               "the installed dbarts",
                DBARTS_C_API_MAJOR, DBARTS_C_API_MINOR, major, minor);
   }
 }
