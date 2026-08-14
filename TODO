@@ -8,6 +8,14 @@ docs/design/dbarts-capability-adoption.md. An item graduates to its own
 docs/plans/<item>.md when it is picked up.
 
 items
+  bart-args-forests-guard: the reserved-argument guard in
+    stan4bart_fit.R (~:541) covers sigma/resid.prior/resid.dist/
+    variance but not forests, so bart_args = list(forests = ...)
+    rides the generic forwarding loop and builds a two-forest
+    sampler; it then dies at the first dbarts_sampler_setOffset
+    with a loud dbarts-side refusal (confirmed empirically
+    2026-08-13, dbarts reshape S2 review). Add "forests" to
+    reserved so the error moves to argument validation.
   callback-estimators: TABLED with its consumer (bartCause) 2026-07-16.
     The design and measurements are complete in
     docs/plans/callback-estimators.md (per-draw reducing callbacks
