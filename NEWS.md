@@ -198,6 +198,9 @@
   priors are unaffected - they were already restricted to non-shrinkage
   families.
 
+* `dbarts::dbartsControl`'s `rngSeed` argument was renamed to `seed`;
+  `bart_args = list(rngSeed = ...)` is now silently ignored, use `seed`.
+
 ## Bug fixes
 
 * Fixed `dbarts_results.structSize` never being set by the dbarts 1.0

@@ -55,7 +55,7 @@ if (at_home() && requireNamespace("lme4", quietly = TRUE)) {
 
 
   base_bart_fit <- bart2(y ~ ., df.train, test = df.test, verbose = FALSE,
-                         n.samples = 1000, n.burn = 1000, rngSeed = 0)
+                         n.samples = 1000, n.burn = 1000, seed = 0)
 
   base_bart_fitted <- fitted(base_bart_fit, sample = "test")
   base_bart_dev <- -2 * mean(log(ifelse(df.test$y == 1, base_bart_fitted, 1 - base_bart_fitted)))
