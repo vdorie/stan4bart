@@ -140,16 +140,23 @@ namespace {
   void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr);
 
   // dbartsSpec resolves the family and parks the token on the model; it is what
-  // dbarts_sampler_create's fourth argument wants. "" asks the library to
-  // dispatch on the shape of the response instead, which is right for the two
-  // families this package fits and is the fallback for a model built before the
-  // slot existed (a state restored from an older saved fit).
-  const char* getBARTFamily(SEXP modelExpr)
+  // dbarts_sampler_create's fourth argument wants. DBARTS_FAMILY_AUTO asks the
+  // library to dispatch on the shape of the response instead, which is right
+  // for the two families this package fits and is the fallback for a model
+  // built before the slot existed (a state restored from an older saved fit).
+  int getBARTFamily(SEXP modelExpr)
   {
     SEXP familyExpr = Rf_getAttrib(modelExpr, Rf_install("family"));
-    if (!Rf_isString(familyExpr) || Rf_length(familyExpr) == 0) return "";
+    if (!Rf_isString(familyExpr) || Rf_length(familyExpr) == 0) return DBARTS_FAMILY_AUTO;
     const char* family = CHAR(STRING_ELT(familyExpr, 0));
-    return std::strcmp(family, "auto") == 0 ? "" : family;
+    if (std::strcmp(family, "auto") == 0) return DBARTS_FAMILY_AUTO;
+    if (std::strcmp(family, "gaussian") == 0) return DBARTS_FAMILY_GAUSSIAN;
+    if (std::strcmp(family, "probit") == 0) return DBARTS_FAMILY_PROBIT;
+    if (std::strcmp(family, "logistic") == 0) return DBARTS_FAMILY_LOGISTIC;
+    if (std::strcmp(family, "aft") == 0) return DBARTS_FAMILY_AFT;
+    if (std::strcmp(family, "ordinal") == 0) return DBARTS_FAMILY_ORDINAL;
+    if (std::strcmp(family, "nbinom") == 0) return DBARTS_FAMILY_NBINOM;
+    Rf_error("unrecognized BART family '%s'", family);
   }
 }
 
@@ -429,7 +436,7 @@ extern "C" {
       for (size_t i = 0; i < numTreeIndices; ++i) treeIndices[i] = static_cast<size_t>(i_treeIndices[i] - 1);
     }
     
-    dbarts_sampler_printTrees(fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices, 0);
+    dbarts_sampler_printTrees(fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices, 0, 0);
 
     delete [] treeIndices;
     delete [] sampleIndices;
@@ -963,13 +970,7 @@ namespace {
   {
     int major = dbarts_apiMajorVersion();
     int minor = dbarts_apiMinorVersion();
-    // Pre-release lockstep check: the version constants do not move before
-    // 1.0-0, so the major/minor handshake alone can never fire and only the
-    // exact signature token catches a stale binary. Remove or downgrade it at
-    // the 1.0-0 freeze - post-release a legitimate minor append moves the hash
-    // and a hard equality would refuse every consumer until it is rebuilt.
-    if (major != DBARTS_C_API_MAJOR || minor < DBARTS_C_API_MINOR ||
-        dbarts_apiHash() != DBARTS_C_API_HASH)
+    if (major != DBARTS_C_API_MAJOR || minor < DBARTS_C_API_MINOR)
       Rf_error("stan4bart was built against dbarts C API version %d.%d but the "
                "installed dbarts provides %d.%d, or the two carry different "
                "entry-point signatures; reinstall or rebuild stan4bart against "

@@ -1,4 +1,6 @@
-PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG -DDBARTS_USE_STUBS
+# pre-release lockstep guard: MAJOR/MINOR do not move before 1.0-0, so only the
+# token catches a stale binary; dropped at the coordinated 1.0 merge
+PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG -DDBARTS_USE_STUBS -DDBARTS_REQUIRE_EXACT_ABI
 
 CXX_STD = CXX20
 SOURCES = bart_util.cpp init.cpp logdensity_export.cpp parametric_control.cpp rc_bounds.c rc_util.c walnuts_sampler.cpp

@@ -1,4 +1,6 @@
-PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG -DDBARTS_USE_STUBS
+# pre-release lockstep guard: MAJOR/MINOR do not move before 1.0-0, so only the
+# token catches a stale binary; dropped at the coordinated 1.0 merge
+PKG_CPPFLAGS = -I"include" -I"../inst/include" -DEIGEN_NO_DEBUG -DDBARTS_USE_STUBS -DDBARTS_REQUIRE_EXACT_ABI
 SHLIB_LDFLAGS = $(SHLIB_CXXLDFLAGS)
 SHLIB_LD = $(SHLIB_CXXLD)
 
