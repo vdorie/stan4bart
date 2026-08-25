@@ -339,7 +339,7 @@ extern "C" {
     // carries the fit's transform, so no R-side rescaling remains
     dbarts_predictor_source x_test = dbarts_dense_predictor_source(
       REAL(x_testExpr), numTestObservations, dbarts_sampler_numPredictors(fit));
-    dbarts_sampler_predict(fit, &x_test, testOffset, REAL(result));
+    dbarts_sampler_predict(fit, &x_test, testOffset, 0, REAL(result));
     
     UNPROTECT(1);
     
