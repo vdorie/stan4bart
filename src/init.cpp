@@ -436,7 +436,7 @@ extern "C" {
       for (size_t i = 0; i < numTreeIndices; ++i) treeIndices[i] = static_cast<size_t>(i_treeIndices[i] - 1);
     }
     
-    dbarts_sampler_printTrees(fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices, 0, 0);
+    dbarts_sampler_printTrees(fit, 0, chainIndices, numChainIndices, sampleIndices, numSampleIndices, treeIndices, numTreeIndices, 0);
 
     delete [] treeIndices;
     delete [] sampleIndices;
@@ -500,8 +500,8 @@ extern "C" {
     }
         
     SEXP resultExpr = PROTECT(dbarts_sampler_getTrees(
-      fit, chainIndices, numChainIndices, sampleIndices, numSampleIndices,
-      treeIndices, numTreeIndices, useLiveTrees ? 1 : 0, 0));
+      fit, 0, chainIndices, numChainIndices, sampleIndices, numSampleIndices,
+      treeIndices, numTreeIndices, useLiveTrees ? 1 : 0));
     
     delete [] treeIndices;
     delete [] sampleIndices;
