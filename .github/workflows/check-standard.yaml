@@ -79,6 +79,27 @@ jobs:
           extra-packages: any::rcmdcheck
           needs: check
 
+      # TEMPORARY, deleted with the install step above. pak's package cache is
+      # keyed by version, not commit, and the pre-release branch never bumps
+      # 1.0-0: a cached dbarts built from an older branch tip counts as "the
+      # latest build" and silently replaces the fresh install above. Put the
+      # branch build back whenever the shas disagree.
+      - name: Reinstall dbarts if the dependency cache replaced it
+        shell: Rscript {0}
+        run: |
+          tip <- sub("\\s.*$", "",
+            system2("git", c("ls-remote", "https://github.com/vdorie/dbarts.git",
+                             "refs/heads/bartcore"), stdout = TRUE))
+          installed <- utils::packageDescription("dbarts")$RemoteSha
+          if (!identical(installed, tip)) {
+            cat("installed dbarts", if (is.null(installed)) "<none>" else installed,
+                "is not branch tip", tip, "- reinstalling\n")
+            remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never",
+                                    force = TRUE)
+          } else {
+            cat("dbarts already at branch tip", tip, "\n")
+          }
+
       - uses: r-lib/actions/check-r-package@v2
         with:
           upload-snapshots: true
