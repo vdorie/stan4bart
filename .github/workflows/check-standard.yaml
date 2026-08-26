@@ -87,11 +87,15 @@ jobs:
       - name: Reinstall dbarts if the dependency cache replaced it
         shell: Rscript {0}
         run: |
-          tip <- sub("\\s.*$", "",
+          tips <- suppressWarnings(
             system2("git", c("ls-remote", "https://github.com/vdorie/dbarts.git",
                              "refs/heads/bartcore"), stdout = TRUE))
+          tip <- if (length(tips) > 0L) sub("\\s.*$", "", tips[1L]) else ""
           installed <- utils::packageDescription("dbarts")$RemoteSha
-          if (!identical(installed, tip)) {
+          if (!nzchar(tip)) {
+            cat("could not read the branch tip; keeping installed dbarts",
+                if (is.null(installed)) "<none>" else installed, "\n")
+          } else if (!identical(installed, tip)) {
             cat("installed dbarts", if (is.null(installed)) "<none>" else installed,
                 "is not branch tip", tip, "- reinstalling\n")
             remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never",
