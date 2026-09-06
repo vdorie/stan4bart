@@ -65,6 +65,47 @@ items
     here, and what bartCause would consume. Needs a new dbarts.h entry
     point: BCF is built by its own path inside dbarts and is not
     exposed through the flat C API at all. decision-gated.
+  re-scale-ridge-move: the random-effect scale's ridge crossed in closed
+    form instead of by brute force. THE DESIGN IS WRITTEN and carries a
+    pre-registered acceptance bar:
+    docs/design/re-scale-and-grouped-cost.md, with the measurements in
+    docs/plans/re-scale-mixing.md. What landed meanwhile is skip's
+    parametric element, which reaches the release bar at eight to
+    sixteen parametric transitions per sweep and about 2x wall time;
+    the design argues that is the wrong axis to pay on and keeps the
+    default at 1. The recommended remedy is a slice move along the
+    homogeneity curve: rescaling tau_i and dividing that block's z_b by
+    the same factor leaves b, the linear predictor, and the likelihood
+    untouched, so the conditional along the curve is
+    log pi(t) = (shape - q) log t - t - B / (2 t^2), one-dimensional,
+    log-concave, O(q) per sweep and no gradient. Blocked on WALNUTS
+    holding its position privately: it wants ONE accessor added to the
+    vendored headers (a position setter - reading the position is
+    already solved via LatestDraw::on_sample), which ends the "vendored
+    verbatim" claim in LICENSE.note. 150-250 lines plus a full baseline
+    re-record, since it moves every draw of every model with a
+    random-effect block.
+  grouped-fit-wall-time: the four costs behind bartCause's group.by
+    route being several times slower than the dbarts route it replaced,
+    measured and ranked in docs/design/re-scale-and-grouped-cost.md
+    section 5. Ours to move: chain parallelism (a PSOCK/FORK cluster
+    with 1.25 s of startup, and cores defaulting to 1, against dbarts'
+    free in-engine pthreads - a net LOSS below roughly 2000 iters x 4
+    chains), and the counterfactual test surface tripling the fit.
+    NOT ours: bartCause forwards neither n.samples nor n.burn nor
+    n.chains on this route and never sets cores, so the fit silently
+    runs 10 chains at this package's own iter/warmup defaults - 5x the
+    work asked for, and the single largest factor. Report that upward.
+  ranef-shared-level: the shared level of the group intercepts does not
+    mix - lag-1 0.97-0.99 and ESS 1.5-19 per 1000 on every design at
+    every skip in benchmarks/baselines/re-scale-BASELINE.csv. It is
+    confounded with the forest's overall level, so the two-block
+    alternation is what has to cross it and no parametric transition
+    can; freezing the forest takes it to lag-1 0.09. Separate from the
+    scale and not covered by the dbarts bar. The fix is a joint move
+    shifting a scalar between the forest and the intercepts, which
+    needs a way to add a constant to every leaf that the dbarts flat C
+    API does not expose. docs/plans/re-scale-mixing.md.
   vendored-headers: when syncing a file from dbarts, copy it and
     rewrite external/ -> ext/ (this package names that directory ext,
     dbarts names it external); that one line is the only permitted

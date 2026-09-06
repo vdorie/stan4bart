@@ -90,7 +90,12 @@ stan4bart(formula,
   an attempt will be made to use he named element \code{"bart"} for BART and
   \code{"stan"} for Stan. If not named, BART is the first skip element and Stan
   is the second. This argument does not impact the number of \code{iter}s
-  returned, unlike a conventional \dQuote{thinning} parameter.}
+  returned, unlike a conventional \dQuote{thinning} parameter. The parametric
+  element applies to the sampling phase only; warmup keeps one parametric
+  transition per sweep so that the parametric block cannot outrun the
+  still-growing forest and park the response mean in the random intercepts.
+  Raising it is the available remedy for a poorly mixing random-effect
+  standard deviation - see \sQuote{Details}.}
   \item{chains}{positive integer giving the number of Markov Chains to sample.}
   \item{cores}{positive integer giving the number of units of parallelization.
   Computation for each chain will be divide among the cores available. When 
@@ -327,6 +332,27 @@ stan4bart(formula,
     implies (\code{"gaussian"} or \code{"probit"}) - the response family
     follows the fitted data, and the remaining \code{dbarts} families are not
     wired into the two-block sampler.
+  }
+  \subsection{Random effect scale mixing}{
+    The random effect covariance is sampled in its non-centered form: a scale
+    and a block of standardized effects whose product is the effect itself.
+    When the group effects are well identified - many observations per group -
+    the log scale and the standardized effects are constrained to a product
+    ridge, a direction the sampler's diagonal metric cannot rescale. Every
+    other direction of the parametric block mixes freely; that one does not,
+    and the random effect standard deviations inherit its autocorrelation.
+
+    The remedy is the \code{"stan"} element of \code{skip}: it takes that many
+    parametric transitions per BART sweep and keeps the last, at that multiple
+    of the parametric block's cost and no change to the number of draws
+    returned. On a 20-group, 100-observations-per-group Gaussian random
+    intercept fit, \code{skip = c(bart = 1, stan = 8)} takes the scale's lag-1
+    autocorrelation from about 0.96 to about 0.77 and \code{stan = 16} to about
+    0.63, at 1.4x and 2.0x the wall time. How far it has to go tracks how
+    strongly the groups are identified, so read the autocorrelation of the fit
+    in hand rather than carrying a number over. The wall-time cost is real - a
+    parametric transition is roughly a third of a BART sweep - so raise it when
+    the scale is the quantity of interest, not by default.
   }
   \subsection{Reproducibility}{
     Behavior differs when running multi- and single-threaded, as the pseudo random

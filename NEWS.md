@@ -203,6 +203,24 @@
 
 ## Bug fixes
 
+* Fixed the `"stan"` element of `skip` reaching the sampler and being consumed
+  by nothing: the parametric block took one transition per BART sweep whatever
+  it was set to, while the `"bart"` element had been honored throughout. It now
+  takes that many parametric transitions per sweep during sampling and keeps the
+  last, at no change to the number of draws returned. This is the available
+  remedy for a poorly mixing random-effect standard deviation: the non-centered
+  block ties the log scale to the standardized effects on a product ridge, which
+  a diagonal metric cannot rescale, so that one direction of the parametric
+  block mixes an order of magnitude slower than the rest. On a 20-group,
+  100-observations-per-group Gaussian random intercept fit,
+  `skip = c(bart = 1, stan = 8)` takes the scale's lag-1 autocorrelation from
+  about 0.96 to about 0.77 and its ESS from about 14 to about 115 per 1000 kept
+  draws at 1.4x wall time, and `stan = 16` to about 0.63 and 250 at 2.0x. Warmup
+  keeps one parametric transition per sweep at any `skip`, so that the
+  parametric block cannot outrun the still-growing forest and park the response
+  mean in the random intercepts. Draws at the default `skip = 1` are unchanged,
+  so the remedy has to be asked for.
+
 * Fixed `dbarts_results.structSize` never being set by the dbarts 1.0
   flat-C-API port, which caused the versioned-struct field gate to skip
   populating every run's output buffers (usually masked by the buffers

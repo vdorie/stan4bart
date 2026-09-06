@@ -80,8 +80,12 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   if (control.common$warmup > 0L && !is.null(results$adaptation)) {
     evals_total <- .Call(C_stan4bart_getEvalCount, sampler)
     n_sample <- control.common$iter - control.common$warmup
+    # per parametric TRANSITION, not per sweep: sampling runs control.stan$skip
+    # transitions per sweep, so the sweep count alone would scale the diagnostic
+    # by skip. Warmup runs one per sweep at any skip, so its divisor is the
+    # sweep count.
     results$adaptation$mean_leapfrog <-
-      if (n_sample > 0L) (evals_total - evals_warmup) / n_sample else NA_real_
+      if (n_sample > 0L) (evals_total - evals_warmup) / (n_sample * control.stan$skip) else NA_real_
     results$adaptation$mean_leapfrog_warmup <- evals_warmup / control.common$warmup
   }
   
