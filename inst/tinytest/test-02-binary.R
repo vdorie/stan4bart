@@ -61,17 +61,12 @@ if (at_home() && requireNamespace("lme4", quietly = TRUE)) {
   base_bart_dev <- -2 * mean(log(ifelse(df.test$y == 1, base_bart_fitted, 1 - base_bart_fitted)))
 
 
-  rbart_fit <- rbart_vi(y ~ . - g.2, df.train, test = df.test, group.by = g.2,
-                        group.by.test = df.test$g.2, verbose = FALSE,
-                        n.samples = 1000, n.burn = 1000)
-
-  rbart_fitted <- fitted(rbart_fit, sample = "test")
-  rbart_dev <- -2 * mean(log(ifelse(df.test$y == 1, rbart_fitted, 1 - rbart_fitted)))
-
+  # The third comparator used to be dbarts::rbart_vi. dbarts retired it in
+  # favour of this package, so the two survivors carry the intent: beat the
+  # parametric GLMM, and stay within reach of a forest with no group term.
   expect_true(stan4bart_dev <= glmer_dev)
   # low sample size, so we cut ourselves some slack
   expect_true(stan4bart_dev <= 1.35 * base_bart_dev)
-  expect_true(stan4bart_dev <= 1.35 * rbart_dev)
 }
 
 # predict matches supplied data
