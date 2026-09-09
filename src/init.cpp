@@ -12,7 +12,7 @@ using std::snprintf;
 #endif
 
 #include <cstdint>
-#include <cstring> // strcmp
+#include <cstring> // memcpy
 #include <exception>
 #include <memory> // unique_ptr
 #include <set> // external pointers set
@@ -43,7 +43,6 @@ namespace {
   typedef std::set<SEXP, ExternalPointerComparator> PointerSet;
   
   PointerSet* activeSamplers;
-  PointerSet* activeStoredBARTSamplers;
   
   bool compareExternalPointers(const SEXP& lhs, const SEXP& rhs) {
     return R_ExternalPtrAddr(const_cast<SEXP>(lhs)) < R_ExternalPtrAddr(const_cast<SEXP>(rhs));
@@ -76,18 +75,21 @@ namespace {
     RESULTS_STAN
   };
   
-  // used for predict
-  struct StoredBARTSampler {
-    dbarts_sampler* fit;
-    
-    StoredBARTSampler() : fit(NULL) { }
-    ~StoredBARTSampler() {
-      if (fit != NULL) {
-        dbarts_sampler_destroy(fit);
-        fit = NULL;
-      }
-    }
-  };
+  // THE HANDLE: a dbarts_sampler* is the address in an R dbartsSampler
+  // object's external pointer (dbarts.h has no creation entry), read here with
+  // R_ExternalPtrAddr. A null address is the state a saveRDS/readRDS round trip
+  // leaves behind, and is refused rather than dereferenced - which is what
+  // makes the R-side liveness probe (bart_pointer_is_live, generics.R) work.
+  dbarts_sampler* bartSamplerFromExpression(SEXP samplerExpr, const char* name)
+  {
+    if (TYPEOF(samplerExpr) != EXTPTRSXP)
+      Rf_error("%s: 'sampler' must be a dbarts sampler pointer", name);
+    dbarts_sampler* result =
+      static_cast<dbarts_sampler*>(R_ExternalPtrAddr(samplerExpr));
+    if (result == NULL)
+      Rf_error("%s called on NULL external pointer", name);
+    return result;
+  }
   
   struct Sampler {
     int defaultWarmup;
@@ -139,32 +141,17 @@ namespace {
   
   void initializeSamplerFromExpression(Sampler& sampler, SEXP commonControlExpr);
 
-  // dbartsSpec resolves the family and parks the token on the model; it is what
-  // dbarts_sampler_create's fourth argument wants. DBARTS_FAMILY_AUTO asks the
-  // library to dispatch on the shape of the response instead, which is right
-  // for the two families this package fits and is the fallback for a model
-  // built before the slot existed (a state restored from an older saved fit).
-  int getBARTFamily(SEXP modelExpr)
-  {
-    SEXP familyExpr = Rf_getAttrib(modelExpr, Rf_install("family"));
-    if (!Rf_isString(familyExpr) || Rf_length(familyExpr) == 0) return DBARTS_FAMILY_AUTO;
-    const char* family = CHAR(STRING_ELT(familyExpr, 0));
-    if (std::strcmp(family, "auto") == 0) return DBARTS_FAMILY_AUTO;
-    if (std::strcmp(family, "gaussian") == 0) return DBARTS_FAMILY_GAUSSIAN;
-    if (std::strcmp(family, "probit") == 0) return DBARTS_FAMILY_PROBIT;
-    if (std::strcmp(family, "logistic") == 0) return DBARTS_FAMILY_LOGISTIC;
-    if (std::strcmp(family, "aft") == 0) return DBARTS_FAMILY_AFT;
-    if (std::strcmp(family, "ordinal") == 0) return DBARTS_FAMILY_ORDINAL;
-    if (std::strcmp(family, "nbinom") == 0) return DBARTS_FAMILY_NBINOM;
-    Rf_error("unrecognized BART family '%s'", family);
-  }
 }
 
 extern "C" {
   static void samplerFinalizer(SEXP samplerExpr);
-  static void storedBARTSamplerFinalizer(SEXP samplerExpr);
   
-  static SEXP createSampler(SEXP bartControlExpr, SEXP bartDataExpr, SEXP bartModelExpr,
+  // bartSamplerExpr is the external pointer of the dbartsSampler the R side
+  // built from the (control, model, data) triple it already assembles; this
+  // reads the handle out of it and never creates a sampler of its own. The
+  // control still rides along for the one attribute the handle cannot report,
+  // keepTrees.
+  static SEXP createSampler(SEXP bartSamplerExpr, SEXP bartControlExpr,
                             SEXP stanDataExpr, SEXP stanControlExpr,
                             SEXP commonControlExpr)
   {
@@ -201,9 +188,8 @@ extern "C" {
     sampler.keepTrees = rc_getBool(
       Rf_getAttrib(bartControlExpr, Rf_install("keepTrees")), "keepTrees",
       RC_NA | RC_NO, RC_END);
-    sampler.bartSampler = dbarts_sampler_create(bartControlExpr,
-                                               bartModelExpr, bartDataExpr,
-                                               getBARTFamily(bartModelExpr));
+    sampler.bartSampler = bartSamplerFromExpression(bartSamplerExpr,
+                                                    "stan4bart_create");
     dbarts_sampler_setVerbose(sampler.bartSampler, 0, 100);
     dbarts_sampler_setTreeStorage(sampler.bartSampler, 0, 0);
     sampler.kIsSampled = dbarts_sampler_kIsSampled(sampler.bartSampler) != 0;
@@ -269,7 +255,11 @@ extern "C" {
       sampler.paramSampler->setResponse(sampler.bartLatents);
     }
 
-    SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, R_NilValue));
+    // the handle is only valid while the R sampler object's own external
+    // pointer lives, so pin it in the protection slot: it is then reachable
+    // from this pointer, and dbarts's holder finalizer cannot run before this
+    // sampler's own (which calls dbarts_sampler_destroy)
+    SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, bartSamplerExpr));
     samplerPtr.release();
     R_RegisterCFinalizerEx(result, samplerFinalizer, static_cast<Rboolean>(FALSE));
     
@@ -298,13 +288,9 @@ extern "C" {
     return result;
   }
   
-  static SEXP predictBART(SEXP storedBARTSamplerExpr, SEXP x_testExpr, SEXP offset_testExpr)
+  static SEXP predictBART(SEXP bartSamplerExpr, SEXP x_testExpr, SEXP offset_testExpr)
   {
-    StoredBARTSampler* samplerPtr = static_cast<StoredBARTSampler*>(R_ExternalPtrAddr(storedBARTSamplerExpr));
-    if (samplerPtr == NULL) Rf_error("predictBART called on NULL external pointer");
-    StoredBARTSampler& sampler(*samplerPtr);
-    
-    dbarts_sampler* fit(sampler.fit);
+    dbarts_sampler* fit = bartSamplerFromExpression(bartSamplerExpr, "predictBART");
         
     if (Rf_isNull(x_testExpr)) return R_NilValue;
     
@@ -353,46 +339,9 @@ extern "C" {
     return result;
   }
   
-  static SEXP exportBARTState(SEXP samplerExpr)
+  static SEXP printTrees(SEXP bartSamplerExpr, SEXP chainIndicesExpr, SEXP sampleIndicesExpr, SEXP treeIndicesExpr)
   {
-    Sampler* samplerPtr = static_cast<Sampler*>(R_ExternalPtrAddr(samplerExpr));
-    if (samplerPtr == NULL) Rf_error("exportBARTState called on NULL external pointer");
-    Sampler& sampler(*samplerPtr);
-    
-    return dbarts_sampler_storeState(sampler.bartSampler);
-  }
-  
-  static SEXP createStoredBARTSampler(SEXP controlExpr, SEXP dataExpr, SEXP modelExpr, SEXP stateExpr)
-  {
-    std::unique_ptr<StoredBARTSampler> samplerPtr(new StoredBARTSampler);
-    StoredBARTSampler& sampler(*samplerPtr);
-    
-    // the R side sizes the control for restoration (n.chains matching the
-    // state, keepTrees with n.samples at the saved capacity); the state
-    // carries the fit's response transform, so no scale pokes remain
-    sampler.fit = dbarts_sampler_create(controlExpr, modelExpr, dataExpr,
-                                        getBARTFamily(modelExpr));
-    dbarts_sampler_setVerbose(sampler.fit, 0, 100);
-    dbarts_sampler_setState(sampler.fit, stateExpr);
-    
-    SEXP result = PROTECT(R_MakeExternalPtr(samplerPtr.get(), R_NilValue, R_NilValue));
-    samplerPtr.release();
-    R_RegisterCFinalizerEx(result, storedBARTSamplerFinalizer, static_cast<Rboolean>(FALSE));
-
-    activeStoredBARTSamplers->insert(result);
-
-    UNPROTECT(1);
-    
-    return result;
-  }
-
-  static SEXP printTrees(SEXP storedBARTSamplerExpr, SEXP chainIndicesExpr, SEXP sampleIndicesExpr, SEXP treeIndicesExpr)
-  {
-    StoredBARTSampler* samplerPtr = static_cast<StoredBARTSampler*>(R_ExternalPtrAddr(storedBARTSamplerExpr));
-    if (samplerPtr == NULL) Rf_error("printTrees called on NULL external pointer");
-    StoredBARTSampler& sampler(*samplerPtr);
-    
-    dbarts_sampler* fit(sampler.fit);
+    dbarts_sampler* fit = bartSamplerFromExpression(bartSamplerExpr, "printTrees");
     
     size_t numChains  = dbarts_sampler_numChains(fit);
     size_t numSamples = dbarts_sampler_numSavedSamples(fit);
@@ -443,73 +392,6 @@ extern "C" {
     delete [] chainIndices;
     
     return R_NilValue;
-  }
-  
-  static SEXP getTrees(SEXP storedBARTSamplerExpr, SEXP chainIndicesExpr, SEXP sampleIndicesExpr, SEXP treeIndicesExpr, SEXP currentExpr)
-  {
-    StoredBARTSampler* samplerPtr = static_cast<StoredBARTSampler*>(R_ExternalPtrAddr(storedBARTSamplerExpr));
-    if (samplerPtr == NULL) Rf_error("getTrees called on NULL external pointer");
-    StoredBARTSampler& sampler(*samplerPtr);
-    
-    dbarts_sampler* fit(sampler.fit);
-
-    // when currentExpr is true, return the live working trees even for a
-    // keepTrees sampler; there is then no sample dimension
-    bool useLiveTrees = Rf_asLogical(currentExpr) == TRUE;
-    bool treatAsSaved = dbarts_sampler_numSavedSamples(fit) > 0 && !useLiveTrees;
-     
-    size_t numChains  = dbarts_sampler_numChains(fit);
-    size_t numSamples = treatAsSaved ? dbarts_sampler_numSavedSamples(fit) : 0;
-    // single forest, as in printTrees above
-    size_t numTrees   = dbarts_sampler_numTrees(fit, 0);
-
-    size_t numChainIndices  = Rf_isNull(chainIndicesExpr)  ? numChains  : rc_getLength(chainIndicesExpr);
-    size_t numSampleIndices = Rf_isNull(sampleIndicesExpr) ? numSamples : rc_getLength(sampleIndicesExpr);
-    size_t numTreeIndices   = Rf_isNull(treeIndicesExpr)   ? numTrees   : rc_getLength(treeIndicesExpr);
-    
-    if (numChainIndices > numChains)
-      Rf_error(SIZE_T_SPECIFIER " chains specified but only " SIZE_T_SPECIFIER " in sampler", numChainIndices, numChains);
-    if (numSampleIndices > numSamples)
-      Rf_error(SIZE_T_SPECIFIER " samples specified but only " SIZE_T_SPECIFIER " in sampler", numSampleIndices, numSamples);
-    if (numTreeIndices > numTrees)
-      Rf_error(SIZE_T_SPECIFIER " trees specified but only " SIZE_T_SPECIFIER " in sampler", numTreeIndices, numTrees);
-    
-    size_t* chainIndices  = new size_t[numChainIndices];
-    size_t* sampleIndices = treatAsSaved ? new size_t[numSamples] : NULL;
-    size_t* treeIndices   = new size_t[numTreeIndices];
-    
-    if (Rf_isNull(chainIndicesExpr)) {
-      for (size_t i = 0; i < numChains; ++i) chainIndices[i] = i;
-    } else {
-      int* i_chainIndices = INTEGER(chainIndicesExpr);
-      for (size_t i = 0; i < numChainIndices; ++i) chainIndices[i] = static_cast<size_t>(i_chainIndices[i] - 1);
-    }
-    
-    if (Rf_isNull(sampleIndicesExpr)) {
-      for (size_t i = 0; i < numSamples; ++i) sampleIndices[i] = i;
-    } else {
-      int* i_sampleIndices = INTEGER(sampleIndicesExpr);
-      for (size_t i = 0; i < numSampleIndices; ++i) sampleIndices[i] = static_cast<size_t>(i_sampleIndices[i] - 1);
-    }
-    
-    if (Rf_isNull(treeIndicesExpr)) {
-      for (size_t i = 0; i < numTrees; ++i) treeIndices[i] = i;
-    } else {
-      int* i_treeIndices = INTEGER(treeIndicesExpr);
-      for (size_t i = 0; i < numTreeIndices; ++i) treeIndices[i] = static_cast<size_t>(i_treeIndices[i] - 1);
-    }
-        
-    SEXP resultExpr = PROTECT(dbarts_sampler_getTrees(
-      fit, 0, chainIndices, numChainIndices, sampleIndices, numSampleIndices,
-      treeIndices, numTreeIndices, useLiveTrees ? 1 : 0));
-    
-    delete [] treeIndices;
-    delete [] sampleIndices;
-    delete [] chainIndices;
-    
-    UNPROTECT(1);
-    
-    return resultExpr;
   }
   
   static SEXP run(SEXP samplerExpr, SEXP numIterExpr, SEXP isWarmupExpr, SEXP resultsTypeExpr)
@@ -1009,21 +891,6 @@ static void samplerFinalizer(SEXP samplerExpr)
   R_ClearExternalPtr(samplerExpr);
 }
 
-static void storedBARTSamplerFinalizer(SEXP samplerExpr)
-{
-  StoredBARTSampler* sampler = static_cast<StoredBARTSampler*>(R_ExternalPtrAddr(samplerExpr));
-  
-  if (sampler == NULL) return;
-  
-  if (activeStoredBARTSamplers->find(samplerExpr) == activeStoredBARTSamplers->end()) return;
-  
-  activeStoredBARTSamplers->erase(samplerExpr);
-  
-  delete sampler;
-  
-  R_ClearExternalPtr(samplerExpr);
-}
-
 static SEXP finalize(void)
 {
   for (PointerSet::iterator it = activeSamplers->begin(); it != activeSamplers->end(); ) {
@@ -1039,38 +906,22 @@ static SEXP finalize(void)
       
   delete activeSamplers;
   
-  for (PointerSet::iterator it = activeStoredBARTSamplers->begin(); it != activeStoredBARTSamplers->end(); ) {
-    SEXP samplerExpr = *it;
-    StoredBARTSampler* sampler = static_cast<StoredBARTSampler*>(R_ExternalPtrAddr(samplerExpr));
-    
-    delete sampler;
-    PointerSet::iterator prev = it;
-    ++it;
-    activeStoredBARTSamplers->erase(prev);
-    R_ClearExternalPtr(samplerExpr);
-  }
-      
-  delete activeStoredBARTSamplers;
-  
   return R_NilValue;
 }
 
 #define DEF_FUNC(_N_, _F_, _A_) { _N_, std::bit_cast<DL_FUNC>(&_F_), _A_ }
 
 static R_CallMethodDef R_callMethods[] = {
-  DEF_FUNC("stan4bart_create", createSampler, 6),
+  DEF_FUNC("stan4bart_create", createSampler, 5),
   DEF_FUNC("stan4bart_run", run, 4),
   DEF_FUNC("stan4bart_printInitialSummary", printInitialSummary, 1),
   DEF_FUNC("stan4bart_disengageAdaptation", disengageAdaptation, 1),
   DEF_FUNC("stan4bart_getAdaptationInfo", getAdaptationInfo, 1),
   DEF_FUNC("stan4bart_getEvalCount", getEvalCount, 1),
   DEF_FUNC("stan4bart_finalize", finalize, 0),
-  DEF_FUNC("stan4bart_exportBARTState", exportBARTState, 1),
-  DEF_FUNC("stan4bart_createStoredBARTSampler", createStoredBARTSampler, 4),
   DEF_FUNC("stan4bart_predictBART", predictBART, 3),
   DEF_FUNC("stan4bart_getParametricMean", getParametricMean, 1),
   DEF_FUNC("stan4bart_printTrees", printTrees, 4),
-  DEF_FUNC("stan4bart_getTrees", getTrees, 5),
   DEF_FUNC("stan4bart_logdensity_grad", stan4bart_logdensity_grad, 2),
   {NULL, NULL, 0}
 };
@@ -1084,7 +935,6 @@ void attribute_visible R_init_stan4bart(DllInfo *info) {
   checkDbartsAPIVersion();
 
   activeSamplers = new PointerSet(&compareExternalPointers);
-  activeStoredBARTSamplers = new PointerSet(&compareExternalPointers);
 }
 
 } // extern "C"

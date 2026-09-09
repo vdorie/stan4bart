@@ -194,19 +194,33 @@ get_samples <- function(expr, include_warmup, only_warmup)
   result
 }
 
-# Liveness probe for a StoredBARTSampler external pointer. predictBART null-
-# checks the pointer (init.cpp:335) BEFORE its early return on a NULL test
-# matrix (init.cpp:340), so predictBART(ptr, NULL, NULL) is a cheap, side-
-# effect-free liveness test: it returns NULL for a live pointer and errors for
-# a dead one - the state a saveRDS/readRDS round trip leaves behind (a non-NULL
-# externalptr whose address is NULL).
-bart_pointer_is_live <- function(ptr) {
-  if (is.null(ptr)) return(FALSE)
-  !inherits(tryCatch(.Call(C_stan4bart_predictBART, ptr, NULL, NULL),
+# Builds the dbarts sampler a restored fit drives: dbarts.h has no creation
+# entry, so the sampler is a dbartsSampler object built here from the
+# (control, model, data) triple and handed its saved forests through the
+# object's own setState. The state is dropped from the object afterwards
+# because this fit retains its own serializable copy (state.bart) and must not
+# write a second one into saveRDS; the dead-pointer rebuild after a reload is
+# getBartSampler's below, not dbarts's transparent re-creation.
+restoreBartSampler <- function(control, model, data, state) {
+  sampler <- new("dbartsSampler", control, model, data)
+  sampler$setState(state)
+  sampler$state <- NULL
+  sampler
+}
+
+# Liveness probe for a restored sampler. Its 'pointer' field is read directly
+# rather than through $getPointer(), which would re-create the engine instead
+# of reporting it dead; predictBART null-checks the handle BEFORE its early
+# return on a NULL test matrix, so predictBART(pointer, NULL, NULL) is a cheap,
+# side-effect-free test: NULL for a live pointer, an error for the dead one a
+# saveRDS/readRDS round trip leaves behind.
+bart_pointer_is_live <- function(sampler) {
+  if (is.null(sampler)) return(FALSE)
+  !inherits(tryCatch(.Call(C_stan4bart_predictBART, sampler$pointer, NULL, NULL),
                      error = function(e) e), "error")
 }
 
-# Return a live StoredBARTSampler pointer for `object`, rebuilding it from the
+# Return a live dbarts sampler for `object`, rebuilding it from the
 # retained serializable state (object$state.bart) when the live pointer has
 # died in a fresh session after reload. The training design matrix, dropped
 # from the retained bundle to keep it n-independent, is re-spliced from
@@ -225,8 +239,8 @@ getBartSampler <- function(object) {
   data.bart <- restore$data
   data.bart@x <- object$bartData@x
   data.bart@x.test <- object$bartData@x.test
-  ptr <- .Call(C_stan4bart_createStoredBARTSampler,
-               restore$control, data.bart, restore$model, restore$state)
+  ptr <- restoreBartSampler(restore$control, restore$model, data.bart,
+                            restore$state)
   if (!is.null(env)) env$ptr <- ptr
   ptr
 }
@@ -258,7 +272,7 @@ bart_needs_recompute <- function(object, sample) {
 
 # Reproduce the n x draws x chains bart_train / bart_test block a store = "trees"
 # fit did not retain, by replaying the kept trees over the training / test
-# design matrix through dbarts's predict path (predictBART, init.cpp:332).
+# design matrix through dbarts's predict path (predictBART, init.cpp).
 # Predictions arrive on the original response scale (the restored state carries
 # each chain's fit transform), shaped and named like the stored block. `rows`
 # restricts to a row subset (row-block streaming for fitted()); NULL is the full
@@ -272,7 +286,7 @@ recompute_bart_block <- function(object, sample, rows = NULL) {
   # as.matrix() is dbarts's own dense conversion, encoding factor columns the
   # same 0-indexed-double way x.test already does.
   if (inherits(X, "dbartsMixedMatrix")) X <- as.matrix(X)
-  result <- .Call(C_stan4bart_predictBART, getBartSampler(object), X, NULL)
+  result <- .Call(C_stan4bart_predictBART, getBartSampler(object)$getPointer(), X, NULL)
   if (length(dim(result)) == 2L) dim(result) <- c(dim(result), 1L)
   dimnames(result) <- list(observation = NULL, iterations = NULL,
                            chain = paste0("chain:", seq_len(dim(result)[3L])))
@@ -300,7 +314,14 @@ extract.stan4bartFit <-
     treeNums <- if ("treeNums" %in% names(dotsList)) as.integer(dotsList[["treeNums"]]) else NULL
     chainNums <- if ("chainNums" %in% names(dotsList)) as.integer(dotsList[["chainNums"]]) else NULL
     sampleNums <- if ("sampleNums" %in% names(dotsList)) as.integer(dotsList[["sampleNums"]]) else NULL
-    return(.Call(C_stan4bart_getTrees, getBartSampler(object), chainNums, sampleNums, treeNums, FALSE))
+    # dbarts.h no longer carries a tree-extraction entry; the sampler object's
+    # own method is the surface, and an omitted index selects everything, so
+    # only the ones the caller named are passed on
+    treeArgs <- list(current = FALSE)
+    if (!is.null(treeNums)) treeArgs$treeNums <- treeNums
+    if (!is.null(chainNums)) treeArgs$chainNums <- chainNums
+    if (!is.null(sampleNums)) treeArgs$sampleNums <- sampleNums
+    return(do.call(getBartSampler(object)$getTrees, treeArgs))
   } else {
     if (length(list(...)) > 0) warning("unused arguments ignored")
   }
@@ -962,7 +983,8 @@ predict.stan4bartFit <-
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
     # predictions arrive on the original response scale: the restored
     # sampler's state carries each chain's fit transform
-    indiv.bart <- .Call(C_stan4bart_predictBART, getBartSampler(object), testData$X.bart, NULL)
+    indiv.bart <- .Call(C_stan4bart_predictBART, getBartSampler(object)$getPointer(),
+                        testData$X.bart, NULL)
     if (length(dim(indiv.bart)) == 2L)
       dim(indiv.bart) <- c(dim(indiv.bart), 1L)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)

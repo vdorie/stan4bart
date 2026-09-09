@@ -44,7 +44,13 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
     # a verbose control prints the bart initial summary during creation
     control.bart@verbose <- TRUE
   }
-  sampler <- .Call(C_stan4bart_create, control.bart, data.bart, model.bart, data.stan, control.stan, control.common)
+  # dbarts.h carries no creation entry: the sampler is built here, from the
+  # triple dbartsSpec resolved, and the C++ reads the handle out of the
+  # object's own external pointer. The object has to outlive the handle, which
+  # C_stan4bart_create pins in its own pointer's protection slot.
+  sampler.bart <- new("dbartsSampler", control.bart, model.bart, data.bart)
+  sampler <- .Call(C_stan4bart_create, sampler.bart$getPointer(), control.bart,
+                   data.stan, control.stan, control.common)
   if (control.common$verbose > 0L)
     .Call(C_stan4bart_printInitialSummary, sampler)
   results <- list()
@@ -91,8 +97,10 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   
   # predictions from a restored sampler arrive on the original response
   # scale (the state carries the fit's transform), so only the state exports
-  if (control.bart@keepTrees)
-    results$state.bart <- .Call(C_stan4bart_exportBARTState, sampler)
+  if (control.bart@keepTrees) {
+    sampler.bart$storeState()
+    results$state.bart <- sampler.bart$state
+  }
   
   results
 }
@@ -701,7 +709,7 @@ stan4bart_fit <-
     control.bart@keepTrees <- TRUE
     control.bart@n.samples <- as.integer(iter - warmup)
     attr(chainResults, "sampler.bart") <-
-      .Call(C_stan4bart_createStoredBARTSampler, control.bart, data.bart, model.bart, all_state)
+      restoreBartSampler(control.bart, model.bart, data.bart, all_state)
 
     # Retain the SERIALIZABLE inputs so the stored-tree external pointer can be
     # rebuilt lazily after saveRDS/readRDS (the live pointer dies on reload).

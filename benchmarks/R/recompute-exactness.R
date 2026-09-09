@@ -96,7 +96,8 @@ run_scale <- function(label, n, n_levels, warmup, iter, chains, n.trees,
   if (inherits(X.bart, "dbartsMixedMatrix")) X.bart <- as.matrix(X.bart)
 
   t_rec <- system.time(
-    recomputed <- .Call(stan4bart:::C_stan4bart_predictBART, fit$sampler.bart, X.bart, NULL)
+    recomputed <- .Call(stan4bart:::C_stan4bart_predictBART,
+                        fit$sampler.bart$getPointer(), X.bart, NULL)
   )[["elapsed"]]
   if (length(dim(recomputed)) == 2L)
     dim(recomputed) <- c(dim(recomputed), 1L)     # chains==1 arrives 2-D

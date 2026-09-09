@@ -16,6 +16,7 @@ export(mvbart)
 S3method(print, mvbartFit)
 
 importFrom(dbarts, extract)
+importClassesFrom(dbarts, dbartsSampler)
 importFrom(Matrix, t, sparseMatrix, drop0, diag, rankMatrix, fac2sparse, KhatriRao, bdiag)
 importFrom(parallel, makeCluster, clusterExport, clusterEvalQ, clusterMap, stopCluster)
 
