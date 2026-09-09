@@ -550,8 +550,10 @@ stan4bart_fit <-
   # the forest with setSigma every sweep, so dbarts holds sigma fixed at 1 and
   # can carry neither a residual prior nor a residual distribution nor a
   # variance forest of its own; and the response family follows stan4bart's
-  # own 'family' argument.
-  reserved <- intersect(names(bart_args), c("sigma", "resid.prior", "resid.dist", "variance"))
+  # own 'family' argument. dbartsSpec spells the creation-time estimate
+  # 'sigest' now; 'sigma' still reaches the same formal for one release
+  # (dbarts tombstone), so both names are reserved.
+  reserved <- intersect(names(bart_args), c("sigma", "sigest", "resid.prior", "resid.dist", "variance"))
   if (length(reserved) > 0L)
     stop("bart_args cannot set ", paste0("'", reserved, "'", collapse = ", "),
          "; the parametric component draws the residual standard deviation and ",
