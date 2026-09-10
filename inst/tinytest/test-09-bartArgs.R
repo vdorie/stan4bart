@@ -116,3 +116,26 @@ fit.literal <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
                          cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
                          bart_args = list(n.trees = 3))
 expect_equal(fit.shadowed$bart_train, fit.literal$bart_train)
+
+# bart_args$seed reaches dbarts::dbartsControl and pins the BART draws
+fit.seed1 <- fitWith(list(n.trees = 3, seed = 909L))
+fit.seed2 <- fitWith(list(n.trees = 3, seed = 909L))
+expect_equal(fit.seed1$bart_train, fit.seed2$bart_train)
+
+# dbarts::dbartsControl's 'rngSeed' argument was renamed to 'seed'; the old
+# name is mapped to the new one (with a once-per-session warning) rather than
+# silently dropped, so it reaches the sampler exactly as 'seed' does
+rm(list = ls(stan4bart:::.message_env), envir = stan4bart:::.message_env)
+expect_warning(fit.rngSeed <- fitWith(list(n.trees = 3, rngSeed = 909L)),
+               "'rngSeed' is now 'seed'")
+expect_equal(fit.rngSeed$bart_train, fit.seed1$bart_train)
+# the warning fires once per session
+expect_silent(fitWith(list(n.trees = 3, rngSeed = 909L)))
+
+expect_error(fitWith(list(n.trees = 3, seed = 1L, rngSeed = 1L)),
+             "cannot set both 'rngSeed' and 'seed'")
+
+# a bart_args name matching no dbartsControl/dbartsSpec formal errors by name
+# instead of being silently dropped
+expect_error(fitWith(list(n.trees = 3, notAnArgument = 1)),
+             "'notAnArgument'")

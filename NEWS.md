@@ -198,10 +198,15 @@
   priors are unaffected - they were already restricted to non-shrinkage
   families.
 
-* `dbarts::dbartsControl`'s `rngSeed` argument was renamed to `seed`;
-  `bart_args = list(rngSeed = ...)` is now silently ignored, use `seed`.
-
 ## Bug fixes
+
+* Fixed `bart_args` silently dropping any name that did not match a
+  `dbarts::dbartsControl`/`dbarts::dbartsSpec` formal, rather than erroring:
+  most consequentially, `dbarts::dbartsControl`'s `rngSeed` argument was
+  renamed to `seed`, so `bart_args = list(rngSeed = ...)` reached no formal
+  and the seed was silently ignored. `rngSeed` is now mapped to `seed` (with
+  a once-per-session warning naming the rename); any other unmatched name
+  now errors, naming the offending argument, instead of being dropped.
 
 * Fixed the `"stan"` element of `skip` reaching the sampler and being consumed
   by nothing: the parametric block took one transition per BART sweep whatever

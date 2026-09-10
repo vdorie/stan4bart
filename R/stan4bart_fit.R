@@ -522,6 +522,37 @@ stan4bart_fit <-
   # work correctly
   if (is.null(bart_args)) bart_args <- list()
   if (!is.list(bart_args)) bart_args <- as.list(bart_args)
+
+  # dbarts::dbartsControl's 'rngSeed' argument was renamed to 'seed'; the old
+  # name matches no current dbartsControl/dbartsSpec formal, so without this
+  # it would fall through to the unknown-name check below and be refused
+  # outright. Map it instead, once per session, so existing bart_args =
+  # list(rngSeed = ...) callers keep working under the new name.
+  if ("rngSeed" %in% names(bart_args)) {
+    if ("seed" %in% names(bart_args))
+      stop("bart_args cannot set both 'rngSeed' and 'seed'; use 'seed'", call. = FALSE)
+    if (!isTRUE(.message_env$bart_args_rngSeed)) {
+      .message_env$bart_args_rngSeed <- TRUE
+      warning("bart_args: 'rngSeed' is now 'seed' in dbarts::dbartsControl; ",
+              "the value was used under the new name (once per session)", call. = FALSE)
+    }
+    names(bart_args)[names(bart_args) == "rngSeed"] <- "seed"
+  }
+
+  # every bart_args name has to be consumed by something below - either a
+  # dbartsControl/dbartsSpec formal, one of the k/power/base/split.probs
+  # shorthands, or 'resid.dist' (reserved further down alongside the other
+  # residual-model names, though it is not an actual dbarts formal) - or it
+  # is silently dropped rather than reaching the sampler.
+  known_bart_args <- unique(c(names(formals(dbarts::dbartsControl)),
+                              names(formals(dbarts::dbartsSpec)),
+                              "k", "power", "base", "split.probs", "resid.dist"))
+  unknown_bart_args <- setdiff(names(bart_args), known_bart_args)
+  if (length(unknown_bart_args) > 0L)
+    stop("bart_args has unrecognized name",
+         if (length(unknown_bart_args) > 1L) "s" else "", ": ",
+         paste0("'", unknown_bart_args, "'", collapse = ", "), call. = FALSE)
+
   data.bart@sigma <- sigma_init
   control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
                                               n.thin = skip.bart, n.threads = 1L,
