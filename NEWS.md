@@ -208,6 +208,15 @@
   a once-per-session warning naming the rename); any other unmatched name
   now errors, naming the offending argument, instead of being dropped.
 
+* Fixed `bart_args = list(n.cuts = ...)` corrupting the `dbartsControl`
+  object when given a non-integer numeric: it was written into the `n.cuts`
+  slot with `attr<-`, which bypasses the coercion `dbartsControl()` itself
+  applies, so a plain numeric `n.cuts` landed in the slot uncoerced and
+  `validObject` later failed ("should be or extend class integer"). `n.cuts`
+  is already picked up, coerced, and validated by the existing
+  `dbartsControl()` construction call; the separate `attr<-` assignment is
+  removed.
+
 * Fixed the `"stan"` element of `skip` reaching the sampler and being consumed
   by nothing: the parametric block took one transition per BART sweep whatever
   it was set to, while the `"bart"` element had been honored throughout. It now

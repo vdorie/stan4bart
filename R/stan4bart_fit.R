@@ -562,13 +562,14 @@ stan4bart_fit <-
   {
     control_call[[name]] <- bart_args[[name]]
   }
+  # n.cuts is already picked up by the loop above when supplied in bart_args
+  # (it is a dbartsControl formal), and dbartsControl() coerces and validates
+  # it there - no separate assignment into the slot is needed or wanted.
   control.bart <- eval(control_call)
-  if (!is.null(bart_args[["n.cuts"]]))
-    attr(control.bart, "n.cuts") <- bart_args[["n.cuts"]]
-  
+
   if (length(weights) > 0L) data.bart@weights <- weights
-  
-  data.bart@n.cuts <- rep_len(attr(control.bart, "n.cuts"), ncol(data.bart@x))
+
+  data.bart@n.cuts <- rep_len(control.bart@n.cuts, ncol(data.bart@x))
   evalEnv <- sys.frame(sys.nframe())
 
   # dbarts::dbartsSpec resolves the control/model/data triple and the family

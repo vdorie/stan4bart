@@ -139,3 +139,12 @@ expect_error(fitWith(list(n.trees = 3, seed = 1L, rngSeed = 1L)),
 # instead of being silently dropped
 expect_error(fitWith(list(n.trees = 3, notAnArgument = 1)),
              "'notAnArgument'")
+
+# n.cuts (a double, as arrives from ordinary R arithmetic) reaches the
+# dbartsControl slot properly coerced to integer, and the control object
+# validates
+fit.nCuts <- fitWith(list(n.trees = 3, n.cuts = 100, keepTrees = TRUE))
+expect_inherits(fit.nCuts, "stan4bartFit")
+control.nCuts <- fit.nCuts$state.bart$control
+expect_equal(control.nCuts@n.cuts, 100L)
+expect_true(validObject(control.nCuts))
