@@ -270,7 +270,9 @@ that later work is measured against the refreshed build and not against a
 picture the refresh had already changed.
 
 It did not. The bar's design, one chain, 1000 warmup and 1000 kept, 200 trees,
-ten seeds, the same seeds on both builds:
+the same ten seeds on both builds - 20260907, 7, 42, 1234, 99, 2, 13, 314, 2718,
+4242, the harness's own five followed by five more. Every column but the last is
+a median or a worst over the ten; the seconds column is their mean:
 
 | skip | build | acf1 median | acf1 worst | ESS median | ESS worst | tau mean | seconds |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -283,11 +285,12 @@ The medians agree to about a hundredth in autocorrelation and a few percent in
 effective sample size; the worst-seed columns move more, in both directions,
 which is what a worst-of-ten statistic does when every draw has changed. Mean
 leapfrog steps per transition are unchanged at the median, 10.8 before and 10.6
-after, so the refresh is not paying for itself in gradient evaluations either.
-The ten seeds used here are not the ten the table above under "Result against
-the bar" was recorded on, which were not written down; on this set skip 16 does
-not clear the worst-seed ESS floor on either build, so read the two builds
-against each other rather than against that table's verdict.
+after. At skip 16 they fall from 10.8 to 9.8, which is the largest move in the
+table and still not a cost. The ten seeds used here are not the ten the table
+above under "Result against the bar" was recorded on, which were not written
+down; on this set skip 16 does not clear the worst-seed ESS floor on either
+build, so read the two builds against each other rather than against that
+table's verdict.
 
 The four-design group-sd measurement behind `docs/mixing-group-sd.md` moves the
 same way. Group sd lag-one before and after, three seeds per design:
@@ -309,9 +312,13 @@ enough at 1000 draws to carry a verdict on its own, and the autocorrelation is.
 ## Two sampler settings that had never been measured
 
 `max_hamiltonian_error` and `min_micro_steps` reach the sampler through this
-package's `SamplingConfig` and had never been varied. Both were probed on the
-bar's design at the default skip, five seeds, against the refreshed build. The
-expectation was that neither would matter. One of them does.
+package's `SamplingConfig` and had never been varied. Neither is reachable from
+R: each probe row is a separate build with the `SamplingConfigBuilder` call in
+src/walnuts_sampler.cpp given the setting, so reproducing a row means rebuilding.
+Both were probed on the bar's design at the default skip and the harness's own
+five seeds - 20260907, 7, 42, 1234, 99 - against the refreshed build, read the
+same way as the table above. The expectation was that neither would matter. One
+of them does.
 
 | setting | acf1 median | acf1 worst | ESS median | ESS worst | leapfrog | seconds |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -347,3 +354,13 @@ the baseline rather than only here. It replaces the `rbart_vi` comparison the ba
 came from, which cannot survive that function's removal from dbarts; the same
 removal took the third comparator out of inst/tinytest/test-02-binary.R, whose
 surviving glmer and plain-forest arms carry the intent.
+
+The two sections above drive the same harness from a caller that names the
+design, the skip and the seeds, rather than through its `record` mode:
+
+    source("benchmarks/R/bench-re-scale.R")
+    record_re_scale(outfile, "gaussian_k20", c(1L, 16L), SEEDS_10)
+
+with SEEDS_10 as listed there, and `1L` alone for a probe row. Each row is
+deterministic in its seed, so a re-run of any of them on the same build
+reproduces it exactly.

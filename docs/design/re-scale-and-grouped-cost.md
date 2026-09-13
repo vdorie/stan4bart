@@ -219,7 +219,11 @@ Every value the rebuild needs is reachable. `inv_mass`, `macro_time` and
 `max_step_halvings` come from this package's own `SamplingConfig`; and
 `min_micro_steps`, which used to be the gap in this route, is a public getter on
 `AdaptiveWalnuts`. The base generator is held by reference throughout, so a
-rebuilt sampler continues the same random stream rather than restarting it.
+rebuilt sampler draws from where the old one left off rather than restarting it.
+It is not bit-identical to a persistent sampler: the vendored `Random` wrapper
+holds its own `std::normal_distribution`, which caches a spare variate, and a
+rebuild constructs a fresh one. The stream stays valid; it stops being the same
+sequence, so the move has to be gated on distributions rather than on draws.
 
 Three things the route costs, none of them a blocker:
 
@@ -230,7 +234,8 @@ Three things the route costs, none of them a blocker:
   position. That evaluation is already paid once a sweep, because the vendored
   sampler caches those values across transitions and this package has to
   refresh them after swapping the target; a sweep that rebuilds does not need
-  to refresh as well.
+  to refresh as well. That holds in the sampling phase only - warmup still
+  needs the refresh, for the reason in the next item.
 - The route reaches the sampling phase only. Warmup runs `AdaptiveWalnuts`,
   which has no constructor from a running state, so rebuilding it would reset
   Adam and the mass estimator. The move applies after the freeze, which is what

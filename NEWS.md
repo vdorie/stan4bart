@@ -10,12 +10,12 @@
   embedded Stan/NUTS sampler for both continuous and binary response
   families. This is a sampler swap only: the outer BART-vs-parametric Gibbs
   alternation, the R formula/data-prep surface (`glFormula`, lme4 grouping
-  syntax, priors), and
-  the posterior targeted are unchanged, verified by a pre-registered
-  distributional-equivalence gate against the Stan-era posterior on
-  reference fits spanning every gradient tier (nc=1/nc=2/nc>=3 random-effect
-  structures, weighted, and binary). See `docs/design/walnuts.md` for the
-  full design record, including the gate design and results.
+  syntax, priors), and the posterior targeted are unchanged, verified by a
+  pre-registered distributional-equivalence gate against the Stan-era
+  posterior on reference fits spanning every gradient tier (nc=1/nc=2/nc>=3
+  random-effect structures, weighted, and binary). See
+  `docs/design/walnuts.md` for the full design record, including the gate
+  design and results.
 
 * Measured payoff (one quiet window, arm64 macOS, reference fits spanning
   continuous/binary/weighted-continuous, with dbarts held at one version so

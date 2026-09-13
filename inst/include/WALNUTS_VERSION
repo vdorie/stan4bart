@@ -3,7 +3,7 @@ WALNUTS (vendored)
 
 Upstream:  https://github.com/flatironinstitute/walnuts
 Commit:    f3c1833117d9d2f76db1671d70d2ce0810ad8436
-Date:      2026-09-11 (upstream commit date)
+Date:      2026-09-10 (upstream commit date)
 Vendored:  2026-09-13
 License:   MIT, (c) 2025--2026 by the Walnutpie Developers
            (see WALNUTS_LICENSE)
