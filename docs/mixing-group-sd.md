@@ -33,77 +33,96 @@ and split R-hat, both on half-chains. On autoregressive test chains they
 reproduce the standard split implementations to within half a percent.
 Lag-one autocorrelation is the mean over the four chains.
 
-The table describes the build at 2fa75b7, which refreshed the vendored WALNUTS
-to upstream head. That refresh moved every draw, so these are not the figures an
-older build produces; what it did not move is the verdict, and the control run
-that establishes as much is recorded in `docs/plans/re-scale-mixing.md`.
+The table describes the build that carries the random-effect scale's ridge move,
+which is on by default: once per sweep the scale of each grouping factor is
+drawn by an exact slice move along the curve that rescales it and divides that
+factor's standardized effects by the same amount, leaving the linear predictor
+and the likelihood untouched. That move is what changed the verdict below, and
+it is what the group sd's mixing now rests on; its derivation and its own
+acceptance bar are in `docs/design/re-scale-and-grouped-cost.md`. The earlier
+figures this note carried, on a build without the move, are in
+`docs/plans/re-scale-mixing.md`, which also records that the WALNUTS refresh
+before it moved every draw and none of the verdicts.
 
 | case | seed | group sd lag-1 | group sd ESS/1000 | group sd R-hat | sigma lag-1 | sigma ESS/1000 | fixed effect lag-1 | fixed effect ESS/1000 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bar_reference | 20260913 | 0.96 | 19 | 1.01 | 0.53 | 6 | 0.23 | 18 |
-| bar_reference | 20260914 | 0.95 | 18 | 1.06 | 0.68 | 19 | 0.27 | 14 |
-| bar_reference | 20260915 | 0.95 | 10 | 1.11 | 0.61 | 6 | 0.11 | 9 |
-| many_small | 20260913 | 0.87 | 45 | 1.03 | 0.34 | 5 | 0.14 | 5 |
-| many_small | 20260914 | 0.90 | 35 | 1.04 | 0.66 | 5 | 0.20 | 29 |
-| many_small | 20260915 | 0.91 | 19 | 1.07 | 0.79 | 12 | 0.12 | 11 |
-| few_large | 20260913 | 0.97 | 5 | 1.18 | 0.61 | 84 | 0.35 | 13 |
-| few_large | 20260914 | 0.96 | 21 | 1.06 | 0.65 | 6 | 0.50 | 15 |
-| few_large | 20260915 | 0.96 | 2 | 1.42 | 0.65 | 17 | 0.42 | 29 |
-| weak_signal | 20260913 | 0.63 | 24 | 1.04 | 0.21 | 3 | -0.01 | 38 |
-| weak_signal | 20260914 | 0.73 | 92 | 1.02 | 0.31 | 4 | 0.04 | 28 |
-| weak_signal | 20260915 | 0.59 | 72 | 1.02 | 0.36 | 6 | 0.11 | 61 |
+| bar_reference | 20260913 | 0.08 | 370 | 1.00 | 0.50 | 5 | 0.23 | 106 |
+| bar_reference | 20260914 | 0.12 | 377 | 1.00 | 0.69 | 4 | 0.29 | 25 |
+| bar_reference | 20260915 | 0.08 | 187 | 1.01 | 0.65 | 9 | 0.16 | 30 |
+| many_small | 20260913 | 0.04 | 496 | 1.00 | 0.36 | 4 | 0.15 | 47 |
+| many_small | 20260914 | 0.08 | 596 | 1.01 | 0.64 | 15 | 0.20 | 103 |
+| many_small | 20260915 | 0.05 | 478 | 1.01 | 0.76 | 15 | 0.17 | 7 |
+| few_large | 20260913 | 0.20 | 81 | 1.02 | 0.65 | 41 | 0.31 | 17 |
+| few_large | 20260914 | 0.22 | 14 | 1.05 | 0.73 | 10 | 0.55 | 8 |
+| few_large | 20260915 | 0.10 | 1 | 1.82 | 0.77 | 3 | 0.47 | 8 |
+| weak_signal | 20260913 | 0.17 | 503 | 1.01 | 0.14 | 55 | 0.02 | 7 |
+| weak_signal | 20260914 | 0.22 | 374 | 1.01 | 0.39 | 7 | 0.08 | 6 |
+| weak_signal | 20260915 | 0.30 | 35 | 1.03 | 0.32 | 18 | 0.12 | 10 |
 
 ## The verdict
 
-The bar is met in none of the four cases, and not one of the twelve fits clears
-both of its halves. The reference design the bar was written against is the
-plainest failure: lag-one 0.95 to 0.96 against a ceiling of 0.8, and 10 to 19
-effective draws per thousand against a floor of 100, so it misses the
-autocorrelation limit by about 0.15 and the effective-sample-size floor by a
-factor of five to ten. `few_large` is worse - lag-one 0.96 to 0.97 on all three
-seeds and effective draws of 5, 21 and 2 per thousand, the last with an R-hat of
-1.42, which is four chains that have not settled on one posterior rather than
-four slow ones. `many_small` is the least bad of the three designs with a group
-sd of 1 and still fails everywhere, at lag-one 0.87 to 0.91 and 19 to 45
-effective draws, missing the effective-sample-size floor by between two and five
-times. `weak_signal` is the only design that comes near: its lag-one clears on
-all three seeds and its effective sample size reads 24, 92 and 72 per thousand,
-so it misses the floor on all three, though one of them by under ten percent.
-Group count and group size both matter and point the same way - the fewer groups
-there are, the worse the group sd mixes - but no design with a group sd large
-enough to be worth estimating reaches the bar on any seed.
+The bar is met in two of the four designs on every seed, in a third on two
+seeds of three, and in the fourth on none - eight of the twelve fits clear both
+halves, where before the move not one of them cleared either. The design the bar
+was written against is the clean pass: lag-one 0.08 to 0.12 against a ceiling of
+0.8, and 187 to 377 effective draws per thousand against a floor of 100, so it
+clears the autocorrelation limit by an order of magnitude and the
+effective-sample-size floor by two to four times. `many_small` passes on all
+three seeds by more, at lag-one 0.04 to 0.08 and 478 to 596 effective draws.
+`weak_signal` passes on two of three and misses the effective-sample-size floor
+on the third, at 35 per thousand against a lag-one of 0.30.
 
-Read the two halves of the bar with different weight. The lag-one column is
-stable: it moves by hundredths between builds whose draws differ only in warmup
-numerics. The effective sample size is not: on the weak-signal design it moves
-by a factor of several across the same comparison, and it swings as widely
-between seeds. Where they disagree, the autocorrelation is the one to trust.
+`few_large` is the failure, and it fails for a different reason than the group sd
+used to fail everywhere. Its lag-one is 0.10 to 0.22 - the chain is not
+autocorrelated any more - and its effective sample size reads 81, 14 and 1 per
+thousand, the last with an R-hat of 1.82. What is left there is four chains
+disagreeing about the group sd rather than four slow ones, which is what five
+groups of four hundred buys: the spread of five numbers about zero is weakly
+identified however well each draw of it mixes, and the effective-sample-size
+estimator charges for between-chain disagreement. Longer runs repair that;
+faster mixing within a chain does not.
 
-The group sd is the hard parameter, and it is hard in a way the other two are
-not. Across the three designs with a group sd of 1 its lag-one autocorrelation
-sits at 0.87 to 0.97, while the residual standard deviation runs 0.34 to 0.79
-and the fixed effect 0.11 to 0.50. The effective sample sizes for those two are
-also low, sometimes lower than the group sd's, but for a different reason: they
-are depressed by disagreement between chains, and a longer run repairs that.
-Quadrupling warmup and kept draws on the reference design drops the residual
-standard deviation's R-hat from 1.12 to 1.07, while the group sd's lag-one stays
-at 0.95 and its effective sample size per thousand does not move at all, 18.7
-then 18.8. That is the distinction that matters for the bar: the other
-parameters are under-warmed at the defaults, and the group sd is autocorrelated
-from one draw to the next, which no amount of extra sampling fixes.
+Read the two halves of the bar with different weight, as before. The lag-one
+column is stable and it is now uniformly low. The effective sample size is not:
+`weak_signal`'s reading moves by a factor of several between seeds, and
+`few_large`'s ESS of 1 sits beside a lag-one of 0.10. Where they disagree, the
+autocorrelation is the one to trust.
 
-## Candidate remedies, not implemented
+The group sd is no longer the hard parameter. Across the three designs with a
+group sd of 1 its lag-one now sits at 0.04 to 0.22, while the residual standard
+deviation runs 0.36 to 0.77 and the fixed effect 0.15 to 0.55 - the ordering
+from the earlier build is reversed, and the two parameters that now mix worst
+are the two that pay the BART-versus-parametric alternation rather than the
+parametric block's own geometry. Their effective sample sizes are depressed by
+disagreement between chains and a longer run repairs them. The posterior means
+still track the truth in every fit - the residual standard deviation within a
+percent or two of 1, the fixed effect within a few percent of 2, and the group sd
+within its posterior uncertainty - and a check across these four designs at
+three seeds with the move switched off finds 33 of 36 posterior-mean differences
+within twice their combined Monte Carlo error, with no systematic direction: the
+mixing is not bought with bias.
 
-dbarts's own work on this parameter leaves two candidates on the table, both
+## What remains, and the remedies not taken
+
+What is left is the two-block alternation, not the parametric block. The group
+sd's own conditional is now drawn exactly; the residual standard deviation, the
+fixed effect, and the shared level of the group intercepts are all confounded
+with the forest's overall fit, and no move inside either block crosses that.
+The shared level is the sharpest case - lag-one 0.97 to 0.99 on every design,
+unmoved by the ridge move by construction, since the move holds the linear
+predictor fixed. Its fix is a joint move shifting a scalar between the forest and
+the intercepts, which needs a way to add a constant to every leaf that the dbarts
+flat C API does not expose. That is recorded in `docs/plans/re-scale-mixing.md`
+and in the root `TODO`.
+
+dbarts's own work on this parameter left two candidates on the table, both
 recorded in its `docs/design/retire-grouped-random-effects.md` and
-`docs/plans/tau-slice-review.md`. The first is an interweaving move, alternating
-the centered draw of the group effects with an ancillary one in which the
-effects are rescaled by the group sd, which measured roughly an elevenfold drop
-in autocorrelation on the isolated pair of the group sd and its effects, but
-costs a new sampling block, changes every draw this package makes, and addresses
-only part of the problem, since dbarts attributed most of its own weak-signal
-difficulty to the forest and the group effects competing to explain the same
-group-level structure rather than to that pair. The second is the fallback
+`docs/plans/tau-slice-review.md`; neither is needed now for the quantity the bar
+names. The first is an interweaving move, alternating the centered draw of the
+group effects with an ancillary one in which the effects are rescaled by the
+group sd, which measured roughly an elevenfold drop in autocorrelation on the
+isolated pair of the group sd and its effects - the same pair the ridge move
+now draws in closed form, and at no wall-time cost. The second is the fallback
 dbarts named when the bar was set: an R-level grouped intercept that draws the
 group effects and their spread itself and drives a plain dbarts sampler through
 `setOffset` each sweep, which buys the conjugate draw whose lag-one dbarts

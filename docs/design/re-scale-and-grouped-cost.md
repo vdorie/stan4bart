@@ -146,6 +146,9 @@ built. Recorded as untested.
 
 ## 4. The remedy
 
+This section is the proposal as it was written. It has landed; section 6 is the
+landing note, and it corrects two things stated here.
+
 The ridge is exactly traversable in closed form, and the conditional along it is
 log-concave. That is the whole of the recommendation.
 
@@ -288,3 +291,140 @@ Not part of the remedy above; recorded so the two are not conflated again.
    being evaluated more often than the stored draws need.
 4. The parametric block at 29 percent of per-sweep cost is the floor, and it is
    the price of the model this package fits.
+
+## 6. What landed
+
+The slice move, on by default, drawn once per sweep for every random-effect
+block during sampling. Warmup is unchanged.
+
+### The derivation, as implemented
+
+The move itself is section 4's: `tau_i -> tau_i * e^u` with that block's `z_b`
+divided by `e^u`. That leaves every entry of the block's Cholesky factor scaled
+by `e^u` and every standardized effect divided by it, so `b`, the linear
+predictor and the likelihood are exactly invariant - for a scalar block, for a
+correlated block under `decov`, for several random-effect terms at once (each
+has its own `tau` and its own `z_b` segment, so the moves are separate
+conditionals), and for the binary family, whose latents enter only as the
+response of that same invariant likelihood.
+
+The conditional was re-derived from `ParametricModel::eval` rather than taken
+from section 4, and it differs from what section 4 states. Write `x = log tau_i`
+- which IS the unconstrained coordinate the sampler carries - and `v` for the
+block's standardized effects in `R^{q_i}`, `q_i = p_i * l_i` counting every
+coordinate of every level of the block. Change variables `(x, v) -> (x, w)` with
+`w = e^x v`, the quantity the curve holds fixed. The Jacobian of `v -> w` at
+fixed `x` is `e^{q_i x}` times the identity, so the density in the new chart
+carries a factor `e^{-q_i x}`. The only terms of the log density that involve
+`x` or `v` are the standardized effects' `N(0, 1)` prior, `tau`'s
+`Gamma(shape_i, 1)` prior, and the log Jacobian of `tau = e^x`. Collecting them,
+
+```
+log p(x | w, rest) = (shape_i - q_i) x - e^x - (A_i / 2) e^{-2x},
+A_i = ||w||^2 = tau_i^2 ||z_b(block i)||^2
+```
+
+with `(shape_i - 1) x - e^x` the Gamma prior, `+x` its Jacobian, `-q_i x` the
+chart's, and the last term the normal prior at `v = e^{-x} w`. The second
+derivative is `-e^x - 2 A_i e^{-2x} < 0`, so the conditional is log-concave on
+all of `R` unconditionally - there is no `shape <= q` side condition, which
+section 4 needed only because it wrote the density in `t`. `re_scale` and
+`dispersion` cancel: they multiply `tau_i` and `z_b` in one product.
+
+Two corrections to section 4:
+
+- Its `log pi(t) = (shape - q) log t - t - B / (2 t^2)` is a density in `t`
+  carrying the exponent of the density in `log t`. In `t` the exponent is
+  `shape - q - 1`; the Jacobian `dt/dx` is missing. What is implemented is the
+  `x` form above, where `shape_i - q_i` is right.
+- Its invariant `B = ||b_block||^2 / (re_scale * dispersion)^2` equals `A_i`
+  only for a scalar block. For a correlated block `T` is not a multiple of an
+  orthogonal matrix, so `||b||^2` is not `s^2 ||z_b||^2`. `A_i` is also the
+  cheaper of the two: it needs no `b`.
+
+A stepping-out slice sampler draws it (Neal 2003, interval stepped out with a
+split budget and then shrunk), at `O(q_i)` to form `A_i` plus a handful of
+scalar evaluations and no gradient. The interval's width is a function of the
+block's geometry only - a width read off the current position would cost the
+draw its reversibility.
+
+### Where it sits in the sweep
+
+At the top of the parametric block: after the BART draw has set the offset and,
+for a binary response, the latent response, and before the WALNUTS transitions.
+The conditional carries no likelihood term, so the move is stationary for the
+parametric conditional wherever it is applied; that position is chosen because
+it is where the rebuild's own log density and gradient evaluation is the one the
+stale-target cache already owed. A sweep that moves therefore pays no
+evaluation it was not already paying, and the mean leapfrog count per transition
+is unmoved (10.65 to 10.84 on the bar's design).
+
+Section 4's route is what was built: nothing was added to the vendored headers.
+The sampler is rebuilt at the moved position from the tuning captured at the
+freeze - `min_micro_steps` read off `AdaptiveWalnuts` before the adapter is
+dropped, `inv_mass`, `macro_time` and `max_error` off the frozen sampler, the
+two caps off this package's own `SamplingConfig`. The base generator is held by
+reference and continues; the rebuilt sampler's own `normal_distribution` is
+fresh and caches a spare variate, so the move is gated on distributions and not
+on draws. `LICENSE.note`'s vendored-verbatim claim is untouched, and the
+vendored tree still carries exactly one local patch.
+
+### The bar
+
+Bar design (Gaussian, n = 2000, K = 20, tau = 1, one chain, 1000 warmup and 1000
+kept, 200 trees), at the DEFAULT `skip`, the five harness seeds, the move off
+and on:
+
+| gate | move off | move on | bar |
+| --- | --- | --- | --- |
+| scale lag-1, worst seed | 0.963 | 0.090 | below 0.8 |
+| scale lag-1, median | 0.957 | 0.059 | - |
+| scale ESS per 1000, worst seed | 7.0 | 526 | at least 100 |
+| scale ESS per 1000, median | 13.5 | 739 | - |
+| scale posterior mean, worst seed shift | - | 0.78 combined MCSE | within MCSE |
+| seconds | 2.15 | 2.08 | - |
+
+PASS on all three clauses. Per seed the two arms' posterior means for the scale
+differ by 0.01 to 0.78 of two combined Monte Carlo errors, and the move cuts
+that Monte Carlo error by five to seven times (0.029-0.050 down to 0.005-0.007).
+
+Wall time on the bartCause configuration (n = 1000, K = 20, four chains, 500
+kept, the counterfactual test surface, `cores = 1`), eight paired repetitions:
+median 6.36 s with the move off against 6.43 s with it on, a ratio of **1.01**;
+means 6.51 s and 6.54 s, 1.004. The bar is 1.1x. PASS. The machine was not
+quiet, which is why the comparison is paired and read on the median.
+
+Secondary, not gated: `gaussian_k5` (400 observations per group, the longest
+ridge) goes from worst-seed lag-1 0.986 to 0.150, so it clears 0.8 on every
+seed, and the diagnosis is not incomplete. Its ESS half does not follow on one
+of the five seeds, which reads 10.5 against a lag-1 of 0.150 - the
+effective-sample-size estimator at 1000 draws is the noisier of the two, and
+that seed's chain carries structure past lag one that the scale's own
+conditional does not produce. The third design, `probit_k20`, goes from
+worst-seed 0.947 / 5.9 to 0.248 / 232 and clears both halves.
+
+Bias, the four grouped designs of the group-sd harness at three seeds each, the
+same data and the same MCMC seed in both arms, at the package defaults: 33 of 36
+posterior-mean differences (group sd, residual sd, fixed effect) fall within two
+combined Monte Carlo errors, worst ratio 1.42, with no systematic direction.
+Three exceedances against a k = 2 band on 36 comparisons is the expected tail.
+
+The full tinytest suite passes unchanged (546 expectations), the posterior
+baseline gate passes on all five tiers, and the tree-replay exactness gate
+passes on all three. No test pins draws of a random-effect model, so nothing
+needed the off switch or a regenerated value.
+
+### The current state
+
+The maintainer's ruling of 2026-09-13 is what was built: the move rebuilds the
+frozen `WalnutsSampler` each sweep rather than editing the vendored headers. The
+second local patch the plan held in reserve - a position setter on
+`AdaptiveWalnuts`, so the move could run in warmup too - was **not needed**: the
+sampling-only move clears the bar at the default `skip` on every seed, so warmup
+adaptation is not what holds the scale back and the vendored tree keeps its one
+patch.
+
+The move is **on by default**. `stan_args = list(ridge_move = FALSE)` turns it
+off, which is how the two columns above were measured and is the only reason to
+reach for it. `skip`'s `"stan"` element stays where it was, default 1, as the
+escape hatch for anything the move does not reach.

@@ -223,6 +223,29 @@
   `dbartsControl()` construction call; the separate `attr<-` assignment is
   removed.
 
+* The random-effect standard deviation is now drawn once per sweep by an exact
+  slice move along the curve that leaves the linear predictor fixed, and this is
+  on by default. Rescaling a grouping factor's standard deviation and dividing
+  that factor's standardized effects by the same amount leaves the random
+  effects, the linear predictor and the likelihood untouched, so the conditional
+  along that curve is one-dimensional, log-concave and free of any data term - a
+  slice sampler draws it exactly, at a cost that does not register against a BART
+  sweep. That curve is the one direction the gradient-based sampler could not
+  travel, and it was the whole of the random-effect scale's mixing problem. On a
+  20-group, 100-observations-per-group Gaussian random intercept with the default
+  `skip`, the scale's lag-1 autocorrelation drops from 0.96 to 0.09 and its ESS
+  rises from 7 to 526 per 1000 kept draws, worst of five seeds, at a wall-time
+  ratio of 1.01 on a four-chain fit with a counterfactual test surface. Across
+  four grouped designs at the package defaults the group standard deviation now
+  clears the dbarts hand-off bar - lag-1 below 0.8 and ESS at least 100 per 1000
+  - in eight of twelve fits, where before it cleared it in none. Posterior means
+  are unmoved within Monte Carlo error. This is a draw-moving change for every
+  model with a random-effect block; `stan_args = list(ridge_move = FALSE)`
+  restores the previous behavior, which is how the comparison above was
+  measured. `skip` remains the escape hatch for what the move does not reach -
+  notably the residual standard deviation, which pays the BART-versus-parametric
+  alternation whether or not there is a random-effect block.
+
 * Fixed the `"stan"` element of `skip` reaching the sampler and being consumed
   by nothing: the parametric block took one transition per BART sweep whatever
   it was set to, while the `"bart"` element had been honored throughout. It now
