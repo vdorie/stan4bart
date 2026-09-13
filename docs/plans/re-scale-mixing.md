@@ -229,23 +229,16 @@ Jacobian, no likelihood term - so a slice sampler draws the scale nearly
 independently at O(q) per sweep with no gradient evaluation. It is the direction
 WALNUTS cannot travel and nothing else needs.
 
-The cost is that WALNUTS holds its position privately: neither `AdaptiveWalnuts`
-nor `WalnutsSampler` exposes a way to write `theta_`. Reading it is already
-solved - `LatestDraw::on_sample` is handed `theta_` after every transition, so
-the handler holds the current position. The ask on the vendored headers is
-therefore ONE accessor, a position setter, not two; adding it ends the "vendored
-verbatim at commit 5854be8" claim in LICENSE.note.
+WALNUTS still holds its position privately - neither `AdaptiveWalnuts` nor
+`WalnutsSampler` exposes a way to write `theta_` - but the rebuild route around
+that is available at the refreshed headers and needs nothing added to them.
+`WalnutsSampler` is copyable and its constructor takes the position and every
+tuning value, and `AdaptiveWalnuts::min_micro_steps()` is a public getter, so
+the slice move can construct a fresh sampler at the updated position each sweep.
+Its cost and its limits are set out in docs/design/re-scale-and-grouped-cost.md
+"What it costs".
 
-The alternative, rebuilding a `WalnutsSampler` after each draw, is nearly but not
-quite available without touching the vendored code. Of the five sampling tuning
-values, three (`max_trajectory_doublings`, `max_step_halvings`,
-`max_hamiltonian_error`) come from this package's own `SamplingConfig` and two
-have getters (`inverse_mass_matrix_diagonal`, `macro_time`). The sixth,
-`min_micro_steps`, comes from the adapter's own estimator and `WalnutsSampler`
-exposes no getter for it, so a rebuild silently loses it. That path also reaches
-only the sampling phase.
-
-On top of either, the density, the slice sampler, and their gate. Call it 150-250
+On top of that, the density, the slice sampler, and their gate. Call it 150-250
 lines and a design note, and it moves every draw.
 
 **The centered alternative** - sampling the effects directly and the scale from
@@ -264,6 +257,85 @@ by the end); `skip = 8` in warmup makes it eight times worse, which is why the
 extra transitions are confined to sampling rather than fixed at the root. Fixing
 it at the root - seeding the forest with the response mean, or carrying an
 explicit intercept - would also make a uniform skip loop safe.
+
+## The WALNUTS refresh, as a control
+
+The vendored sampler was refreshed to upstream head at 2fa75b7, four of whose
+changes move numerics: an aliased Welford update in the mass estimator, a
+doubling count that was double-reported on capped or aborted warmup draws, a
+non-finite acceptance statistic that is now a rejection rather than an input to
+Adam, and a reused gradient at the selected position. Every draw moved. The
+question this section answers is whether the scale's mixing moved with them, so
+that later work is measured against the refreshed build and not against a
+picture the refresh had already changed.
+
+It did not. The bar's design, one chain, 1000 warmup and 1000 kept, 200 trees,
+ten seeds, the same seeds on both builds:
+
+| skip | build | acf1 median | acf1 worst | ESS median | ESS worst | tau mean | seconds |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | before | 0.959 | 0.977 | 13.0 | 3.0 | 1.019 | 2.04 |
+| 1 | after | 0.960 | 0.993 | 13.3 | 1.3 | 1.040 | 2.03 |
+| 16 | before | 0.651 | 0.759 | 176.0 | 10.6 | 1.001 | 4.15 |
+| 16 | after | 0.639 | 0.797 | 184.2 | 44.8 | 1.009 | 3.95 |
+
+The medians agree to about a hundredth in autocorrelation and a few percent in
+effective sample size; the worst-seed columns move more, in both directions,
+which is what a worst-of-ten statistic does when every draw has changed. Mean
+leapfrog steps per transition are unchanged at the median, 10.8 before and 10.6
+after, so the refresh is not paying for itself in gradient evaluations either.
+The ten seeds used here are not the ten the table above under "Result against
+the bar" was recorded on, which were not written down; on this set skip 16 does
+not clear the worst-seed ESS floor on either build, so read the two builds
+against each other rather than against that table's verdict.
+
+The four-design group-sd measurement behind `docs/mixing-group-sd.md` moves the
+same way. Group sd lag-one before and after, three seeds per design:
+
+| design | acf1 before | acf1 after | ESS/1000 before | ESS/1000 after |
+| --- | --- | --- | --- | --- |
+| bar_reference | 0.93 - 0.96 | 0.95 - 0.96 | 12 - 19 | 10 - 19 |
+| many_small | 0.88 - 0.91 | 0.87 - 0.91 | 24 - 39 | 19 - 45 |
+| few_large | 0.96 | 0.96 - 0.97 | 1 - 12 | 2 - 21 |
+| weak_signal | 0.62 - 0.73 | 0.59 - 0.73 | 18 - 164 | 24 - 92 |
+
+The bar is met in no design on either build. The one fit that cleared it before
+- weak_signal at the first seed, on an effective sample size of 164 - reads 24
+after, and another seed of the same design goes 18 to 72. Nothing in the
+autocorrelation column moves by more than 0.06. That contrast is the useful
+finding here: on this parameter the effective-sample-size estimate is not stable
+enough at 1000 draws to carry a verdict on its own, and the autocorrelation is.
+
+## Two sampler settings that had never been measured
+
+`max_hamiltonian_error` and `min_micro_steps` reach the sampler through this
+package's `SamplingConfig` and had never been varied. Both were probed on the
+bar's design at the default skip, five seeds, against the refreshed build. The
+expectation was that neither would matter. One of them does.
+
+| setting | acf1 median | acf1 worst | ESS median | ESS worst | leapfrog | seconds |
+| --- | --- | --- | --- | --- | --- | --- |
+| default (0.5, 1) | 0.957 | 0.963 | 13.5 | 7.0 | 10.7 | 2.05 |
+| max_hamiltonian_error 0.1 | 0.964 | 0.986 | 14.7 | 5.3 | 26.5 | 2.42 |
+| max_hamiltonian_error 2.0 | 0.938 | 0.960 | 25.0 | 14.7 | 9.1 | 2.02 |
+| min_micro_steps 2 | 0.943 | 0.953 | 25.6 | 20.1 | 14.8 | 2.14 |
+| min_micro_steps 4 | 0.821 | 0.893 | 64.4 | 54.5 | 23.9 | 2.37 |
+| min_micro_steps 8 | 0.887 | 0.901 | 49.7 | 31.1 | 13.6 | 2.20 |
+
+`max_hamiltonian_error` behaves as expected: tightening it to 0.1 buys nothing
+and costs two and a half times the gradient evaluations, and loosening it to 2.0
+is a small gain inside seed noise. `min_micro_steps` is not what was expected.
+Four micro steps per macro step takes the median autocorrelation from 0.957 to
+0.821 and the median effective sample size from 13.5 to 64.4, worst seed 7.0 to
+54.5, for 1.16x the wall time - against the 2x that `skip = 16` costs for a
+comparable gain. It still does not clear the bar, and it is not a monotone
+lever: eight micro steps is worse than four on every column, so this is a single
+five-seed probe of a setting with an interior optimum, not a curve with a known
+shape.
+
+That is enough to say the setting is worth a proper look and not enough to move
+a default on. What it changes for the ridge move is the comparison: the move now
+has to beat a cheaper alternative than `skip` alone.
 
 ## Harness
 
