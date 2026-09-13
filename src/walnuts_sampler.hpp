@@ -35,6 +35,7 @@ struct WalnutsSampler : public ParametricSampler {
   ~WalnutsSampler() override;
 
   void run(bool isWarmup) override;
+  void ridgeMove() override;
   void freeze() override;
 
   void getParametricMean(double* result) const override;

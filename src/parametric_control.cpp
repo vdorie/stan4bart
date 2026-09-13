@@ -25,7 +25,8 @@ namespace {
 // step-size acceptance-rate target; the remaining NUTS-specific knobs
 // (adapt_gamma/kappa/t0/buffers/window, stepsize*, max_treedepth) have no
 // faithful WALNUTS analog and are accepted-but-ignored (parsed, never
-// consumed); seed, init_r, skip, and adapt_delta reach the WALNUTS sampler.
+// consumed); seed, init_r, skip, ridge_move, and adapt_delta reach the WALNUTS
+// sampler.
 const char* const controlNames[] = {
   "seed",
   "init_r",
@@ -40,7 +41,8 @@ const char* const controlNames[] = {
   "stepsize",
   "stepsize_jitter",
   "max_treedepth",
-  "save_raw_parameters"
+  "save_raw_parameters",
+  "ridge_move"
 };
 
 constexpr size_t numControlNames = sizeof(controlNames) / sizeof(controlNames[0]);
@@ -118,6 +120,10 @@ void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr)
     RC_VALUE | RC_DEFAULT, 10, RC_END);
   control.save_raw = rc_getIntAt(controlExpr, matchPos[13], "save_raw_parameters",
     RC_VALUE | RC_DEFAULT, 0, RC_END) != 0;
+  // Default ON: an absent name reads as the default, so a caller that predates
+  // the move still gets it.
+  control.ridge_move = rc_getIntAt(controlExpr, matchPos[14], "ridge_move",
+    RC_VALUE | RC_DEFAULT, 1, RC_END) != 0;
 }
 
 SEXP createStanResultsExpr(const double_writer& sample_writer)
@@ -156,13 +162,14 @@ void printStanControl(const StanControl& control)
           "  stepsize: %f\n"
           "  stepsize_jitter: %f\n"
           "  max_treedepth: %d\n"
-          "  save_raw_parameters: %d\n",
+          "  save_raw_parameters: %d\n"
+          "  ridge_move: %d\n",
           control.random_seed, control.init_radius,
           control.skip, control.adapt_gamma, control.adapt_delta,
           control.adapt_kappa, control.adapt_init_buffer, control.adapt_term_buffer,
           control.adapt_window, control.adapt_t0, control.stepsize,
           control.stepsize_jitter, control.max_treedepth,
-          control.save_raw ? 1 : 0);
+          control.save_raw ? 1 : 0, control.ridge_move ? 1 : 0);
 }
 
 }  // namespace stan4bart

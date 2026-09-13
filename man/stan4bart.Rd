@@ -274,6 +274,15 @@ stan4bart(formula,
       \code{adapt_delta}. A higher value targets a smaller step size, so warmup
       spends more gradient evaluations per transition but tracks the posterior
       geometry more finely; a lower value takes larger, cheaper steps.
+      \item \code{ridge_move} - logical, default \code{TRUE}. The
+      random-effect scale is drawn once per sweep by an exact slice move along
+      the curve that rescales a grouping factor's standard deviation and
+      divides that factor's standardized effects by the same amount, which
+      leaves the linear predictor and the likelihood untouched. It is the one
+      direction the gradient-based sampler cannot travel, and it is what the
+      random-effect standard deviation's mixing depends on. Set \code{FALSE}
+      to sample without it, e.g. to measure what it buys; there is no other
+      reason to.
       \item \code{save_raw_parameters} - logical, default \code{FALSE}. When
       \code{FALSE} the stored parametric draw is only the transformed block
       every consumer reads (\code{beta}, \code{b}, \code{theta_L}, and

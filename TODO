@@ -65,26 +65,6 @@ items
     here, and what bartCause would consume. Needs a new dbarts.h entry
     point: BCF is built by its own path inside dbarts and is not
     exposed through the flat C API at all. decision-gated.
-  re-scale-ridge-move: the random-effect scale's ridge crossed in closed
-    form instead of by brute force. THE DESIGN IS WRITTEN and carries a
-    pre-registered acceptance bar:
-    docs/design/re-scale-and-grouped-cost.md, with the measurements in
-    docs/plans/re-scale-mixing.md. What landed meanwhile is skip's
-    parametric element, which reaches the release bar at eight to
-    sixteen parametric transitions per sweep and about 2x wall time;
-    the design argues that is the wrong axis to pay on and keeps the
-    default at 1. The recommended remedy is a slice move along the
-    homogeneity curve: rescaling tau_i and dividing that block's z_b by
-    the same factor leaves b, the linear predictor, and the likelihood
-    untouched, so the conditional along the curve is
-    log pi(t) = (shape - q) log t - t - B / (2 t^2), one-dimensional,
-    log-concave, O(q) per sweep and no gradient. Blocked on WALNUTS
-    holding its position privately: it wants ONE accessor added to the
-    vendored headers (a position setter - reading the position is
-    already solved via LatestDraw::on_sample), which ends the "vendored
-    verbatim" claim in LICENSE.note. 150-250 lines plus a full baseline
-    re-record, since it moves every draw of every model with a
-    random-effect block.
   grouped-fit-wall-time: the four costs behind bartCause's group.by
     route being several times slower than the dbarts route it replaced,
     measured and ranked in docs/design/re-scale-and-grouped-cost.md

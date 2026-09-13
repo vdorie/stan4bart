@@ -147,6 +147,7 @@ diagnose <- function(draws) {
        ess_per_1000 = 1000 * e / n_draws,
        rhat = rhat(draws),
        post_mean = mean(draws),
+       post_sd = sd(as.numeric(draws)),
        n_draws = n_draws)
 }
 
@@ -205,10 +206,11 @@ CORES <- 4L
 ## object: stan4bart detects the bart() and lme4-bar terms by walking the
 ## UNEVALUATED call, so a formula held in a variable silently fails to strip
 ## the bart() term and model.frame() then tries to call dbarts::bart() for real.
-fit_case <- function(data, mcmc_seed) {
+fit_case <- function(data, mcmc_seed, ridge_move = TRUE) {
   stan4bart::stan4bart(y ~ bart(X1 + X2 + X3 + X4 + X5) + Xfix + (1 | g), data,
                        cores = CORES, chains = CHAINS, iter = ITER,
-                       verbose = -1L, seed = mcmc_seed)
+                       verbose = -1L, seed = mcmc_seed,
+                       stan_args = list(ridge_move = ridge_move))
 }
 
 ## The three monitored scalars. The group sd is the square root of the single
@@ -221,13 +223,13 @@ monitored_draws <- function(fit) {
        fixef_Xfix = extract(fit, "fixef", combine_chains = FALSE)["Xfix", , ])
 }
 
-run_one <- function(case_name, seed_index) {
+run_one <- function(case_name, seed_index, ridge_move = TRUE) {
   cfg <- CASES[[case_name]]
   seed <- SEEDS[seed_index]
   data <- simulate(seed, cfg$n, cfg$n_groups, cfg$group_sd)
 
   t0 <- proc.time()[["elapsed"]]
-  fit <- fit_case(data, seed + 1L)
+  fit <- fit_case(data, seed + 1L, ridge_move)
   elapsed <- proc.time()[["elapsed"]] - t0
 
   draws <- monitored_draws(fit)
@@ -236,7 +238,8 @@ run_one <- function(case_name, seed_index) {
     data.frame(case = case_name, seed = seed, parameter = par,
                lag1 = d$lag1_mean, lag1_max = d$lag1_max,
                ess = d$ess, ess_per_1000 = d$ess_per_1000, rhat = d$rhat,
-               post_mean = d$post_mean, n_draws = d$n_draws,
+               post_mean = d$post_mean, post_sd = d$post_sd,
+               n_draws = d$n_draws, ridge_move = ridge_move,
                elapsed = elapsed, stringsAsFactors = FALSE)
   })
   list(summary = do.call(rbind, rows),
@@ -253,6 +256,44 @@ verdict <- function(row) {
   if (row$lag1 < LAG1_BAR && row$ess_per_1000 >= ESS_BAR) "pass" else "FAIL"
 }
 
+# ---- the bias check ---------------------------------------------------------
+
+## Every case and seed fitted twice on the SAME data and the SAME MCMC seed,
+## the scale's ridge move off and on, and every monitored posterior mean read
+## against twice the two arms' combined Monte Carlo error. The move changes the
+## kernel, not the target, so a difference outside that band on more than the
+## tail of the comparisons would mean the mixing was bought with bias.
+bias_check <- function(case_names) {
+  rows <- list()
+  for (case_name in case_names) for (i in seq_along(SEEDS)) {
+    cat(sprintf("fitting %s, seed %d, both arms ...\n", case_name, SEEDS[i]))
+    flush(stdout())
+    off <- run_one(case_name, i, FALSE)$summary
+    on  <- run_one(case_name, i, TRUE)$summary
+    mcse_off <- off$post_sd / sqrt(off$ess)
+    mcse_on  <- on$post_sd / sqrt(on$ess)
+    rows[[length(rows) + 1L]] <- data.frame(
+      case = case_name, seed = SEEDS[i], parameter = off$parameter,
+      mean_off = off$post_mean, mean_on = on$post_mean,
+      mcse_off = mcse_off, mcse_on = mcse_on,
+      ratio = abs(on$post_mean - off$post_mean) /
+              (2 * sqrt(mcse_off^2 + mcse_on^2)),
+      stringsAsFactors = FALSE)
+  }
+  r <- do.call(rbind, rows)
+  cat("\n")
+  for (i in seq_len(nrow(r)))
+    cat(sprintf("%-14s %9d %-11s off %8.4f on %8.4f  mcse %7.4f / %7.4f  %5.2f %s\n",
+                r$case[i], r$seed[i], r$parameter[i], r$mean_off[i], r$mean_on[i],
+                r$mcse_off[i], r$mcse_on[i], r$ratio[i],
+                if (r$ratio[i] <= 1) "" else "OUTSIDE"))
+  cat(sprintf("\n%d of %d posterior-mean differences within two combined Monte Carlo errors; worst %.2f\n",
+              sum(r$ratio <= 1), nrow(r), max(r$ratio)))
+  cat(sprintf("sign of (on - off): %d of %d positive\n",
+              sum(r$mean_on > r$mean_off), nrow(r)))
+  invisible(r)
+}
+
 # ---- main -------------------------------------------------------------------
 
 main <- function(args) {
@@ -261,10 +302,13 @@ main <- function(args) {
     outfile <- args[1L]
     args <- args[-1L]
   }
+  bias <- length(args) > 0L && args[1L] == "bias"
+  if (bias) args <- args[-1L]
   case_names <- if (length(args) > 0L) args else names(CASES)
   unknown <- setdiff(case_names, names(CASES))
   if (length(unknown) > 0L)
     stop("unknown case(s): ", paste(unknown, collapse = ", "))
+  if (bias) return(bias_check(case_names))
 
   results <- list()
   for (case_name in case_names) {

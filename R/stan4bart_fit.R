@@ -633,9 +633,20 @@ stan4bart_fit <-
   data.bart    <- bart_spec$data
 
   
+  # The random-effect scale's ridge move: on by default, an off switch for
+  # measuring what it buys.
+  ridge_move <- stan_args[["ridge_move"]]
+  if (is.null(ridge_move)) {
+    ridge_move <- TRUE
+  } else if (!is.logical(ridge_move) || length(ridge_move) != 1L ||
+             is.na(ridge_move)) {
+    stop("'ridge_move' must be TRUE or FALSE")
+  }
+
   control.stan <- list(
     init_r = stan_args[["init_r"]] %ORifNULL% 2.0,
     skip = skip.stan,
+    ridge_move = as.integer(ridge_move),
     adapt_gamma = stan_args[["adapt_gamma"]],
     adapt_delta = stan_args[["adapt_delta"]],
     adapt_kappa = stan_args[["adapt_kappa"]],

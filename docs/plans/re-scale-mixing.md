@@ -117,6 +117,9 @@ sampling, which is also draw-neutral for warmup at every skip.
 At the default `skip = 1` the change is a no-op by construction, and the
 posterior baselines and the exactness gate confirm it.
 
+The scale's ridge move landed after it, and is what the default now relies on;
+the "Open" section below records where that leaves this file.
+
 ## Result against the bar
 
 Bar design, 1000 warmup and 1000 kept, ten seeds:
@@ -191,72 +194,74 @@ level columns in the baseline are not read as noise.
 
 ## Open
 
-**The default is still 1**, so the bar is met by an argument and not by the
-package as shipped. A user who does not set `skip` still gets a scale that does
-not mix. The measured cost of raising it to 16 is smaller than it looks, and it
-is not confined to models with random effects:
+**The scale is drawn along the ridge, and the default is the move, not `skip`.**
+The closed-form slice move this file argued for landed: once per sweep, per
+random-effect block, during sampling, rebuilding the frozen sampler at the moved
+position rather than editing the vendored headers. The ridge is exactly
+traversable, so the conditional along it carries no likelihood term and a slice
+sampler draws the scale nearly independently at O(q) with no gradient - which is
+the direction WALNUTS cannot travel and nothing else needs.
+
+On the bar's design at the DEFAULT `skip`, worst of the harness's five seeds,
+lag-1 autocorrelation goes from 0.963 to 0.090 and ESS from 7.0 to 526 per 1000
+kept draws, at a wall-time ratio of 1.01 on the bartCause configuration. The
+derivation as implemented, the corrections it makes to the design's formula, and
+the full bar are in docs/design/re-scale-and-grouped-cost.md, section 6. It is
+on by default; `stan_args = list(ridge_move = FALSE)` turns it off.
+
+**`skip` stays the escape hatch, and its default stays 1.** Nothing above about
+its cost has changed - a WALNUTS transition is 0.079 ms against a 0.19 ms BART
+sweep, so `stan = 16` still roughly doubles the fit - but the reason to reach for
+it has narrowed to what the move does not reach. The measured cost of raising it
+is still:
 
 | design | skip 1 | skip 16 | ratio | what it buys |
 | --- | --- | --- | --- | --- |
-| gaussian_k20 | 2.30 s | 4.63 s | 2.0x | scale ESS 14 -> 250, clears the bar |
-| probit_k20 | 2.51 s | 4.80 s | 1.9x | scale ESS 35 -> 227, clears the bar |
+| gaussian_k20 | 2.30 s | 4.63 s | 2.0x | scale ESS 14 -> 250 |
+| probit_k20 | 2.51 s | 4.80 s | 1.9x | scale ESS 35 -> 227 |
 | no random effects (`t == 0`) | 2.32 s | 2.85 s | 1.2x | sigma ESS 65 -> 220 |
 
-The `t == 0` row is worth noting for a different reason than it first suggests:
-there is no ridge there, so the extra transitions should be pure waste, and they
-are not - they cost 1.2x and triple sigma's ESS, because sigma pays the two-block
-alternation whether or not there is a random-effect block.
+The `t == 0` row is the one the move does not touch at all: there is no ridge
+there, and the extra transitions still triple sigma's ESS, because sigma pays
+the two-block alternation whether or not there is a random-effect block. That
+is the surviving case for the escape hatch.
 
-Recommendation nonetheless: **leave the default at 1.** The wall-time
-decomposition in docs/design/re-scale-and-grouped-cost.md is what decides it. A
-WALNUTS transition costs 0.079 ms against a 0.19 ms BART sweep, so `stan = 16`
-adds 1.2 ms per sweep and roughly doubles the fit - on the axis that is already
-the live complaint about this package against the dbarts route it replaced.
-Buying the scale's mixing at 2x wall time is the wrong trade when the same
-mixing is available for free along the ridge itself (that design's section 4).
-`skip` stays the escape hatch a user can reach for today; the default moves, if
-at all, only if the ridge move is abandoned.
+**What the move does not reach.** Two things, both of them the two-block
+alternation rather than the parametric block's geometry.
 
-**The fix that does not cost 8x**, worked out with its acceptance bar in
-docs/design/re-scale-and-grouped-cost.md. The ridge is exactly traversable in
-closed form. Every block's Cholesky factor is homogeneous of degree one in its own scale
-(`bl.s = tau[i] * re_scale[i] * dispersion`, and every entry of `T` is a multiple
-of `bl.s`), so scaling `tau_i` by r and dividing that block's `z_b` by r leaves
-`b`, and therefore the linear predictor and the likelihood, untouched. Along that
-curve the target is a one-dimensional density in closed form - the standardized
-effects' normal prior, the scale's gamma prior, and the change-of-variables
-Jacobian, no likelihood term - so a slice sampler draws the scale nearly
-independently at O(q) per sweep with no gradient evaluation. It is the direction
-WALNUTS cannot travel and nothing else needs.
+The shared level of the group intercepts is the first, and it has its own
+section above. The move leaves it exactly where it was - lag-1 0.97 to 0.99 on
+every design - which is the confirmation the ridge picture predicted: the level
+is confounded with the forest's overall level, and a move that holds the linear
+predictor fixed by construction cannot cross it. Its fix is still a joint move
+shifting a scalar between the forest and the intercepts, which still needs a way
+to add a constant to every leaf that the dbarts flat C API does not expose. Not
+scheduled.
 
-WALNUTS still holds its position privately - neither `AdaptiveWalnuts` nor
-`WalnutsSampler` exposes a way to write `theta_` - but the rebuild route around
-that is available at the refreshed headers and needs nothing added to them.
-`WalnutsSampler` is copyable and its constructor takes the position and every
-tuning value, and `AdaptiveWalnuts::min_micro_steps()` is a public getter, so
-the slice move can construct a fresh sampler at the updated position each sweep.
-Its cost and its limits are set out in docs/design/re-scale-and-grouped-cost.md
-"What it costs".
+Five-group designs are the second. On `gaussian_k5` the move takes worst-seed
+lag-1 from 0.986 to 0.150 - so the ridge is crossed there as exactly as
+anywhere - but one of the five seeds reads an ESS of 10.5 against that lag-1,
+and on the group-sd harness's `few_large` case (five groups of four hundred,
+four chains) the group sd clears the autocorrelation half of the bar on all
+three seeds and the effective-sample-size half on none, one of them at an R-hat
+of 1.82. With five groups the scale is weakly identified and the four chains
+disagree about it; what remains is between-chain spread, not within-chain
+autocorrelation, and the ESS estimator charges for the first. That is a
+different defect from the one this file diagnoses and it is not the ridge.
 
-On top of that, the density, the slice sampler, and their gate. Call it 150-250
-lines and a design note, and it moves every draw.
+**Warmup is unchanged.** The move applies after the freeze. The second local
+patch this file held in reserve - a position setter on `AdaptiveWalnuts`, so a
+warmup sampler could be moved without resetting Adam and the mass estimator -
+was not needed: the sampling-only move clears the bar on every seed, so warmup
+adaptation is not what was holding the scale back. The vendored tree still
+carries exactly one local patch.
 
 **The centered alternative** - sampling the effects directly and the scale from
 its own conditional - is the textbook answer for well-identified groups and is a
 rewrite of `make_theta_L`, `make_b`, the hand adjoint, the raw block layout, the
 gradient-gate fixtures, and every baseline. It also reintroduces the funnel for
-weakly identified designs, so it wants a switch rather than a swap.
-
-**The shared-level defect** has its own section above; what belongs here is the
-warmup half of it. `y ~ bart(...) + (1 | g)` has no fixed-effect column at all -
-the design matrix is empty, K = 0 - so nothing but the forest and the random
-intercepts can carry the response mean, and early in warmup the forest has not
-grown. The intercepts take it and give it back slowly. It is visible at
-`skip = 1` too (the shared level is 1.96 at the first stored warmup draw and 0.2
-by the end); `skip = 8` in warmup makes it eight times worse, which is why the
-extra transitions are confined to sampling rather than fixed at the root. Fixing
-it at the root - seeding the forest with the response mean, or carrying an
-explicit intercept - would also make a uniform skip loop safe.
+weakly identified designs, so it wants a switch rather than a swap. The move
+makes it unnecessary for the quantity the bar names.
 
 ## The WALNUTS refresh, as a control
 
@@ -354,6 +359,10 @@ the baseline rather than only here. It replaces the `rbart_vi` comparison the ba
 came from, which cannot survive that function's removal from dbarts; the same
 removal took the third comparator out of inst/tinytest/test-02-binary.R, whose
 surviving glmer and plain-forest arms carry the intent.
+
+Its `ridge` mode is the scale move's own acceptance bar: the default skip, the
+move off and on, every design, the five seeds, so the two columns are read
+against each other.
 
 The two sections above drive the same harness from a caller that names the
 design, the skip and the seeds, rather than through its `record` mode:
