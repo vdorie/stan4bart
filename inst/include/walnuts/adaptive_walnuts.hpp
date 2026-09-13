@@ -16,7 +16,7 @@
 #include "walnuts/util.hpp"
 #include "walnuts/walnuts.hpp"
 
-namespace walnuts::detail {
+namespace walnutpie::detail {
 
 /**
  * @brief A mass matrix estimator based on exponentially discounted draws
@@ -30,7 +30,7 @@ class MassEstimator {
    * position.
    *
    * The estimator observes positions and their gradients at given iterations
-   * with the function `observe()`.  At each step, the discount factor for
+   * with the function `observe()`. At each step, the discount factor for
    * discounting past draws the online moment estimators is set to
    * ```
    * discount_factor = 1 - 1 / (iter_offset + iter)
@@ -80,7 +80,7 @@ class MassEstimator {
   }
 
   /**
-   * @brief Return an estimate of the inverse mass matrix.  The result
+   * @brief Return an estimate of the inverse mass matrix. The result
    * is the geometric average of the variance of the draws and the
    * inverse variance of the scores.
    *
@@ -94,7 +94,7 @@ class MassEstimator {
   }
 
  private:
-  /** The warmup configuration for adaptive Walnuts. */
+  /** The warmup configuration for adaptive Walnutpie. */
   WarmupConfig warmup_cfg_;
 
   /** The online variance estimator for draws. */
@@ -163,16 +163,16 @@ class MinMicroStepsAdaptHandler {
   double count_;
 };
 
-}  // namespace walnuts::detail
+}  // namespace walnutpie::detail
 
-namespace walnuts {
+namespace walnutpie {
 
 /**
  * @brief The adaptive Walnuts sampler.
  *
  * The adaptive Walnuts sampler is configured in the constructor, then
  * provides a functor method `operator()()` for returning the next
- * state in warmup.  Warmup re-estimates step size and mass matrix
+ * state in warmup. Warmup re-estimates step size and mass matrix
  * each iteration, exponentially discounting the past.
  *
  * @tparam F Type of log density/gradient function.
@@ -186,8 +186,8 @@ class AdaptiveWalnuts {
    * @brief Construct an adaptive Walnuts sampler.
    *
    * The configuration objects, the base random number generator, and
-   * the log density/gradient function are held by reference.  The RNG
-   * changes state every time a random number is generated.  The
+   * the log density/gradient function are held by reference. The RNG
+   * changes state every time a random number is generated. The
    * target depth specifies the expected Nuts tree depth, which is
    * controlled through the minimum number of micro steps per macro
    * step and adjusted with a mean estimator to achieve this average.
@@ -210,7 +210,7 @@ class AdaptiveWalnuts {
         sampling_cfg_(std::cref(sampling_cfg)),
         rand_(rng),
         handler_(handler),
-        logp_grad_(logp_grad),
+        logp_grad_(logp_grad, handler),
         theta_(init_chain_cfg.position()),
         iteration_(0),
         adam_(init_chain_cfg.step_size(), warmup_cfg.step_accept_rate_target(),
@@ -220,22 +220,22 @@ class AdaptiveWalnuts {
               warmup_cfg.step_learn_rate_decay()),
         mass_estimator_(warmup_cfg, init_chain_cfg),
         min_micro_estimator_(warmup_cfg.max_macro_steps_target(),
-                             sampling_cfg.min_micro_steps()) {}
+                             sampling_cfg.min_micro_steps()) {
+    logp_grad_(theta_, logp_, grad_);
+  }
 
   /**
    * @brief Generate the next state for adaptation and the handler.
    *
    * This method should be called a number of time equal to the number
-   * of warmup iterations desired.  These warmup draws are *not* drawn
-   * from a Markov chain and are not valid for inference.  After
+   * of warmup iterations desired. These warmup draws are *not* drawn
+   * from a Markov chain and are not valid for inference. After
    * warmup, call `sampler()` to return a sampler that fixes the
    * tuning parameters and provides a proper Markov chain.
    */
   void operator()() {
     Eigen::VectorXd inv_mass = mass_estimator_.inv_mass_estimate();
     Eigen::VectorXd chol_mass = inv_mass.array().inverse().sqrt().matrix();
-    Eigen::VectorXd grad_select;
-    double logp_select;
     std::size_t depth;
     theta_ =
         transition_w(rand_, logp_grad_, inv_mass, chol_mass, adam_.step_size(),
@@ -243,18 +243,29 @@ class AdaptiveWalnuts {
                      sampling_cfg_.get().max_step_halvings(),
                      min_micro_estimator_.min_micro_steps(),
                      sampling_cfg_.get().max_hamiltonian_error(),
-                     std::move(theta_), depth, grad_select, logp_select, adam_);
-    mass_estimator_.observe(theta_, grad_select, iteration_);
+                     std::move(theta_), depth, grad_, logp_, adam_);
+    mass_estimator_.observe(theta_, grad_, iteration_);
     min_micro_estimator_.observe(1 << depth);
-    handler_.get().on_warmup(theta_, logp_select, step_size(), inv_mass);
+    handler_.get().on_warmup(theta_, logp_, step_size(), inv_mass);
     ++iteration_;
   }
+
+  /**
+   * @brief Re-evaluate the log density and gradient at the current position.
+   *
+   * The cached log density and gradient carry over from the previous
+   * transition, so a client that mutates the target between transitions must
+   * call this before the next one; otherwise that transition's initial state
+   * is scored under the previous target. Costs one log density and gradient
+   * evaluation and leaves the position and every tuning value alone.
+   */
+  void refresh_logp_grad() { logp_grad_(theta_, logp_, grad_); }
 
   /**
    * @brief Return a Walnuts sampler with the current tuning parameter
    * estimates.
    *
-   * The returned sampler forms a proper Markov chain.  The method passes
+   * The returned sampler forms a proper Markov chain. The method passes
    * along the compound random number generator and log density function and
    * is hence not marked `const`.
    *
@@ -343,10 +354,16 @@ class AdaptiveWalnuts {
   std::reference_wrapper<H> handler_;
 
   /** The target log density/gradient function. */
-  const detail::NoExceptLogpGrad<F> logp_grad_;
+  const detail::NoExceptLogpGrad<F, H> logp_grad_;
 
   /** The current state. */
   Eigen::VectorXd theta_;
+
+  /** The gradient of the log density at `theta_`. */
+  Eigen::VectorXd grad_;
+
+  /** The log density at `theta_`. */
+  double logp_;
 
   /** The current iteration. */
   std::size_t iteration_;
@@ -362,4 +379,4 @@ class AdaptiveWalnuts {
   detail::MinMicroStepsAdaptHandler min_micro_estimator_;
 };
 
-}  // namespace walnuts
+}  // namespace walnutpie

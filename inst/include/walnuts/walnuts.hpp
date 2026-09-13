@@ -17,15 +17,15 @@
 #include "walnuts/util.hpp"
 #include "walnuts/validate.hpp"
 
-namespace walnuts::detail {
+namespace walnutpie::detail {
 
 /**
  * @brief A class for holding the minimal information in a Hamiltonian
- * trajectory required for WALNUTS.
+ * trajectory required for Walnuts.
  *
  * A span has member variables for the initial and final states' (a)
  * position, (b) momentum, (c) log density of the state, and (d)
- * gradient of target log density.  It also holds a selected state,
+ * gradient of target log density. It also holds a selected state,
  * the gradient of the selected state, and the log of the sum of all
  * joint densities on the trajectory. The gradients could be recomputed,
  * but storing them serves as a local cache.
@@ -134,13 +134,13 @@ class SpanW {
  * @brief Return a tuple of the arguments ordered by direction.
 
  * The arguments are forwarded as is the returned tuple and returned
- * by reference, so function arguments must stay in scope.  If the
+ * by reference, so function arguments must stay in scope. If the
  * template argument `D` is `Direction::Forward`, then the tuple is
  * `(x1, x2)`; if `D` is `Direction::Backward`, the returned tuple is
  * `(x2, x1)`.
  *
  * The template parameter `T` is generic in order to allow reference
- * collapsing in callers.  Working through all of the types and forwarding
+ * collapsing in callers. Working through all of the types and forwarding
  * here, the type of the return
  *
  * @tparam D The `Direction` in which to combine the arguments
@@ -334,7 +334,8 @@ static bool macro_step(const F& logp_grad, const Eigen::VectorXd& inv_mass,
     logp_next = logp_pos_next + logp_momentum(rho_next, inv_mass);
     if (num_steps == min_micro_steps) {
       double min_accept = std::exp(-std::fabs(logp - logp_next));
-      adapt_handler(min_accept);
+      // Treat invalid energy changes as rejection for step-size adaptation.
+      adapt_handler(std::isfinite(min_accept) ? min_accept : 0.0);
     }
     if (std::fabs(logp - logp_next) <= max_error) {
       return reversible(logp_grad, inv_mass, step, num_steps, min_micro_steps,
@@ -390,14 +391,14 @@ inline SpanW combine(Random<RNG>& rng, SpanW&& span_old, SpanW&& span_new) {
  * @brief Extend the specified span with a span of a single state.
  *
  * Given the specified span and direction `D`, build a new leaf span consisting
- * of a single state.  If `D` is `Forward`, the leaf extends the specified span
- * forward in time; if `Backward, it extends the span backward in time.
+ * of a single state. If `D` is `Forward`, the leaf extends the specified span
+ * forward in time; if `Backward`, it extends the span backward in time.
  *
  * The step-size adaptation handler is called with the acceptance of each
  * macro step attempt.
  *
  * The step size is reduced so that the Hamiltonian is conserved
- * within the specified error.  The mass matrix and macro step size
+ * within the specified error. The mass matrix and macro step size
  * are passed on to the leapfrog algorithm.
  *
  * The result is `std::optional` and will be `std::nullopt` only if the
@@ -453,7 +454,7 @@ static std::optional<SpanW> build_leaf(const F& logp_grad, const SpanW& span,
  * @param[in] logp_grad The log density/gradient function.
  * @param[in] inv_mass The diagonal of the diagonal inverse mass matrix.
  * @param[in] step The macro step size.
- * @param[in] depth The maximum NUTS depth.
+ * @param[in] depth The maximum Nuts depth.
  * @param[in] max_step_halvings The maximum number of halvings of the step size.
  * @param[in] min_micro_steps The minimum number of micro steps per macro step.
  * @param[in] max_error The maximum error allowed at macro steps.
@@ -506,14 +507,17 @@ static std::optional<SpanW> build_span(Random<RNG>& rng, const F& logp_grad,
  * @param[in] chol_mass The diagonal of the diagonal Cholesky factor of the mass
  * matrix.
  * @param[in] step The macro step size.
- * @param[in] max_depth The maximum number of trajectory doublings in NUTS.
+ * @param[in] max_depth The maximum number of trajectory doublings in Nuts.
  * @param[in] max_step_halvings The maximum number of halvings of the step size.
  * @param[in] min_micro_steps The minimum number of micro steps per macro step.
  * @param[in] max_error The maximum difference in Hamiltonians.
  * @param[in] theta The current state.
- * @param[out] depth The tree depth used by the transition.
- * @param[out] theta_grad The gradient of the log density at the previous state.
- * @param[out] logp_pos_select The log density of the selected position.
+ * @param[out] depth The number of doublings included in the final
+ * trajectory, which holds `2^depth` states.
+ * @param[in,out] theta_grad The gradient of the log density at `theta` on
+ * input; the gradient at the selected state on output.
+ * @param[in,out] logp_pos_select The log density of `theta` on input; the
+ * log density of the selected position on output.
  * @param[in,out] step_size_adapter The step-size adaptation handler.
  * @return The next position in the Markov chain.
  */
@@ -527,18 +531,16 @@ inline Eigen::VectorXd transition_w(
     A& step_size_adapter) {
   auto z = rand.standard_normal(chol_mass.size());
   Eigen::VectorXd rho = (chol_mass.array() * z.array()).matrix();
-  Eigen::VectorXd grad(theta.size());
-  double logp_pos;
-  logp_grad(theta, logp_pos, grad);
-  double logp_joint = logp_pos + logp_momentum(rho, inv_mass);
-  auto span_accum = SpanW::from_initial_point(
-      std::move(theta), std::move(rho), std::move(grad), logp_pos, logp_joint);
-  for (depth = 1; depth <= max_depth; ++depth) {
-    // helper to turn runtime direction into compile-time template enum
+  double logp_joint = logp_pos_select + logp_momentum(rho, inv_mass);
+  auto span_accum = SpanW::from_initial_point(std::move(theta), std::move(rho),
+                                              std::move(theta_grad),
+                                              logp_pos_select, logp_joint);
+  depth = 0;
+  while (depth < max_depth) {
     auto expand_in_direction = [&](auto direction) -> bool {
       constexpr Direction D = direction;
       auto maybe_next_span = build_span<D>(
-          rand, logp_grad, inv_mass, step, depth - 1, max_step_halvings,
+          rand, logp_grad, inv_mass, step, depth, max_step_halvings,
           min_micro_steps, max_error, span_accum, step_size_adapter);
       if (!maybe_next_span) {
         return true;
@@ -546,6 +548,7 @@ inline Eigen::VectorXd transition_w(
       bool combined_uturn = uturn<D>(span_accum, *maybe_next_span, inv_mass);
       span_accum = combine<Update::Metropolis, D>(rand, std::move(span_accum),
                                                   std::move(*maybe_next_span));
+      ++depth;
       return combined_uturn;
     };
 
@@ -586,12 +589,12 @@ class NoOpStepSizeAdapter {
   }
 };
 
-}  // namespace walnuts::detail
+}  // namespace walnutpie::detail
 
-namespace walnuts {
+namespace walnutpie {
 
 /**
- * @brief The WALNUTS Markov chain Monte Carlo (MCMC) sampler.
+ * @brief The Walnuts Markov chain Monte Carlo (MCMC) sampler.
  *
  * The sampler is constructed with a base random number generator, a log density
  * and gradient function, an initialization, and several tuning parameters.
@@ -606,7 +609,7 @@ template <LogpGrad F, std::uniform_random_bit_generator RNG, SampleHandler H>
 class WalnutsSampler {
  public:
   /**
-   * @brief Construct a WALNUTS sampler from the specified RNG, target log
+   * @brief Construct a Walnuts sampler from the specified RNG, target log
    * density/gradient initialization, and tuning parameters.
    *
    * @param[in,out] rng The base random number generator.
@@ -617,7 +620,7 @@ class WalnutsSampler {
    * @param[in] inv_mass The diagonal of the diagonal inverse mass matrix.
    * @param[in] macro_time The macro time discretization interval.
    * @param[in] max_nuts_depth The maximum number of trajectory doublings for
-   * NUTS.
+   * Nuts.
    * @param[in] max_step_halvings The maximum number of times the step size is
    * halved.
    * @param[in] min_micro_steps The minimum number of micro steps per macro
@@ -641,7 +644,7 @@ class WalnutsSampler {
                  double max_error)
       : rand_(rng),
         sample_handler_(sample_handler),
-        logp_grad_(logp_grad),
+        logp_grad_(logp_grad, sample_handler),
         theta_(theta),
         inv_mass_(inv_mass),
         cholesky_mass_(inv_mass.array().sqrt().inverse().matrix()),
@@ -657,6 +660,7 @@ class WalnutsSampler {
     detail::validate_positive(max_step_halvings, "max_step_halvings");
     detail::validate_positive(min_micro_steps, "min_micro_steps");
     detail::validate_positive(max_error, "max_error");
+    logp_grad_(theta_, logp_, grad_);
   }
 
   /**
@@ -681,15 +685,24 @@ class WalnutsSampler {
    */
   double operator()() {
     std::size_t depth;
-    Eigen::VectorXd grad_next;
-    double logp_pos;
     theta_ = transition_w(rand_, logp_grad_, inv_mass_, cholesky_mass_,
                           macro_time_, max_nuts_depth_, max_step_halvings_,
                           min_micro_steps_, max_error_, std::move(theta_),
-                          depth, grad_next, logp_pos, no_op_step_size_adapter_);
-    sample_handler_.get().on_sample(theta_, logp_pos);
-    return logp_pos;
+                          depth, grad_, logp_, no_op_step_size_adapter_);
+    sample_handler_.get().on_sample(theta_, logp_);
+    return logp_;
   }
+
+  /**
+   * @brief Re-evaluate the log density and gradient at the current position.
+   *
+   * The cached log density and gradient carry over from the previous
+   * transition, so a client that mutates the target between transitions must
+   * call this before the next one; otherwise that transition's initial state
+   * is scored under the previous target. Costs one log density and gradient
+   * evaluation and leaves the position and every tuning value alone.
+   */
+  void refresh_logp_grad() { logp_grad_(theta_, logp_, grad_); }
 
   /**
    * @brief  Return a constant reference the diagonal of the diagonal inverse
@@ -735,10 +748,16 @@ class WalnutsSampler {
   std::reference_wrapper<H> sample_handler_;
 
   /** The target log density/gradient function. */
-  const detail::NoExceptLogpGrad<F> logp_grad_;
+  const detail::NoExceptLogpGrad<F, H> logp_grad_;
 
   /** The current position. */
   Eigen::VectorXd theta_;
+
+  /** The gradient of the log density at `theta_`. */
+  Eigen::VectorXd grad_;
+
+  /** The log density at `theta_`. */
+  double logp_;
 
   /** The diagonal of the diagonal inverse mass matrix. */
   Eigen::VectorXd inv_mass_;
@@ -749,7 +768,7 @@ class WalnutsSampler {
   /** The macro time discretization interval for Nuts. */
   const double macro_time_;
 
-  /** The maximum number of doublings in NUTS trajectories. */
+  /** The maximum number of doublings in Nuts trajectories. */
   const std::size_t max_nuts_depth_;
 
   /** The maximum number of halvings of the step size. */
@@ -765,4 +784,4 @@ class WalnutsSampler {
   const detail::NoOpStepSizeAdapter no_op_step_size_adapter_;
 };
 
-}  // namespace walnuts
+}  // namespace walnutpie

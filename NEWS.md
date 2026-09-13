@@ -5,11 +5,12 @@
 * The parametric conditional (fixed effects, lme4-style random effects, and
   the residual sd for continuous responses) is now drawn with a hand-derived
   analytic log-posterior gradient and the WALNUTS sampler (vendored from
-  <https://github.com/flatironinstitute/walnuts>, commit 5854be8; MIT
-  licensed, (c) 2025 Bob Carpenter), replacing the embedded Stan/NUTS
-  sampler for both continuous and binary response families. This is a
-  sampler swap only: the outer BART-vs-parametric Gibbs alternation, the R
-  formula/data-prep surface (`glFormula`, lme4 grouping syntax, priors), and
+  <https://github.com/flatironinstitute/walnuts>, commit f3c1833; MIT
+  licensed, (c) 2025--2026 by the Walnutpie Developers), replacing the
+  embedded Stan/NUTS sampler for both continuous and binary response
+  families. This is a sampler swap only: the outer BART-vs-parametric Gibbs
+  alternation, the R formula/data-prep surface (`glFormula`, lme4 grouping
+  syntax, priors), and
   the posterior targeted are unchanged, verified by a pre-registered
   distributional-equivalence gate against the Stan-era posterior on
   reference fits spanning every gradient tier (nc=1/nc=2/nc>=3 random-effect

@@ -6,6 +6,7 @@
 #include "parametric_model_io.hpp"
 
 #include <cstring>   // memcpy
+#include <exception>
 #include <optional>
 #include <random>
 #include <string>
@@ -198,10 +199,16 @@ struct LatestDraw {
     position = p; lp = l; step_size = s; inv_mass = m;
   }
   void on_warmup_complete(double s, const Eigen::VectorXd& m) { step_size = s; inv_mass = m; }
+  // Required by the SampleHandler concept. The vendored NoExceptLogpGrad
+  // reports a thrown log density here and then returns -inf with a zero
+  // gradient, which is the divergence the model's own domain_error already
+  // means; nothing further is recorded, and this must not throw because the
+  // caller is noexcept.
+  void on_logp_exception(const Eigen::VectorXd&, const std::exception&) noexcept {}
 };
 
-using Adapter = walnuts::AdaptiveWalnuts<ParametricModel, std::mt19937_64, LatestDraw>;
-using Sampler = walnuts::WalnutsSampler<ParametricModel, std::mt19937_64, LatestDraw>;
+using Adapter = walnutpie::AdaptiveWalnuts<ParametricModel, std::mt19937_64, LatestDraw>;
+using Sampler = walnutpie::WalnutsSampler<ParametricModel, std::mt19937_64, LatestDraw>;
 }  // namespace
 
 struct WalnutsSampler::Impl {
@@ -214,11 +221,21 @@ struct WalnutsSampler::Impl {
 
   // WALNUTS holds these two by const reference; they must outlive the adapter,
   // hence they are declared before (destroyed after) the adapter/sampler.
-  walnuts::WarmupConfig   warmup_cfg   = walnuts::WarmupConfigBuilder().build();
-  walnuts::SamplingConfig sampling_cfg = walnuts::SamplingConfigBuilder().build();
+  walnutpie::WarmupConfig   warmup_cfg   = walnutpie::WarmupConfigBuilder().build();
+  walnutpie::SamplingConfig sampling_cfg = walnutpie::SamplingConfigBuilder().build();
 
   std::optional<Adapter> adapter;   // live during warmup
   std::optional<Sampler> sampler;   // live after freeze()
+
+  // WALNUTS caches the log density and its gradient at its current position
+  // from one transition to the next. This package moves the target between
+  // transitions - the BART fit becomes the parametric offset, and for binary
+  // responses the latents become the response - so that cache goes stale on
+  // every sweep and the next transition would score its initial state under
+  // the previous sweep's target. Set here, cleared by one refresh at the top
+  // of the next run(): one evaluation per sweep rather than one per
+  // transition, so skip > 1 pays it once.
+  bool logp_stale = false;
 };
 
 WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
@@ -245,12 +262,12 @@ WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
   // step_accept_rate_target is the Adam acceptance-rate target (adapt_delta);
   // its 0.8 default matches WarmupConfigBuilder's own, so an unset adapt_delta
   // builds a bit-identical config to the historical fixed-target path.
-  impl_->warmup_cfg = walnuts::WarmupConfigBuilder()
+  impl_->warmup_cfg = walnutpie::WarmupConfigBuilder()
                           .min_max_iter(num_warmup > 0 ? static_cast<std::size_t>(num_warmup) : 1,
                                         num_warmup > 0 ? static_cast<std::size_t>(num_warmup) : 1)
                           .step_accept_rate_target(step_accept_rate_target)
                           .build();
-  impl_->sampling_cfg = walnuts::SamplingConfigBuilder().build();
+  impl_->sampling_cfg = walnutpie::SamplingConfigBuilder().build();
 
   // Row layout + names. By default only the two LIVE diagnostics (lp__ and
   // stepsize__) lead each row; save_raw restores the full Stan-identical
@@ -318,10 +335,10 @@ WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
   // fixed-draws lifecycle is untouched. Config objects are Impl members,
   // referenced by the adapter, so they outlive it.
   const double mass_smoothing = impl_->warmup_cfg.mass_additive_smoothing();
-  std::optional<walnuts::InitChainConfig> init;
+  std::optional<walnutpie::InitChainConfig> init;
   try {
-    walnuts::InitConfig seeded =
-        walnuts::InitConfigBuilder(1u, static_cast<std::size_t>(dim))
+    walnutpie::InitConfig seeded =
+        walnutpie::InitConfigBuilder(1u, static_cast<std::size_t>(dim))
             .positions(impl_->position)
             .masses(impl_->model, mass_smoothing)   // one gradient eval
             .build();
@@ -336,6 +353,13 @@ WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
 WalnutsSampler::~WalnutsSampler() { delete impl_; }
 
 void WalnutsSampler::run(bool isWarmup) {
+  if (impl_->logp_stale) {
+    if (isWarmup)
+      impl_->adapter->refresh_logp_grad();
+    else
+      impl_->sampler->refresh_logp_grad();
+    impl_->logp_stale = false;
+  }
   if (isWarmup)
     (*impl_->adapter)();   // one adapting transition
   else
@@ -363,6 +387,9 @@ void WalnutsSampler::run(bool isWarmup) {
 void WalnutsSampler::freeze() {
   impl_->sampler.emplace(impl_->adapter->sampler());  // AdaptiveWalnuts -> WalnutsSampler
   impl_->adapter.reset();
+  // The frozen sampler's constructor evaluates the log density and gradient at
+  // the handed-over position, so it starts from the live target.
+  impl_->logp_stale = false;
 }
 
 void WalnutsSampler::getParametricMean(double* result) const {
@@ -399,11 +426,13 @@ long long WalnutsSampler::getEvalCount() const { return impl_->model.evalCount()
 void WalnutsSampler::setOffset(const double* offset) {
   std::memcpy(impl_->model.offset_.data(), offset,
               static_cast<size_t>(impl_->model.N) * sizeof(double));
+  impl_->logp_stale = true;
 }
 
 void WalnutsSampler::setResponse(const double* y) {
   std::memcpy(impl_->model.y_.data(), y,
               static_cast<size_t>(impl_->model.N) * sizeof(double));
+  impl_->logp_stale = true;
 }
 
 void WalnutsSampler::setVerbose(int /*level*/) {}
