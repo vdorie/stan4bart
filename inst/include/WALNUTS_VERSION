@@ -3,7 +3,7 @@ WALNUTS (vendored)
 
 Upstream:  https://github.com/flatironinstitute/walnuts
 Commit:    f3c1833117d9d2f76db1671d70d2ce0810ad8436
-Date:      2026-09-10 (upstream commit date)
+Date:      2026-09-11 (upstream commit date, UTC)
 Vendored:  2026-09-13
 License:   MIT, (c) 2025--2026 by the Walnutpie Developers
            (see WALNUTS_LICENSE)
@@ -18,8 +18,10 @@ walnutpie::. Two edits are made to vendored files, and no others:
   1. The include-path rewrite that keeps those paths working:
          #include "walnutpie/x.hpp"  ->  #include "walnuts/x.hpp"
   2. One added method, refresh_logp_grad(), on AdaptiveWalnuts and on
-     WalnutsSampler. Both classes now cache the log density and gradient at
-     their current position from one transition to the next; this package
+     WalnutsSampler, carried as
+     tools/walnuts-patches/0001-refresh-logp-grad.patch. Both classes now
+     cache the log density and gradient at their current position from one
+     transition to the next; this package
      swaps the target between transitions (the BART fit becomes the
      parametric offset, and for binary responses the latents become the
      response), so without a way to re-evaluate at the unchanged position
@@ -35,6 +37,34 @@ its own multi-chain thread pool, which this package does not use; its
 load_stan header dlopen()s a compiled Stan model. Neither is vendored, and
 walnuts.hpp lists only the eight that are. Upstream deleted handlers.hpp,
 which the previous vendoring carried and nothing here reached.
+
+The set is this list, which tools/vendor-walnuts.sh trims to:
+
+  BEGIN VENDORED FILES
+  adam.hpp
+  adaptive_walnuts.hpp
+  concepts.hpp
+  config.hpp
+  online_moments.hpp
+  util.hpp
+  validate.hpp
+  walnuts.hpp
+  END VENDORED FILES
+
+Updating: one command, from the package root.
+
+  tools/vendor-walnuts.sh <upstream-sha>
+
+It fetches include/walnutpie/ at that sha, trims it to the list above,
+rewrites the include paths, regenerates the umbrella walnuts.hpp, refreshes
+WALNUTS_LICENSE, reapplies every patch in tools/walnuts-patches/, and rewrites
+the Commit, Date and Vendored lines at the top of this file. Those patches are
+the ONLY hand edits that survive an update: everything else under
+inst/include/walnuts/ is upstream verbatim apart from the include-path
+rewrite, and a re-run at the current sha into a scratch directory must diff
+clean against inst/include. What the script cannot do is reread upstream - the
+API drift and numerics notes below describe the move from the PREVIOUS sha and
+have to be rewritten by hand after every update.
 
 API drift vs 5854be8, and how src/ absorbed it:
   - Namespace walnuts -> walnutpie. src/walnuts_sampler.cpp spells it the
