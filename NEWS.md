@@ -208,6 +208,11 @@
   a once-per-session warning naming the rename); any other unmatched name
   now errors, naming the offending argument, instead of being dropped.
 
+* `mvbart`'s `bart_args` dropped unmatched names in the same silent way, and
+  now refuses them by name too. The rng seed is `mvbart`'s own argument
+  there, since the seeds are derived per chain and per equation, so neither
+  `seed` nor `rngSeed` is accepted in `bart_args`.
+
 * Fixed `bart_args = list(n.cuts = ...)` corrupting the `dbartsControl`
   object when given a non-integer numeric: it was written into the `n.cuts`
   slot with `attr<-`, which bypasses the coercion `dbartsControl()` itself

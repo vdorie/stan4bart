@@ -196,3 +196,14 @@ if (at_home()) {
   expect_true(abs(mean(rc) - rho) < 0.1,
               info = paste0("value-case rho_hat = ", round(mean(rc), 3)))
 }
+
+# an unrecognized bart_args name is refused by name rather than dropped, and
+# the rng seed belongs to mvbart's own argument
+expect_error(mvbart(cbind(y1, y2) ~ x1 + x2 + x3, data = df[tr, ],
+                    n.samples = 2L, n.burn = 1L, n.chains = 1L, n.trees = 3L,
+                    seed = 5L, bart_args = list(notAnArgument = 1)),
+             "'notAnArgument'")
+expect_error(mvbart(cbind(y1, y2) ~ x1 + x2 + x3, data = df[tr, ],
+                    n.samples = 2L, n.burn = 1L, n.chains = 1L, n.trees = 3L,
+                    seed = 5L, bart_args = list(seed = 5L)),
+             "cannot set the rng seed")

@@ -117,10 +117,15 @@ fit.literal <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
                          bart_args = list(n.trees = 3))
 expect_equal(fit.shadowed$bart_train, fit.literal$bart_train)
 
-# bart_args$seed reaches dbarts::dbartsControl and pins the BART draws
+# bart_args$seed reaches dbarts::dbartsControl and pins the BART draws. The
+# same seed twice is not enough on its own - fitWith sets R's seed, so two
+# runs would agree even if 'seed' were dropped before dbarts saw it. Two
+# different seeds disagreeing is what shows the value was actually consumed.
 fit.seed1 <- fitWith(list(n.trees = 3, seed = 909L))
 fit.seed2 <- fitWith(list(n.trees = 3, seed = 909L))
 expect_equal(fit.seed1$bart_train, fit.seed2$bart_train)
+fit.seed3 <- fitWith(list(n.trees = 3, seed = 101L))
+expect_false(isTRUE(all.equal(fit.seed1$bart_train, fit.seed3$bart_train)))
 
 # dbarts::dbartsControl's 'rngSeed' argument was renamed to 'seed'; the old
 # name is mapped to the new one (with a once-per-session warning) rather than
@@ -129,6 +134,7 @@ rm(list = ls(stan4bart:::.message_env), envir = stan4bart:::.message_env)
 expect_warning(fit.rngSeed <- fitWith(list(n.trees = 3, rngSeed = 909L)),
                "'rngSeed' is now 'seed'")
 expect_equal(fit.rngSeed$bart_train, fit.seed1$bart_train)
+expect_false(isTRUE(all.equal(fit.rngSeed$bart_train, fit.seed3$bart_train)))
 # the warning fires once per session
 expect_silent(fitWith(list(n.trees = 3, rngSeed = 909L)))
 

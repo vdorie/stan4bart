@@ -121,6 +121,17 @@ mvbart <-
                                           n.samples = 1L, updateState = FALSE,
                                           verbose = FALSE))
   ctrlFormals <- names(formals(dbarts::dbartsControl))
+  ## a bart_args name that matches no control formal used to be dropped in
+  ## silence, so a typo or a renamed dbarts argument looked like it had been
+  ## honored; name it instead. The rng seed is mvbart's own argument, because
+  ## the seeds have to be derived per chain and per equation, so neither
+  ## spelling of it is accepted here.
+  if (any(c("seed", "rngSeed") %in% names(bart_args)))
+    stop("bart_args cannot set the rng seed; use mvbart's own 'seed' argument")
+  unknown <- setdiff(names(bart_args), c(ctrlFormals, "k"))
+  if (length(unknown) > 0L)
+    stop("bart_args has unrecognized name", if (length(unknown) > 1L) "s" else "", ": ",
+         paste0("'", unknown, "'", collapse = ", "))
   for (nm in intersect(names(bart_args), setdiff(ctrlFormals, names(ctrlCall))))
     ctrlCall[[nm]] <- bart_args[[nm]]
   control <- eval(ctrlCall)

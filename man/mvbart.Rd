@@ -72,7 +72,9 @@ mvbart(formula,
   outcome's BART sampler. Recognized \code{\link[dbarts]{dbartsControl}}
   arguments not already set by \code{mvbart} (such as \code{n.cuts} or
   \code{keepTrees}) are applied to the shared control; the end-node prior scale
-  \code{k} is also honored.}
+  \code{k} is also honored. Any other name is an error rather than being
+  dropped, and the rng seed is set with \code{mvbart}'s own \code{seed}
+  argument, not here.}
 }
 \details{
   Conditional on the other equations' current residuals, updating one outcome's
