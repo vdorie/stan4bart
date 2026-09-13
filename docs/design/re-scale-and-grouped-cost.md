@@ -348,6 +348,13 @@ scalar evaluations and no gradient. The interval's width is a function of the
 block's geometry only - a width read off the current position would cost the
 draw its reversibility.
 
+The invariance the derivation rests on is checked in `ridgeMove` itself, under
+`NDEBUG`, by comparing the linear predictor across the move: a shipped build
+pays nothing for it, and a build configured with `-UNDEBUG` runs it on every
+move of every fit. Over five hundred moves of a two-block Gaussian fit and a
+two-block binary one the two linear predictors agree to 8.9e-15 absolute, and
+the check's band catches a relative error in the scaling above about 1e-9.
+
 ### Where it sits in the sweep
 
 At the top of the parametric block: after the BART draw has set the offset and,
@@ -384,9 +391,13 @@ and on:
 | scale posterior mean, worst seed shift | - | 0.78 combined MCSE | within MCSE |
 | seconds | 2.15 | 2.08 | - |
 
-PASS on all three clauses. Per seed the two arms' posterior means for the scale
+The seconds row was not taken on a quiet machine and does not reproduce to the
+figure: read the two columns against each other, not the absolute times. Every
+other row is the harness's `ridge` mode and reproduces exactly. PASS on all
+three clauses. Per seed the two arms' posterior means for the scale
 differ by 0.01 to 0.78 of two combined Monte Carlo errors, and the move cuts
-that Monte Carlo error by five to seven times (0.029-0.050 down to 0.005-0.007).
+that Monte Carlo error by four to eight times, seed for seed (0.029-0.050 down
+to 0.005-0.007).
 
 Wall time on the bartCause configuration (n = 1000, K = 20, four chains, 500
 kept, the counterfactual test surface, `cores = 1`), eight paired repetitions:
@@ -403,16 +414,19 @@ that seed's chain carries structure past lag one that the scale's own
 conditional does not produce. The third design, `probit_k20`, goes from
 worst-seed 0.947 / 5.9 to 0.248 / 232 and clears both halves.
 
-Bias, the four grouped designs of the group-sd harness at three seeds each, the
-same data and the same MCMC seed in both arms, at the package defaults: 33 of 36
-posterior-mean differences (group sd, residual sd, fixed effect) fall within two
-combined Monte Carlo errors, worst ratio 1.42, with no systematic direction.
-Three exceedances against a k = 2 band on 36 comparisons is the expected tail.
+Bias is the group-sd harness's `bias` mode - the four grouped designs at three
+seeds each, the same data and the same MCMC seed in both arms, at the package
+defaults. All 36 posterior-mean differences (group sd, residual sd, fixed
+effect) fall within two combined Monte Carlo errors, worst ratio 0.94, and 16 of
+the 36 differences are positive, so there is no systematic direction. A second
+check on a design this harness does not cover - a binary response with a random
+intercept block and a correlated intercept-and-slope block, three seeds - puts
+all 15 of its comparisons inside the same band, worst 0.79.
 
-The full tinytest suite passes unchanged (546 expectations), the posterior
-baseline gate passes on all five tiers, and the tree-replay exactness gate
-passes on all three. No test pins draws of a random-effect model, so nothing
-needed the off switch or a regenerated value.
+The full tinytest suite passes (551 expectations, up from 546 by the five the
+move's own test adds), the posterior baseline gate passes on all five tiers, and
+the tree-replay exactness gate passes on all three. No test pins draws of a
+random-effect model, so nothing needed the off switch or a regenerated value.
 
 ### The current state
 

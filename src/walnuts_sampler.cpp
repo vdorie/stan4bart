@@ -5,7 +5,8 @@
 #include "walnuts_sampler.hpp"
 #include "parametric_model_io.hpp"
 
-#include <cmath>     // exp, log, sqrt, isfinite
+#include <cassert>   // assert
+#include <cmath>     // exp, log, sqrt, isfinite, fabs
 #include <cstring>   // memcpy
 #include <exception>
 #include <limits>
@@ -490,6 +491,23 @@ void WalnutsSampler::ridgeMove() {
   if (model.t == 0 || !impl.sampler) return;
 
   Eigen::VectorXd& theta = impl.position;
+
+#ifndef NDEBUG
+  // The move's whole claim is that the linear predictor does not see it. Check
+  // it, at rounding: b = T_i z_b(i) and the curve scales T_i by exactly the
+  // factor it divides z_b(i) by, so the two products agree to a few ulps and
+  // not bit for bit. NDEBUG-gated, so a shipped build pays nothing; a build
+  // configured with -UNDEBUG runs it on every move of every fit.
+  std::vector<double> dbg_constrained(static_cast<size_t>(model.constrainedDim()));
+  std::vector<double> dbg_eta_before(static_cast<size_t>(model.N));
+  {
+    double dbg_logp = 0.0;
+    Eigen::VectorXd dbg_grad(model.dim());
+    model.eval(theta, dbg_logp, dbg_grad, dbg_constrained.data());
+    model.parametricMean(dbg_constrained.data(), dbg_eta_before.data(), true, true);
+  }
+#endif
+
   bool moved = false;
   int b_off = 0;
   for (int i = 0; i < model.t; ++i) {
@@ -528,6 +546,22 @@ void WalnutsSampler::ridgeMove() {
     moved = true;
   }
   if (!moved) return;
+
+#ifndef NDEBUG
+  {
+    double dbg_logp = 0.0;
+    Eigen::VectorXd dbg_grad(model.dim());
+    std::vector<double> dbg_eta_after(static_cast<size_t>(model.N));
+    model.eval(theta, dbg_logp, dbg_grad, dbg_constrained.data());
+    model.parametricMean(dbg_constrained.data(), dbg_eta_after.data(), true, true);
+    for (int i = 0; i < model.N; ++i) {
+      const double a = dbg_eta_before[static_cast<size_t>(i)];
+      const double b = dbg_eta_after[static_cast<size_t>(i)];
+      assert(std::fabs(a - b) <= 1e-10 * (1.0 + std::fabs(a)) &&
+             "ridgeMove: the move must leave the linear predictor at rounding");
+    }
+  }
+#endif
 
   // WALNUTS holds its position privately, so the setter is a rebuild at the
   // moved position with the tuning captured at freeze(). The base generator is

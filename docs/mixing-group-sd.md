@@ -97,10 +97,11 @@ parametric block's own geometry. Their effective sample sizes are depressed by
 disagreement between chains and a longer run repairs them. The posterior means
 still track the truth in every fit - the residual standard deviation within a
 percent or two of 1, the fixed effect within a few percent of 2, and the group sd
-within its posterior uncertainty - and a check across these four designs at
-three seeds with the move switched off finds 33 of 36 posterior-mean differences
-within twice their combined Monte Carlo error, with no systematic direction: the
-mixing is not bought with bias.
+within its posterior uncertainty - and the script's `bias` mode, which fits each
+design and seed twice on the same data and the same MCMC seed with the move off
+and on, finds all 36 posterior-mean differences within twice their combined
+Monte Carlo error and no systematic direction: the mixing is not bought with
+bias.
 
 ## What remains, and the remedies not taken
 
