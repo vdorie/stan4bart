@@ -70,3 +70,18 @@ NOTE: includes the structSize fix, date, package/R versions, MCMC control,
 chain-health thresholds) and `$tiers` (per-tier simulated data, formula
 shape, healthy-chain mask, summary data frame with mean/sd/mcse/mcse_bm/
 mcse_bc per gated quantity). See baselines/MANIFEST for provenance.
+
+## mixing-group-sd.R - the dbarts group-sd bar
+
+dbarts 1.0-0 retired its own grouped random-intercept fit on the condition
+that this package's random-intercept standard deviation mixes to lag-one
+autocorrelation below 0.8 and an effective sample size of at least 100 per
+1000 kept draws. This script measures that, on four grouped designs at three
+seeds each, at the package defaults, reporting the BART-side residual sd and
+one fixed effect alongside for contrast. It needs no baseline file and runs
+in well under a minute.
+
+    Rscript benchmarks/mixing-group-sd.R
+
+The result is written up in `docs/mixing-group-sd.md`: the bar is met in none
+of the four designs.
