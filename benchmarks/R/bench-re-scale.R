@@ -30,7 +30,11 @@
 #
 # Usage:
 #   Rscript benchmarks/R/bench-re-scale.R record [outfile.csv] [ds1,ds2,...]
+#   Rscript benchmarks/R/bench-re-scale.R ridge  [outfile.csv] [ds1,ds2,...]
 #   Rscript benchmarks/R/bench-re-scale.R quick  [outfile.csv]
+#
+# `ridge` is the scale ridge move's own acceptance bar: the default skip, the
+# move off and on, so the two columns are read against each other.
 
 suppressMessages({
   library(stan4bart)
@@ -87,13 +91,15 @@ ess  <- function(x) tryCatch(posterior::ess_basic(as.numeric(x)),
 
 ## The bart() term has to be written out literally - a formula built by
 ## reformulate() is not recognized as the bart component.
-fit_one <- function(d, skip_stan, seed, iter, warmup, n.trees) {
+fit_one <- function(d, skip_stan, seed, iter, warmup, n.trees,
+                    ridge_move = TRUE) {
   set.seed(seed)
   tm <- system.time(fit <- stan4bart(
     y ~ bart(x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10) + (1 | g),
     data = d$df, iter = iter, warmup = warmup, chains = 1L, cores = 1L,
     verbose = -1L, skip = c(bart = 1L, stan = skip_stan),
-    bart_args = list(n.trees = n.trees)))
+    bart_args = list(n.trees = n.trees),
+    stan_args = list(ridge_move = ridge_move)))
   Sigma <- extract(fit, type = "Sigma")[["g"]]
   tau <- sqrt(as.numeric(Sigma[1L, 1L, ]))
   ranef <- t(extract(fit, type = "ranef")[["g"]][1L, , , drop = TRUE])
@@ -116,20 +122,21 @@ fit_one <- function(d, skip_stan, seed, iter, warmup, n.trees) {
 # ---- driver ----------------------------------------------------------------
 
 record_re_scale <- function(outfile, design_names, skips, seeds,
-                            iter = 2000L, warmup = 1000L, n.trees = 200L) {
+                            iter = 2000L, warmup = 1000L, n.trees = 200L,
+                            ridge_moves = TRUE) {
   rows <- list()
   for (nm in design_names) {
     spec <- DESIGNS[[nm]]
     if (is.null(spec)) stop("unknown design: ", nm)
     d <- do.call(simulate_design, spec)
-    for (k in skips) for (s in seeds) {
-      r <- fit_one(d, k, s, iter, warmup, n.trees)
+    for (rm in ridge_moves) for (k in skips) for (s in seeds) {
+      r <- fit_one(d, k, s, iter, warmup, n.trees, ridge_move = rm)
       rows[[length(rows) + 1L]] <- cbind(
         data.frame(commit = COMMIT, design = nm, K = spec$K, true_tau = spec$tau,
-                   skip_stan = k, seed = s, iter = iter, warmup = warmup,
-                   n.trees = n.trees, stringsAsFactors = FALSE), r)
-      cat(sprintf("%-13s skip %2d seed %8d: acf1 %.3f ess %6.1f mean %.3f | level acf1 %.3f ess %5.1f (%.1f s)\n",
-                  nm, k, s, r$tau_acf1, r$tau_ess, r$tau_mean,
+                   skip_stan = k, ridge_move = rm, seed = s, iter = iter,
+                   warmup = warmup, n.trees = n.trees, stringsAsFactors = FALSE), r)
+      cat(sprintf("%-13s skip %2d move %-5s seed %8d: acf1 %.3f ess %6.1f mean %.3f | level acf1 %.3f ess %5.1f (%.1f s)\n",
+                  nm, k, rm, s, r$tau_acf1, r$tau_ess, r$tau_mean,
                   r$level_acf1, r$level_ess, r$seconds))
       utils::write.csv(do.call(rbind, rows), outfile, row.names = FALSE)
     }
@@ -143,12 +150,13 @@ record_re_scale <- function(outfile, design_names, skips, seeds,
 ## Verdict per design x skip, over seeds: the bar is stated on the WORST seed,
 ## not the median, because a single chain is what a user runs.
 report <- function(res) {
-  for (nm in unique(res$design)) for (k in sort(unique(res$skip_stan))) {
-    z <- res[res$design == nm & res$skip_stan == k, ]
+  if (is.null(res$ridge_move)) res$ridge_move <- NA
+  for (nm in unique(res$design)) for (rm in unique(res$ridge_move)) for (k in sort(unique(res$skip_stan))) {
+    z <- res[res$design == nm & res$skip_stan == k & res$ridge_move %in% rm, ]
     if (nrow(z) == 0L) next
     pass <- max(z$tau_acf1) < BAR_ACF1 && min(z$tau_ess) >= BAR_ESS
-    cat(sprintf("%-13s skip %2d  acf1 med %.3f worst %.3f | ess med %6.1f worst %6.1f | tau_mean %.3f | level acf1 %.3f ess %5.1f | contrast ess %6.1f | %5.2f s | %s\n",
-                nm, k, median(z$tau_acf1), max(z$tau_acf1),
+    cat(sprintf("%-13s skip %2d move %-5s  acf1 med %.3f worst %.3f | ess med %6.1f worst %6.1f | tau_mean %.3f | level acf1 %.3f ess %5.1f | contrast ess %6.1f | %5.2f s | %s\n",
+                nm, k, rm, median(z$tau_acf1), max(z$tau_acf1),
                 median(z$tau_ess), min(z$tau_ess), mean(z$tau_mean),
                 median(z$level_acf1), median(z$level_ess),
                 median(z$contrast_ess), mean(z$seconds),
@@ -169,10 +177,17 @@ if (length(.args) >= 1L) {
       file.path(SELF_DIR, "..", "baselines", "re-scale-BASELINE.csv")
     design_names <- if (length(.args) >= 3L) strsplit(.args[[3L]], ",")[[1L]] else names(DESIGNS)
     record_re_scale(outfile, design_names, SKIP_GRID, SEEDS)
+  } else if (mode == "ridge") {
+    # The ridge move's acceptance bar: the DEFAULT skip, the move off and on,
+    # every design, the five seeds.
+    outfile <- if (length(.args) >= 2L) .args[[2L]] else
+      tempfile("re-scale-ridge-", fileext = ".csv")
+    design_names <- if (length(.args) >= 3L) strsplit(.args[[3L]], ",")[[1L]] else names(DESIGNS)
+    record_re_scale(outfile, design_names, 1L, SEEDS, ridge_moves = c(FALSE, TRUE))
   } else if (mode == "quick") {
     outfile <- if (length(.args) >= 2L) .args[[2L]] else
       tempfile("re-scale-quick-", fileext = ".csv")
     record_re_scale(outfile, "gaussian_k20", c(1L, 8L), SEEDS[1:2],
                     iter = 800L, warmup = 400L, n.trees = 50L)
-  } else stop("unknown mode: ", mode, " (expected 'record' or 'quick')")
+  } else stop("unknown mode: ", mode, " (expected 'record', 'ridge' or 'quick')")
 }

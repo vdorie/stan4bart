@@ -5,8 +5,10 @@
 #include "walnuts_sampler.hpp"
 #include "parametric_model_io.hpp"
 
+#include <cmath>     // exp, log, sqrt, isfinite
 #include <cstring>   // memcpy
 #include <exception>
+#include <limits>
 #include <optional>
 #include <random>
 #include <string>
@@ -209,6 +211,40 @@ struct LatestDraw {
 
 using Adapter = walnutpie::AdaptiveWalnuts<ParametricModel, std::mt19937_64, LatestDraw>;
 using Sampler = walnutpie::WalnutsSampler<ParametricModel, std::mt19937_64, LatestDraw>;
+
+/// \brief One draw from a scalar log-concave density by Neal's (2003)
+///        stepping-out slice sampler.
+///
+/// `logDensity` need be correct only up to an additive constant and must be
+/// finite at `x0`, where its value is `logp0`. `width` must not depend on the
+/// current position: the interval it seeds is what makes the draw reversible.
+/// Log-concavity bounds both loops; their caps are guards, not policy.
+template <class F, class RNG>
+double sliceDraw(const F& logDensity, double x0, double logp0, double width,
+                 RNG& rng) {
+  std::uniform_real_distribution<double> unif(0.0, 1.0);
+  std::exponential_distribution<double> expo(1.0);
+  const double level = logp0 - expo(rng);
+
+  // Figure 3: a window of the given width placed uniformly around x0, stepped
+  // out at most m times with the budget split at random between the two sides.
+  const int m = 64;
+  double lo = x0 - width * unif(rng);
+  double hi = lo + width;
+  int left = static_cast<int>(m * unif(rng));
+  int right = m - 1 - left;
+  while (left > 0 && logDensity(lo) > level) { lo -= width; --left; }
+  while (right > 0 && logDensity(hi) > level) { hi += width; --right; }
+
+  // Figure 5: shrink until a point clears the slice, each rejection replacing
+  // the endpoint on its own side of x0 so that x0 stays inside the interval.
+  for (int iter = 0; iter < 200; ++iter) {
+    const double x = lo + unif(rng) * (hi - lo);
+    if (logDensity(x) > level) return x;
+    if (x < x0) lo = x; else hi = x;
+  }
+  return x0;  // the interval underflowed to a point; stay put
+}
 }  // namespace
 
 struct WalnutsSampler::Impl {
@@ -236,6 +272,19 @@ struct WalnutsSampler::Impl {
   // of the next run(): one evaluation per sweep rather than one per
   // transition, so skip > 1 pays it once.
   bool logp_stale = false;
+
+  // The tuning the frozen sampler was built with. WALNUTS holds its position
+  // privately, so the ridge move's setter is a rebuild at the moved position,
+  // and a rebuild has to restate every tuning value. Three are readable off
+  // the sampler and two off this package's own SamplingConfig, but
+  // min_micro_steps is estimated during warmup and freeze() drops the adapter
+  // that holds it, so it must be captured before the adapter goes.
+  Eigen::VectorXd frozen_inv_mass;
+  double frozen_macro_time = 0.0;
+  double frozen_max_error = 0.0;
+  std::size_t frozen_max_nuts_depth = 0;
+  std::size_t frozen_max_step_halvings = 0;
+  std::size_t frozen_min_micro_steps = 0;
 };
 
 WalnutsSampler::WalnutsSampler(SEXP dataExpr, unsigned int random_seed,
@@ -384,9 +433,128 @@ void WalnutsSampler::run(bool isWarmup) {
   }
 }
 
+/// \brief One slice draw of every random-effect block's scale along the curve
+///        that holds the linear predictor fixed, then a rebuild of the frozen
+///        sampler at the moved position.
+///
+/// THE CURVE. Every block's Cholesky factor is homogeneous of degree one in
+/// that block's own scale. In ParametricModel::eval the scale is
+/// s_i = tau_i * re_scale_i * dispersion, and every entry of T_i is a multiple
+/// of s_i: a scalar block is T = s_i; a correlated block has trace = nc s_i^2,
+/// so sd_c = sqrt(pi_c * trace) = s_i sqrt(nc pi_c), and each onion entry is a
+/// fixed function of rho, zeta and z_T times one sd. With b_level = T_i
+/// z_b_level, the map
+///
+///     tau_i -> tau_i e^u,   z_b(block i) -> z_b(block i) e^-u
+///
+/// therefore leaves b, the linear predictor, and the likelihood exactly where
+/// they were. That holds for every reachable block shape - several
+/// random-effect terms (each block has its own tau and its own z_b segment,
+/// and the moves are separate conditionals), correlated slopes under the decov
+/// structure, and the binary family, whose latents enter only as the response
+/// of that same invariant likelihood. re_scale and dispersion never enter the
+/// conditional: they multiply tau_i and z_b in one product.
+///
+/// THE CONDITIONAL. Sample along the curve as a Gibbs step in the chart that
+/// holds its invariant fixed. Write x = log tau_i (which IS the unconstrained
+/// coordinate the sampler carries) and v = z_b(block i) in R^{q_i}, where
+/// q_i = p_i * l_i counts every coordinate of every level of the block, not
+/// the coordinates per level. Change variables (x, v) -> (x, w) with
+/// w = e^x v = tau_i v, the quantity the curve preserves. The Jacobian of
+/// v -> w at fixed x is e^{q_i x} times the identity, so the density in the new
+/// chart carries a factor e^{-q_i x}. The only terms of eval()'s log density
+/// that involve x or v are the standardized effects' N(0, 1) prior, tau's
+/// Gamma(shape_i, 1) prior, and the log Jacobian of tau = e^x; the likelihood,
+/// beta, rho, zeta, z_T and aux are all invariant. Collecting them,
+///
+///     log p(x | w, rest) = (shape_i - q_i) x - e^x - (A_i / 2) e^{-2x},
+///     A_i = ||w||^2 = tau_i^2 ||z_b(block i)||^2,
+///
+/// with (shape_i - 1) x - e^x the Gamma prior, +x its Jacobian, -q_i x the
+/// chart's, and the last term the N(0, 1) prior at v = e^{-x} w. A_i is
+/// invariant along the curve, so it is computed once from the current state.
+/// The second derivative is -e^x - 2 A_i e^{-2x} < 0, so the conditional is
+/// log-concave on all of R with no condition on shape or on q_i, and a
+/// stepping-out slice sampler draws it exactly: O(q_i) to form A_i, then a
+/// handful of scalar evaluations and no gradient.
+///
+/// STATIONARITY. The move conditions on nothing the likelihood supplies, so it
+/// leaves the parametric conditional invariant wherever in the sweep it is
+/// applied. It runs at the top of the sweep, after the BART draw has set the
+/// offset (and, for binary responses, the latent response) and before the
+/// WALNUTS transitions, because that is where the rebuild's own log density
+/// and gradient evaluation is the one the stale cache already owed.
+void WalnutsSampler::ridgeMove() {
+  Impl& impl = *impl_;
+  const ParametricModel& model = impl.model;
+  if (model.t == 0 || !impl.sampler) return;
+
+  Eigen::VectorXd& theta = impl.position;
+  bool moved = false;
+  int b_off = 0;
+  for (int i = 0; i < model.t; ++i) {
+    const int q_i = model.p[i] * model.l[i];
+    if (q_i <= 0) continue;
+    double* z = theta.data() + model.off_z_b + b_off;
+    b_off += q_i;
+
+    double zz = 0.0;
+    for (int j = 0; j < q_i; ++j) zz += z[j] * z[j];
+    if (!(zz > 0.0)) continue;  // the curve degenerates at z_b == 0
+
+    const double x0 = theta[model.off_tau + i];
+    const double logA = 2.0 * x0 + std::log(zz);
+    const double coef = model.tau_shape[i] - static_cast<double>(q_i);
+    // Overflow in either exponential is the density underflowing to zero in
+    // one tail or the other, which is what -inf means to the slice.
+    const auto logDensity = [coef, logA](double x) {
+      const double v = coef * x - std::exp(x) - 0.5 * std::exp(logA - 2.0 * x);
+      return std::isfinite(v) ? v : -std::numeric_limits<double>::infinity();
+    };
+    const double logp0 = logDensity(x0);
+    if (!std::isfinite(logp0)) continue;
+
+    // -d^2/dx^2 = e^x + 2 A_i e^{-2x} is 2 q_i at the mode up to the scale's
+    // own size, so a few posterior sds is a few over sqrt(q_i). The width is a
+    // function of the block's geometry only: one that read the current
+    // position would cost the draw its reversibility.
+    const double width = 2.0 / std::sqrt(static_cast<double>(q_i));
+    const double x1 = sliceDraw(logDensity, x0, logp0, width, impl.rng);
+    if (x1 == x0) continue;
+
+    theta[model.off_tau + i] = x1;
+    const double shrink = std::exp(x0 - x1);
+    for (int j = 0; j < q_i; ++j) z[j] *= shrink;
+    moved = true;
+  }
+  if (!moved) return;
+
+  // WALNUTS holds its position privately, so the setter is a rebuild at the
+  // moved position with the tuning captured at freeze(). The base generator is
+  // held by reference and continues where it was; the rebuilt sampler's own
+  // normal_distribution is fresh, and it caches a spare variate, so a sweep
+  // that rebuilds is not bitwise what a persistent sampler would have drawn.
+  impl.sampler.emplace(impl.rng, impl.handler, impl.model, theta,
+                       impl.frozen_inv_mass, impl.frozen_macro_time,
+                       impl.frozen_max_nuts_depth,
+                       impl.frozen_max_step_halvings,
+                       impl.frozen_min_micro_steps, impl.frozen_max_error);
+  // That constructor evaluates the log density and gradient at the handed
+  // position under the live target, which is the refresh this sweep owed.
+  impl.logp_stale = false;
+}
+
 void WalnutsSampler::freeze() {
+  // Read before the handoff: sampler() drops the adapter's min-micro estimator
+  // and WalnutsSampler exposes no getter for the value it was handed.
+  impl_->frozen_min_micro_steps = impl_->adapter->min_micro_steps();
   impl_->sampler.emplace(impl_->adapter->sampler());  // AdaptiveWalnuts -> WalnutsSampler
   impl_->adapter.reset();
+  impl_->frozen_inv_mass = impl_->sampler->inverse_mass_matrix_diagonal();
+  impl_->frozen_macro_time = impl_->sampler->macro_time();
+  impl_->frozen_max_error = impl_->sampler->max_error();
+  impl_->frozen_max_nuts_depth = impl_->sampling_cfg.max_trajectory_doublings();
+  impl_->frozen_max_step_halvings = impl_->sampling_cfg.max_step_halvings();
   // The frozen sampler's constructor evaluates the log density and gradient at
   // the handed-over position, so it starts from the live target.
   impl_->logp_stale = false;

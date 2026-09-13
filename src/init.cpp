@@ -469,13 +469,24 @@ extern "C" {
       // or else when they're added together they won't be consistent with `predict`
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN) {
         // Rprintf("running stan\n");
+        // The random-effect scale's ridge is exactly traversable: rescaling
+        // a block's tau and dividing that block's standardized effects by the
+        // same factor leaves the linear predictor and the likelihood alone,
+        // so the conditional along the curve is one-dimensional, log-concave,
+        // and free of any data term. One slice draw per block per sweep, here
+        // rather than inside the transition loop: it is the direction WALNUTS
+        // cannot travel, and one exact draw of it is all that is wanted.
+        // Sampling only - warmup runs AdaptiveWalnuts, which cannot be rebuilt
+        // from a running state without resetting Adam and the mass estimator.
+        if (!isWarmup && sampler.stanControl.ridge_move)
+          sampler.paramSampler->ridgeMove();
+
         // stanControl.skip parametric transitions per BART sweep: only the
         // last one is read out, so this thins the parametric block within the
-        // sweep without changing the stored draw count. The random-effect
-        // scale needs it - the non-centered block's log-scale/standardized-
-        // effect ridge is a rotated direction a diagonal metric cannot
-        // straighten, so one WALNUTS transition moves it a fraction of its
-        // posterior width even when every other direction mixes freely.
+        // sweep without changing the stored draw count. It is the escape
+        // hatch for whatever the ridge move above does not reach - the
+        // residual sd, which pays the two-block alternation whether or not
+        // there is a random-effect block at all.
         // Warmup takes one transition per sweep whatever the skip: the
         // parametric block must not outrun the still-growing forest, or the
         // group intercepts absorb the response mean and give it back over

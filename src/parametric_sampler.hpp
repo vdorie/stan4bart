@@ -27,10 +27,11 @@
 namespace stan4bart {
 
 /// \brief The parametric sampler's control knobs. random_seed, init_radius,
-///        skip, and adapt_delta (the step-size acceptance-rate target) reach
-///        WALNUTS; the remaining NUTS-specific fields are accepted-but-ignored
-///        (parsed from the R control list, never consumed) so scripts that set
-///        the old Stan args still run. The struct name is historical.
+///        skip, ridge_move, and adapt_delta (the step-size acceptance-rate
+///        target) reach WALNUTS; the remaining NUTS-specific fields are
+///        accepted-but-ignored (parsed from the R control list, never consumed)
+///        so scripts that set the old Stan args still run. The struct name is
+///        historical.
 struct StanControl {
   unsigned int random_seed;
   double init_radius;
@@ -45,7 +46,8 @@ struct StanControl {
   double stepsize;
   double stepsize_jitter;
   int max_treedepth;
-  bool save_raw;   // save_raw_parameters: keep the raw unconstrained rows
+  bool save_raw;     // save_raw_parameters: keep the raw unconstrained rows
+  bool ridge_move;   // the random-effect scale ridge move, on by default
 };
 
 void initializeStanControlFromExpression(StanControl& control, SEXP controlExpr);
@@ -66,6 +68,12 @@ struct ParametricSampler {
 
   /// \brief Take one parametric transition (adapting when isWarmup).
   virtual void run(bool isWarmup) = 0;
+
+  /// \brief One slice draw of every random-effect block's scale along the
+  ///        curve that holds the linear predictor fixed, then rebuild the
+  ///        frozen sampler at the moved position. Valid only after freeze();
+  ///        a no-op when the model carries no random-effect block.
+  virtual void ridgeMove() = 0;
 
   /// \brief Freeze adaptation (Stan: disengage_adaptation; WALNUTS: hand off
   ///        AdaptiveWalnuts -> WalnutsSampler).
