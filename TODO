@@ -126,6 +126,18 @@ items
     (COMPILER_SUPPORTS_SSE2 asks whether the compiler accepts -msse2;
     the old HAVE_SSE2 asked whether the build host's cpuid reported
     it).
+  walnuts-vendoring: the vendored WALNUTS headers carry one hand edit,
+    refresh_logp_grad() on AdaptiveWalnuts and WalnutsSampler, kept as
+    tools/walnuts-patches/0001-refresh-logp-grad.patch and reapplied by
+    tools/vendor-walnuts.sh on every re-vendoring. It exists because the
+    upstream sampler caches the log density and gradient at its current
+    position across transitions and this package moves the target
+    between them; without it the chain is biased, not merely slower.
+    The maintainer intends to raise it upstream; if it lands there, drop
+    the patch and the mention of it in inst/include/WALNUTS_VERSION.
+    Update with tools/vendor-walnuts.sh <sha>, then reread the API
+    drift and numerics notes in WALNUTS_VERSION by hand - the script
+    rewrites the provenance lines and nothing else.
   perf-measurement: two traps, kept because both were expensive to find
     and neither leaves a trace once the wrong number is written down.
     (1) Per-iteration cost must be differenced between two fits IN ONE

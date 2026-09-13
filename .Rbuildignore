@@ -1,6 +1,7 @@
 ^ihdp
 ^benchmarks$
 ^docs$
+^tools$
 ^.git$
 ^.github$
 ^.gitignore$

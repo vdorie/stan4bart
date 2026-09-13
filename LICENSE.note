@@ -5,10 +5,16 @@ It bundles third-party components under compatible terms:
 WALNUTS sampler headers
   Location:  inst/include/walnuts/*, inst/include/walnuts.hpp
   License:   MIT (see inst/include/WALNUTS_LICENSE)
-  Copyright: (c) 2025 Bob Carpenter
+  Copyright: (c) 2025--2026 by the Walnutpie Developers
   Provenance: vendored from https://github.com/flatironinstitute/walnuts
-              at commit 5854be888e5432a103275466d7d0be95c7c5c67a
-              (see inst/include/WALNUTS_VERSION).
+              at commit f3c1833117d9d2f76db1671d70d2ce0810ad8436
+              (see inst/include/WALNUTS_VERSION). Upstream has renamed the
+              library to walnutpie; this package keeps the walnuts/ paths.
+              Two edits are made to the vendored files and no others: the
+              include-path rewrite that makes those paths resolve, and one
+              added method, refresh_logp_grad(), without which a target
+              swapped between transitions is scored stale. Both are set out
+              in inst/include/WALNUTS_VERSION.
   The MIT license permits redistribution within a GPL-licensed work; the
   copyright notice and permission notice are retained in WALNUTS_LICENSE.
 

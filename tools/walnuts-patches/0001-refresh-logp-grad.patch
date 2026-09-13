@@ -1,0 +1,59 @@
+Subject: [PATCH] Add refresh_logp_grad to AdaptiveWalnuts and WalnutsSampler
+
+Both classes cache the log density and gradient at their current position from
+one transition to the next, so a client that changes the target between
+transitions scores the next transition's initial state under the previous
+target. stan4bart is such a client: it draws the parametric conditional inside
+a two-block Gibbs sampler, and the BART fit becomes the parametric offset (and,
+for binary responses, the latents become the response) between every pair of
+transitions. Left stale, the initial point's log density and gradient are a
+sweep out of date and the chain is biased, not merely slowed. This adds one
+method to each class that re-evaluates at the unchanged position, costing one
+evaluation and touching nothing else. It is an upstream ask; until upstream
+takes it, tools/vendor-walnuts.sh reapplies it on every re-vendoring.
+
+---
+diff --git a/walnuts/adaptive_walnuts.hpp b/walnuts/adaptive_walnuts.hpp
+index 2eb43c8..e7fdc34 100644
+--- a/walnuts/adaptive_walnuts.hpp
++++ b/walnuts/adaptive_walnuts.hpp
+@@ -250,6 +250,17 @@ class AdaptiveWalnuts {
+     ++iteration_;
+   }
+ 
++  /**
++   * @brief Re-evaluate the log density and gradient at the current position.
++   *
++   * The cached log density and gradient carry over from the previous
++   * transition, so a client that mutates the target between transitions must
++   * call this before the next one; otherwise that transition's initial state
++   * is scored under the previous target. Costs one log density and gradient
++   * evaluation and leaves the position and every tuning value alone.
++   */
++  void refresh_logp_grad() { logp_grad_(theta_, logp_, grad_); }
++
+   /**
+    * @brief Return a Walnuts sampler with the current tuning parameter
+    * estimates.
+diff --git a/walnuts/walnuts.hpp b/walnuts/walnuts.hpp
+index 11ad50a..62b7511 100644
+--- a/walnuts/walnuts.hpp
++++ b/walnuts/walnuts.hpp
+@@ -693,6 +693,17 @@ class WalnutsSampler {
+     return logp_;
+   }
+ 
++  /**
++   * @brief Re-evaluate the log density and gradient at the current position.
++   *
++   * The cached log density and gradient carry over from the previous
++   * transition, so a client that mutates the target between transitions must
++   * call this before the next one; otherwise that transition's initial state
++   * is scored under the previous target. Costs one log density and gradient
++   * evaluation and leaves the position and every tuning value alone.
++   */
++  void refresh_logp_grad() { logp_grad_(theta_, logp_, grad_); }
++
+   /**
+    * @brief  Return a constant reference the diagonal of the diagonal inverse
+    * mass matrix.

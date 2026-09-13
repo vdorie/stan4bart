@@ -6,7 +6,7 @@
 
 #include <Eigen/Dense>
 
-namespace walnuts::detail {
+namespace walnutpie::detail {
 
 /**
  * @brief Concept for a type with a `.size()` member function.
@@ -99,19 +99,6 @@ concept Sampler = requires(S& s, const S& cs) {
 };
 
 /**
- * @brief Concept for a stream that reports whether it is open.
- *
- * A type `S` satisfies `OpenableStream` if `s.is_open()` is callable on
- * a const instance and returns a value convertible to `bool`. This
- * matches the interface of standard file streams (`std::ifstream`,
- * `std::ofstream`, `std::fstream`).
- */
-template <typename S>
-concept OpenableStream = requires(const S& s) {
-  { s.is_open() } -> std::convertible_to<bool>;
-};
-
-/**
  * @brief Concept for a step size adaptation handler.
  *
  * A type `H` satisfies `StepSizeAdapter` if it provides:
@@ -171,9 +158,9 @@ concept AdaptiveSampler = requires(A& a, const A& ca) {
   { ca.log_mass() } -> std::convertible_to<Eigen::VectorXd>;
 };
 
-}  // namespace walnuts::detail
+}  // namespace walnutpie::detail
 
-namespace walnuts {
+namespace walnutpie {
 
 /**
  * @brief Concept for a handler of cross-chain events.
@@ -182,7 +169,6 @@ namespace walnuts {
  *
  * A type `H` satisfies `Handler` if it provides:
  *  - `on_r_hat(double)` callable on a non-const instance, returning `void`,
- *  - `received_interrupt()` called when sampling or warmup should stop.
  */
 template <typename H>
 concept GlobalHandler = requires(H& h, const H& ch, double r_hat) {
@@ -202,16 +188,30 @@ concept InterruptCallback = requires(H& h, const H& ch, double r_hat) {
 };
 
 /**
+ * @brief Concept for handler for errors
+ * The following member is required
+ * - `on_logp_exception(const Eigen::VectorXd&, std::exception&)` called
+ *    when the log density function throws an error
+ */
+template <typename H>
+concept ErrorCallback =
+    requires(H& h, const Eigen::VectorXd& position, const std::exception& exn) {
+      { h.on_logp_exception(position, exn) } -> std::same_as<void>;
+      { noexcept(h.on_logp_exception(position, exn)) };
+    };
+
+/**
  * @brief Concept for a handler of sampling events.
  *
- * A type `H` satisfies `SampleHandler` if it provides the following
- * member functions, each callable on a non-const instance and
- * returning `void`:
+ * A type `H` satisfies `SampleHandler` if it satisfies `ErrorCallback` and
+ * additional provides the following member functions, each callable
+ * on a non-const instance and returning `void`:
  *  - `on_sample(const Eigen::VectorXd&, double)` called once per
  *    draw with the position and log density.
  */
 template <typename H>
 concept SampleHandler =
+    ErrorCallback<H> &&
     requires(H& h, const Eigen::VectorXd& position, double lp) {
       { h.on_sample(position, lp) } -> std::same_as<void>;
     };
@@ -253,9 +253,6 @@ concept ChainHandler =
  * to evaluate, and the second and third are output parameters set to the
  * log density and its gradient, respectively.
  *
- * The callable is permitted to throw exceptions; see `ExceptionFreeLogpGrad`
- * for the noexcept variant.
- *
  * @tparam F The callable type to constrain.
  */
 template <typename F>
@@ -295,4 +292,4 @@ concept MarkovChainSequence =
       { m.draws(dim_index) } -> std::convertible_to<Eigen::VectorXd>;
     };
 
-}  // namespace walnuts
+}  // namespace walnutpie

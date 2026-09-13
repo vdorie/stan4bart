@@ -11,23 +11,7 @@
 
 #include "walnuts/concepts.hpp"
 
-namespace walnuts::detail {
-
-/**
- * @brief Validate that the specified stream is open.
- *
- * @tparam S The type of the stream.
- * @param[in] s The stream.
- * @param[in] name The name of the stream.
- * @throw invalid_argument If the stream is not open.
- */
-template <OpenableStream S>
-inline void validate_open(const S& s, const std::string& name) {
-  if (s.is_open()) {
-    return;
-  }
-  throw std::invalid_argument("could not open stream from: " + name);
-}
+namespace walnutpie::detail {
 
 /**
  * @brief Validate the standard vector is the specified size.
@@ -302,4 +286,4 @@ inline void validate_probability_inclusive(T x, const std::string& name) {
   throw std::invalid_argument(msg);
 }
 
-}  // namespace walnuts::detail
+}  // namespace walnutpie::detail

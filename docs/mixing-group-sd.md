@@ -33,57 +33,64 @@ and split R-hat, both on half-chains. On autoregressive test chains they
 reproduce the standard split implementations to within half a percent.
 Lag-one autocorrelation is the mean over the four chains.
 
+The table describes the build at 2fa75b7, which refreshed the vendored WALNUTS
+to upstream head. That refresh moved every draw, so these are not the figures an
+older build produces; what it did not move is the verdict, and the control run
+that establishes as much is recorded in `docs/plans/re-scale-mixing.md`.
+
 | case | seed | group sd lag-1 | group sd ESS/1000 | group sd R-hat | sigma lag-1 | sigma ESS/1000 | fixed effect lag-1 | fixed effect ESS/1000 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| bar_reference | 20260913 | 0.95 | 18 | 1.08 | 0.43 | 10 | 0.24 | 10 |
-| bar_reference | 20260914 | 0.96 | 19 | 1.02 | 0.66 | 6 | 0.33 | 9 |
-| bar_reference | 20260915 | 0.93 | 12 | 1.07 | 0.54 | 9 | 0.17 | 29 |
-| many_small | 20260913 | 0.88 | 39 | 1.01 | 0.40 | 21 | 0.17 | 107 |
-| many_small | 20260914 | 0.91 | 26 | 1.04 | 0.60 | 15 | 0.23 | 12 |
-| many_small | 20260915 | 0.90 | 24 | 1.04 | 0.76 | 6 | 0.11 | 10 |
-| few_large | 20260913 | 0.96 | 9 | 1.11 | 0.64 | 3 | 0.31 | 11 |
-| few_large | 20260914 | 0.96 | 12 | 1.05 | 0.67 | 32 | 0.54 | 12 |
-| few_large | 20260915 | 0.96 | 1 | 3.43 | 0.77 | 3 | 0.39 | 4 |
-| weak_signal | 20260913 | 0.62 | 164 | 1.01 | 0.07 | 10 | -0.03 | 13 |
-| weak_signal | 20260914 | 0.73 | 70 | 1.03 | 0.39 | 8 | 0.16 | 33 |
-| weak_signal | 20260915 | 0.65 | 18 | 1.05 | 0.38 | 4 | 0.15 | 18 |
+| bar_reference | 20260913 | 0.96 | 19 | 1.01 | 0.53 | 6 | 0.23 | 18 |
+| bar_reference | 20260914 | 0.95 | 18 | 1.06 | 0.68 | 19 | 0.27 | 14 |
+| bar_reference | 20260915 | 0.95 | 10 | 1.11 | 0.61 | 6 | 0.11 | 9 |
+| many_small | 20260913 | 0.87 | 45 | 1.03 | 0.34 | 5 | 0.14 | 5 |
+| many_small | 20260914 | 0.90 | 35 | 1.04 | 0.66 | 5 | 0.20 | 29 |
+| many_small | 20260915 | 0.91 | 19 | 1.07 | 0.79 | 12 | 0.12 | 11 |
+| few_large | 20260913 | 0.97 | 5 | 1.18 | 0.61 | 84 | 0.35 | 13 |
+| few_large | 20260914 | 0.96 | 21 | 1.06 | 0.65 | 6 | 0.50 | 15 |
+| few_large | 20260915 | 0.96 | 2 | 1.42 | 0.65 | 17 | 0.42 | 29 |
+| weak_signal | 20260913 | 0.63 | 24 | 1.04 | 0.21 | 3 | -0.01 | 38 |
+| weak_signal | 20260914 | 0.73 | 92 | 1.02 | 0.31 | 4 | 0.04 | 28 |
+| weak_signal | 20260915 | 0.59 | 72 | 1.02 | 0.36 | 6 | 0.11 | 61 |
 
 ## The verdict
 
-The bar is met in none of the four cases. Exactly one of the twelve fits clears
-it - the weak-signal design at the first seed, at lag-one 0.62 and 164 effective
-draws per thousand - and every other fit misses at least one half of the bar,
-most of them both halves. The reference design the bar was written against is
-the plainest failure: lag-one 0.93 to 0.96 against a ceiling of 0.8, and 12 to
-19 effective draws per thousand against a floor of 100, so it misses the
+The bar is met in none of the four cases, and not one of the twelve fits clears
+both of its halves. The reference design the bar was written against is the
+plainest failure: lag-one 0.95 to 0.96 against a ceiling of 0.8, and 10 to 19
+effective draws per thousand against a floor of 100, so it misses the
 autocorrelation limit by about 0.15 and the effective-sample-size floor by a
-factor of five to eight. `few_large` is worse - lag-one 0.96 on all three seeds
-and effective draws of 9, 12 and 1 per thousand, the last with an R-hat of 3.4,
-which is four chains that have not found the same posterior rather than four
-slow ones. `many_small` is the least bad of the three designs with a group sd of
-1 and still fails everywhere, at lag-one 0.88 to 0.91 and 24 to 39 effective
-draws, missing the effective-sample-size floor by between two and a half and
-four times. `weak_signal` is the only design that comes near: its lag-one
-clears on all three seeds, but its effective sample size swings over an order
-of magnitude across them, 164 then 70 then 18, so it passes once and misses by
-factors of 1.4 and 5.6 on the other two. Group count and group size both matter
-and point the same way - the fewer groups there are, the worse the group sd
-mixes - but no design with a group sd large enough to be worth estimating
-reaches the bar on any seed.
+factor of five to ten. `few_large` is worse - lag-one 0.96 to 0.97 on all three
+seeds and effective draws of 5, 21 and 2 per thousand, the last with an R-hat of
+1.42, which is four chains that have not settled on one posterior rather than
+four slow ones. `many_small` is the least bad of the three designs with a group
+sd of 1 and still fails everywhere, at lag-one 0.87 to 0.91 and 19 to 45
+effective draws, missing the effective-sample-size floor by between two and five
+times. `weak_signal` is the only design that comes near: its lag-one clears on
+all three seeds and its effective sample size reads 24, 92 and 72 per thousand,
+so it misses the floor on all three, though one of them by under ten percent.
+Group count and group size both matter and point the same way - the fewer groups
+there are, the worse the group sd mixes - but no design with a group sd large
+enough to be worth estimating reaches the bar on any seed.
+
+Read the two halves of the bar with different weight. The lag-one column is
+stable: it moves by hundredths between builds whose draws differ only in warmup
+numerics. The effective sample size is not: on the weak-signal design it moves
+by a factor of several across the same comparison, and it swings as widely
+between seeds. Where they disagree, the autocorrelation is the one to trust.
 
 The group sd is the hard parameter, and it is hard in a way the other two are
 not. Across the three designs with a group sd of 1 its lag-one autocorrelation
-sits at 0.88 to 0.96, while the residual standard deviation runs 0.40 to 0.77
-and the fixed effect 0.11 to 0.54. The effective sample sizes for those two are
+sits at 0.87 to 0.97, while the residual standard deviation runs 0.34 to 0.79
+and the fixed effect 0.11 to 0.50. The effective sample sizes for those two are
 also low, sometimes lower than the group sd's, but for a different reason: they
-are depressed by disagreement between chains, and a longer run repairs it.
-Quadrupling warmup and kept draws on the reference design lifts the residual
-standard deviation from 10 effective draws per thousand to 15 and drops its
-R-hat from 1.07 to 1.02, while the group sd's lag-one stays at 0.96 and its
-effective sample size per thousand does not improve. That is the distinction
-that matters for the bar: the other parameters are under-warmed at the defaults,
-and the group sd is autocorrelated from one draw to the next, which no amount of
-extra sampling fixes.
+are depressed by disagreement between chains, and a longer run repairs that.
+Quadrupling warmup and kept draws on the reference design drops the residual
+standard deviation's R-hat from 1.12 to 1.07, while the group sd's lag-one stays
+at 0.95 and its effective sample size per thousand does not move at all, 18.7
+then 18.8. That is the distinction that matters for the bar: the other
+parameters are under-warmed at the defaults, and the group sd is autocorrelated
+from one draw to the next, which no amount of extra sampling fixes.
 
 ## Candidate remedies, not implemented
 

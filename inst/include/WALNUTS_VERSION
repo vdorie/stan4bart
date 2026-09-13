@@ -2,28 +2,106 @@ WALNUTS (vendored)
 ==================
 
 Upstream:  https://github.com/flatironinstitute/walnuts
-Commit:    5854be888e5432a103275466d7d0be95c7c5c67a
-Date:      2026-07-13 (upstream commit date)
-Vendored:  2026-07-15
-License:   MIT, (c) 2025 Bob Carpenter (see WALNUTS_LICENSE)
+Commit:    f3c1833117d9d2f76db1671d70d2ce0810ad8436
+Date:      2026-09-11 (upstream commit date, UTC)
+Vendored:  2026-09-13
+License:   MIT, (c) 2025--2026 by the Walnutpie Developers
+           (see WALNUTS_LICENSE)
 
-Layout mirrors upstream include/: the per-component headers live in
-walnuts/, with walnuts.hpp the umbrella that includes them all.
+Upstream renamed the library to walnutpie between the previous vendoring
+(5854be8) and this one: its headers now live in include/walnutpie/ under
+umbrella include/walnutpie.hpp, and the namespace is walnutpie rather than
+walnuts. This package keeps its own paths - walnuts/*.hpp under umbrella
+walnuts.hpp - and keeps the upstream namespace, so src/ spells the sampler
+walnutpie::. Two edits are made to vendored files, and no others:
 
-Integration reference: bairrtt (inst/include/{walnuts,walnuts.hpp,
-WALNUTS_LICENSE}). These headers were pulled FRESH from upstream, not
-copied from bairrtt.
+  1. The include-path rewrite that keeps those paths working:
+         #include "walnutpie/x.hpp"  ->  #include "walnuts/x.hpp"
+  2. One added method, refresh_logp_grad(), on AdaptiveWalnuts and on
+     WalnutsSampler, carried as
+     tools/walnuts-patches/0001-refresh-logp-grad.patch. Both classes now
+     cache the log density and gradient at their current position from one
+     transition to the next; this package
+     swaps the target between transitions (the BART fit becomes the
+     parametric offset, and for binary responses the latents become the
+     response), so without a way to re-evaluate at the unchanged position
+     every transition would score its initial state under the previous
+     sweep's target. That is a bias, not a slowdown: it fails this
+     package's own accuracy tests. The method costs one evaluation and
+     touches nothing else. It is an upstream ask.
 
-API drift vs the bairrtt-era snapshot (re-verified at C1):
-  - The AdaptiveWalnuts -> freeze (sampler()) -> WalnutsSampler
-    lifecycle, the diagonal MassEstimator, and the
-    InitChainConfig(step_size, position, mass) ctor are UNCHANGED.
-  - WarmupConfig gained a step-size convergence tolerance
-    (step_size_converge_tol_, from upstream's "init-stepsize" work);
-    api.hpp's internal detail::sample() signature was refactored to take
-    the SamplingConfig directly. Neither touches the per-chain path this
-    package uses; both are C2 concerns (WarmupConfig sizing), not C1.
-  - Diagnostics: the ChainHandler concept (concepts.hpp) still surfaces
-    only position / lp / step_size / diag_inv_mass; GlobalHandler adds
-    on_r_hat. There are NO treedepth, divergent, n_leapfrog, or energy
-    hooks, confirming the plan's Q(c) claim against fresh upstream.
+Vendored set: the transitive closure of what src/ reaches (adaptive_walnuts,
+config, walnuts, and below them adam, concepts, online_moments, util,
+validate). Upstream's api/adapt/sampler/spsc_buffer/summary headers drive
+its own multi-chain thread pool, which this package does not use; its
+load_stan header dlopen()s a compiled Stan model. Neither is vendored, and
+walnuts.hpp lists only the eight that are. Upstream deleted handlers.hpp,
+which the previous vendoring carried and nothing here reached.
+
+The set is this list, which tools/vendor-walnuts.sh trims to:
+
+  BEGIN VENDORED FILES
+  adam.hpp
+  adaptive_walnuts.hpp
+  concepts.hpp
+  config.hpp
+  online_moments.hpp
+  util.hpp
+  validate.hpp
+  walnuts.hpp
+  END VENDORED FILES
+
+Updating: one command, from the package root.
+
+  tools/vendor-walnuts.sh <upstream-sha>
+
+It fetches include/walnutpie/ at that sha, trims it to the list above,
+rewrites the include paths, regenerates the umbrella walnuts.hpp, refreshes
+WALNUTS_LICENSE, reapplies every patch in tools/walnuts-patches/, and rewrites
+the Commit, Date and Vendored lines at the top of this file. Those patches are
+the ONLY hand edits that survive an update: everything else under
+inst/include/walnuts/ is upstream verbatim apart from the include-path
+rewrite, and a re-run at the current sha into a scratch directory must diff
+clean against inst/include. What the script cannot do is reread upstream - the
+API drift and numerics notes below describe the move from the PREVIOUS sha and
+have to be rewritten by hand after every update.
+
+API drift vs 5854be8, and how src/ absorbed it:
+  - Namespace walnuts -> walnutpie. src/walnuts_sampler.cpp spells it the
+    new way; no vendored file is patched for it.
+  - SampleHandler now subsumes an ErrorCallback: a handler must supply
+    on_logp_exception(const Eigen::VectorXd&, const std::exception&).
+    NoExceptLogpGrad takes the handler as a second template argument and
+    calls it before returning -inf. LatestDraw gained the member.
+  - AdaptiveWalnuts and WalnutsSampler now evaluate the log density and
+    gradient once in their constructors and carry (logp, grad) at the
+    current position across transitions, so transition_w takes them as
+    in/out rather than recomputing at every transition's first state.
+  - The lifecycle this package drives is otherwise unchanged: AdaptiveWalnuts
+    -> freeze (sampler()) -> WalnutsSampler, the diagonal MassEstimator, the
+    InitChainConfig(step_size, position, mass) ctor, the WarmupConfig and
+    SamplingConfig builders, and the handler callbacks on_sample /
+    on_warmup / on_warmup_complete.
+
+Numerics changed, so draws moved:
+  - The discounted Welford update materializes the deviation from the old
+    mean before updating the mean, fixing an aliased expression in the mass
+    estimator.
+  - transition_w reports completed doublings rather than the loop counter,
+    so the min-micro-steps estimator is no longer fed twice the true state
+    count on a capped or aborted warmup draw.
+  - A non-finite acceptance statistic is treated as a rejection by step-size
+    adaptation instead of poisoning Adam.
+  - The gradient at the selected position is stored and reused. This is the
+    change refresh_logp_grad() above exists for.
+
+Nothing needed re-recording. The posterior baseline is a Stan-era oracle
+compared against pre-registered tolerances rather than a snapshot of these
+draws, and it passes on all five tiers; the tree-replay exactness gate
+recomputes rather than compares against stored numbers, and it passes. The
+re-scale mixing baseline describes the previous build's draws; the refreshed
+group-scale figures are in docs/plans/re-scale-mixing.md.
+
+Diagnostics: the ChainHandler concept (concepts.hpp) still surfaces only
+position / lp / step_size / diag_inv_mass, plus the new on_logp_exception.
+There are still NO treedepth, divergent, n_leapfrog, or energy hooks.
