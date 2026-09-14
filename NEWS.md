@@ -172,6 +172,11 @@
   support was required. Results are `mvbartFit` objects with a `print`
   method; see `?mvbart`.
 
+* Tracking dbarts 1.0-0 retiring `resid.prior` onto the family object: the
+  BART component's fixed unit residual variance is now set with `family =
+  gaussian(sigma = fixed(1))` instead of the now-tombstoned `resid.prior =
+  fixed(1)`, in both `stan4bart_fit` and `mvbart`; no observable change.
+
 ## Breaking changes
 
 * Factor variables in the `bart()` part of the formula are now encoded with

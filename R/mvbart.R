@@ -17,11 +17,11 @@
 ##       v_k  = Sigma_kk - Sigma_{k,-k} Sigma_{-k,-k}^{-1} Sigma_{-k,k}.
 ##
 ## m and v are injected into the k-th sampler through dbarts's setOffset() and
-## setSigma() verbs; each sampler is created with resid.prior = fixed() so the
-## engine never draws its own nugget -- Sigma owns ALL covariance and is drawn
-## conjugately each sweep from an inverse-Wishart on the stacked residual
-## cross-product.  The whole routine is built on dbarts's public R interface; it
-## adds no compiled code.
+## setSigma() verbs; each sampler is created with family = gaussian(sigma =
+## fixed()) so the engine never draws its own nugget -- Sigma owns ALL
+## covariance and is drawn conjugately each sweep from an inverse-Wishart on
+## the stacked residual cross-product.  The whole routine is built on
+## dbarts's public R interface; it adds no compiled code.
 ##
 ## This is a PURE-SUR sampler: it has no random-effect / multilevel component.
 ## Coupling it with stan4bart's WALNUTS multilevel machinery (SUR x ranef, i.e. a
@@ -30,8 +30,9 @@
 ##
 ## Load-bearing dbarts facts this relies on (validated against a conjugate SUR
 ## oracle):
-##   * resid.prior = fixed(v) reads v as a VARIANCE; setSigma(s) takes s as a
-##     STANDARD DEVIATION, and overrides the fixed() creation value every sweep.
+##   * family = gaussian(sigma = fixed(v)) reads v as a VARIANCE; setSigma(s)
+##     takes s as a STANDARD DEVIATION, and overrides the fixed() creation
+##     value every sweep.
 ##   * setOffset(m) injects the per-observation conditional mean; the run() train
 ##     fit INCLUDES that offset, so the forest is recovered as f_k = train - m
 ##     and the structural residual as e_k = Y_k - f_k.
@@ -154,7 +155,7 @@ mvbart <-
       dfk <- data.frame(.y = Y[, k], Xdf, check.names = FALSE)
       vk <- var(Y[, k])
       dbCall <- bquote(dbarts::dbarts(.y ~ ., data = dfk,
-                                      resid.prior = fixed(.(vk)),
+                                      family = gaussian(sigma = fixed(.(vk))),
                                       control = control, seed = .(seedk)))
       if (hasTest) {
         dbCall$test <- quote(Xtest)
