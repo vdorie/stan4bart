@@ -306,3 +306,15 @@
 * Fixed a spurious length-recycling warning whenever a grouping factor
   gained new levels, from comparing random-effect row names with `==`
   rather than `identical()`.
+
+* Fixed a binary response's 0/1 `weights` being silently dropped instead of
+  installed as the BART component's active-row mask. `dbarts` 1.0-0 changed
+  what 0/1 weights mean for a probit fit: they no longer weight the
+  likelihood (a weighted probit has no tractable latent-variable form) and
+  instead name the rows in and out of it, resolved by `dbarts::dbartsSpec`
+  into a mask the caller must install on the sampler it builds. `stan4bart`
+  already called `dbartsSpec` but discarded that mask, so every row re-entered
+  the likelihood regardless of `weights`. The mask is now installed on every
+  sampler a binary fit builds, including the one rebuilt after a
+  `saveRDS`/`readRDS` round trip; a non-0/1 weight vector on a binary response
+  is refused with `dbarts`'s own message, as before.

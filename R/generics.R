@@ -200,11 +200,15 @@ get_samples <- function(expr, include_warmup, only_warmup)
 # object's own setState. The state is dropped from the object afterwards
 # because this fit retains its own serializable copy (state.bart) and must not
 # write a second one into saveRDS; the dead-pointer rebuild after a reload is
-# getBartSampler's below, not dbarts's transparent re-creation.
-restoreBartSampler <- function(control, model, data, state) {
+# getBartSampler's below, not dbarts's transparent re-creation. 'active' is the
+# probit/ordinal active-row mask a binary fit's 0/1 weights resolved to (see
+# dbarts::dbartsSpec); like the state, it does not ride the sampler's saved
+# state and has to be reinstalled on every re-creation.
+restoreBartSampler <- function(control, model, data, state, active = NULL) {
   sampler <- new("dbartsSampler", control, model, data)
   sampler$setState(state)
   sampler$state <- NULL
+  if (!is.null(active)) sampler$setActiveRows(active)
   sampler
 }
 
@@ -240,7 +244,7 @@ getBartSampler <- function(object) {
   data.bart@x <- object$bartData@x
   data.bart@x.test <- object$bartData@x.test
   ptr <- restoreBartSampler(restore$control, restore$model, data.bart,
-                            restore$state)
+                            restore$state, restore$active)
   if (!is.null(env)) env$ptr <- ptr
   ptr
 }

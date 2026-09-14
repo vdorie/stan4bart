@@ -30,7 +30,7 @@ if (FALSE) getRanef <- function(group, samples) {
 }
 
 # putting this out here so we can export it when parallelizing
-stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
+stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group, active.bart = NULL)
 {
   if (!is.na(seed))
     set.seed(seed)
@@ -49,6 +49,7 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   # object's own external pointer. The object has to outlive the handle, which
   # C_stan4bart_create pins in its own pointer's protection slot.
   sampler.bart <- new("dbartsSampler", control.bart, model.bart, data.bart)
+  if (!is.null(active.bart)) sampler.bart$setActiveRows(active.bart)
   sampler <- .Call(C_stan4bart_create, sampler.bart$getPointer(), control.bart,
                    data.stan, control.stan, control.common)
   if (control.common$verbose > 0L)
@@ -631,6 +632,13 @@ stan4bart_fit <-
   control.bart <- bart_spec$control
   model.bart   <- bart_spec$model
   data.bart    <- bart_spec$data
+  # a probit response's 0/1 bart_args weights resolve, inside dbartsSpec, to
+  # the active-row mask rather than to a weight channel (dbarts has none for
+  # this family); anything else is already refused there with dbarts's own
+  # message. The mask has to be installed on every sampler this fit builds -
+  # dbartsSpec returns it separately because it isn't part of the (control,
+  # model, data) triple a sampler is constructed from.
+  active.bart <- bart_spec$active
 
   
   # The random-effect scale's ridge move: on by default, an off switch for
@@ -697,7 +705,7 @@ stan4bart_fit <-
           cluster, "stan4bart_fit_worker",
           seq_len(chains), randomSeeds,
           MoreArgs = nlist(control.bart, data.bart, model.bart, data.stan,
-                           control.stan, control.common, group)),
+                           control.stan, control.common, group, active.bart)),
         error = function(e) e)
     
       stopCluster(cluster)
@@ -719,7 +727,7 @@ stan4bart_fit <-
     }
     
     for (chainNum in seq_len(chains))
-      chainResults[[chainNum]] <- stan4bart_fit_worker(chainNum, NA_integer_, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group)
+      chainResults[[chainNum]] <- stan4bart_fit_worker(chainNum, NA_integer_, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group, active.bart)
     
     if (exists("oldSeed"))
       .Random.seed <- oldSeed
@@ -754,7 +762,7 @@ stan4bart_fit <-
     control.bart@keepTrees <- TRUE
     control.bart@n.samples <- as.integer(iter - warmup)
     attr(chainResults, "sampler.bart") <-
-      restoreBartSampler(control.bart, model.bart, data.bart, all_state)
+      restoreBartSampler(control.bart, model.bart, data.bart, all_state, active.bart)
 
     # Retain the SERIALIZABLE inputs so the stored-tree external pointer can be
     # rebuilt lazily after saveRDS/readRDS (the live pointer dies on reload).
@@ -766,7 +774,7 @@ stan4bart_fit <-
     data.bart.light@x.test <- data.bart.light@x.test[integer(0L), , drop = FALSE]
     attr(chainResults, "state.bart") <-
       list(state = all_state, control = control.bart,
-           model = model.bart, data = data.bart.light)
+           model = model.bart, data = data.bart.light, active = active.bart)
   }
   
   chainResults
