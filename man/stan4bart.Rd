@@ -58,7 +58,13 @@ stan4bart(formula,
   \item{subset, weights, na.action, offset, contrasts}{optional components
   adjusting the constructed model matrices and otherwise changing the linear
   predictor. \code{na.action} cannot be \code{"na.pass"}. See
-  \code{\link{lm}} and \code{\link{model.matrix.default}}.}
+  \code{\link{lm}} and \code{\link{model.matrix.default}}. For a binary
+  response, \code{weights} follow \code{\link[dbarts]{dbarts}}'s probit rule:
+  weights identically 1 are treated as absent, weights that are all 0 and 1
+  name the rows in the data set and install as the BART component's
+  active-row mask (a 0 row leaves both components' likelihoods but keeps its
+  leaf occupancy, its latent and its fitted value), and any other weights are
+  refused.}
   \item{test}{an optional data frame to be used as test data. If present, the
   test predictions will be stored as the sampler runs and can be extracted
   later.}
