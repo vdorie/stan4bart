@@ -542,12 +542,14 @@ stan4bart_fit <-
 
   # every bart_args name has to be consumed by something below - either a
   # dbartsControl/dbartsSpec formal, one of the k/power/base/split.probs
-  # shorthands, or 'resid.dist' (reserved further down alongside the other
-  # residual-model names, though it is not an actual dbarts formal) - or it
-  # is silently dropped rather than reaching the sampler.
+  # shorthands, or 'resid.dist'/'resid.prior' (reserved further down alongside
+  # the other residual-model names, though neither is an actual dbarts formal
+  # any more - both now ride the family object and are only tombstones on
+  # dbartsSpec) - or it is silently dropped rather than reaching the sampler.
   known_bart_args <- unique(c(names(formals(dbarts::dbartsControl)),
                               names(formals(dbarts::dbartsSpec)),
-                              "k", "power", "base", "split.probs", "resid.dist"))
+                              "k", "power", "base", "split.probs",
+                              "resid.dist", "resid.prior"))
   unknown_bart_args <- setdiff(names(bart_args), known_bart_args)
   if (length(unknown_bart_args) > 0L)
     stop("bart_args has unrecognized name",
@@ -580,12 +582,14 @@ stan4bart_fit <-
   #
   # Some of its arguments are this package's to set, not the caller's. The
   # parametric block draws the residual standard deviation and pushes it into
-  # the forest with setSigma every sweep, so dbarts holds sigma fixed at 1 and
-  # can carry neither a residual prior nor a residual distribution nor a
-  # variance forest of its own; and the response family follows stan4bart's
-  # own 'family' argument. dbartsSpec spells the creation-time estimate
-  # 'sigest' now; 'sigma' still reaches the same formal for one release
-  # (dbarts tombstone), so both names are reserved.
+  # the forest with setSigma every sweep, so a continuous response's family
+  # fixes the residual variance at 1 (family = gaussian(sigma = fixed(1))),
+  # dbarts's one home for that prior, and can carry neither a residual prior
+  # nor a residual distribution nor a variance forest of its own; the
+  # response family otherwise follows stan4bart's own 'family' argument.
+  # dbartsSpec spells the creation-time estimate 'sigest' now; 'sigma' still
+  # reaches the same formal for one release (dbarts tombstone), so both
+  # names are reserved.
   reserved <- intersect(names(bart_args), c("sigma", "sigest", "resid.prior", "resid.dist", "variance"))
   if (length(reserved) > 0L)
     stop("bart_args cannot set ", paste0("'", reserved, "'", collapse = ", "),
@@ -599,8 +603,10 @@ stan4bart_fit <-
          call. = FALSE)
 
   spec_call <- quote(dbarts::dbartsSpec(data = data.bart, control = control.bart,
-                                        resid.prior = fixed(1), family = bart_family,
-                                        parentEnv = evalEnv))
+                                        family = bart_family, parentEnv = evalEnv))
+  # The unit-variance fix rides the family object now; the probit family's
+  # latent scale is already fixed and takes no residual prior of its own.
+  if (is_continuous) spec_call[["family"]] <- quote(gaussian(sigma = fixed(1)))
   for (name in intersect(names(bart_args),
                          setdiff(names(formals(dbarts::dbartsSpec)), names(spec_call))))
   {
