@@ -181,7 +181,7 @@ stan4bart <-
     }
   }
   if (is.null(bart_offset_init)) {
-    init_call$formula <- nobars(nobart(mc$formula))
+    init_call$formula <- init_fixed_formula(mc$formula)
     init_fit <- eval(init_call, parent.frame())
     bart_offset_init <- fitted(init_fit, type = "link")
     if (!is_bernoulli)

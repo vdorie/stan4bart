@@ -33,6 +33,22 @@ expect_error(stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1
                        bart_args = list(n.trees = 3)),
              "numeric vector")
 
+# all-zero weights leave no observation in the likelihood; refused up front on
+# both response families rather than failing inside the lme4/glm init fits
+expect_error(stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                       weights = rep(0, nrow(df)),
+                       cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
+                       bart_args = list(n.trees = 3)),
+             "all zero")
+df.bin <- df
+df.bin$y <- as.double(df$y > median(df$y))
+expect_error(stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + (1 | g.1), df.bin,
+                       weights = rep(0, nrow(df)),
+                       cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
+                       bart_args = list(n.trees = 3)),
+             "all zero")
+rm(df.bin)
+
 # heterogeneous weights rescale the ppd noise: observation-level ppd
 # variance should be sigma^2 / weight (regression coverage for the weighted
 # noise branch of extract(..., "ppd"))
