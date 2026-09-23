@@ -553,8 +553,13 @@ validate_weights <- function(w) {
       stop("'weights' must be a numeric vector.", 
            call. = FALSE)
     if (any(w < 0)) 
-      stop("Negative weights are not allowed.", 
+      stop("Negative weights are not allowed.",
            call. = FALSE)
+    # no observation would enter the likelihood, and the lme4/glm fits that
+    # seed the sampler fail on it with messages that do not name the cause
+    if (length(w) > 0L && !any(w > 0))
+      stop("'weights' are all zero; at least one observation must carry ",
+           "positive weight", call. = FALSE)
   }
   
   return(w)

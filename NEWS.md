@@ -228,6 +228,15 @@
   `dbartsControl()` construction call; the separate `attr<-` assignment is
   removed.
 
+* All-zero `weights` are now refused up front with an error naming the
+  cause. Previously they failed inside the `lme4`/`glm` fits that seed the
+  sampler, with messages such as "object 'fit' not found" (binary) or
+  "sigma_init is NaN" (continuous).
+
+* Fixed the last-resort initialization fit building the formula `y` instead
+  of `y ~ 1` when the model has only `bart()` and random-effect terms, which
+  failed with "object 'y' not found".
+
 * The random-effect standard deviation is now drawn once per sweep by an exact
   slice move along the curve that leaves the linear predictor fixed, and this is
   on by default. Rescaling a grouping factor's standard deviation and dividing

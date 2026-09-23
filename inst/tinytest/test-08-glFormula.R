@@ -103,3 +103,9 @@ local({
   expect_true(setequal(attr(glResult$terms, "varnames.random"), "g.1"))
   expect_equal(names(glResult$reTrms$Ztlist), "1 | g.1")
 })
+
+# the last-resort init fit drops the bart and random-effect terms; with
+# nothing else on the right-hand side it is intercept-only, not the bare
+# response
+expect_identical(stan4bart:::init_fixed_formula(quote(y ~ bart(x) + (1 | g))), quote(y ~ 1))
+expect_identical(stan4bart:::init_fixed_formula(quote(y ~ bart(x) + z + (1 | g))), quote(y ~ z))
