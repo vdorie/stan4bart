@@ -928,6 +928,14 @@ fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
         dimnames = list(observation = NULL, iterations = NULL, chain = dimnames(re_new[[1L]])$chain))
 }
 
+# response residuals, as lm's and dbarts's own: the observed response less the
+# posterior mean of its expected value, on the rows fitted() reports
+residuals.stan4bartFit <- function(object, ...)
+{
+  if (length(list(...)) > 0) warning("unused arguments ignored")
+  object$y - fitted(object, type = "ev", sample = "train")
+}
+
 predict.stan4bartFit <-
   # 'offset' must stay behind the defaulted arguments: undefaulted and third,
   # it captures a positionally-supplied 'type', e.g. predict(fit, newdata, "ev").

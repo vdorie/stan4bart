@@ -8,6 +8,18 @@ docs/design/dbarts-capability-adoption.md. An item graduates to its own
 docs/plans/<item>.md when it is picked up.
 
 items
+  plot-method: a plot() method for stan4bartFit, the counterpart of
+    dbarts 0.9-x's plot.rbart, which drew two base-graphics panels: the
+    residual sd's trace across burn-in and draws, one line per chain,
+    and posterior intervals for E(Y|x) against the observed response
+    (for a binary response, against the median probability). Scheduled
+    after dbarts bartcore merges to main and before the dbarts 1.0-0
+    submission (VD 2026-09-24), so it ships in 0.0-14. A short design
+    note first: which panels, where the warmup trace comes from given
+    save_warmup = FALSE by default (fit$adaptation holds a thinned
+    one), what a binary fit shows in place of sigma, and base graphics
+    only (no new dependency). residuals() landed alongside the dbarts
+    print.rbart/plot.rbart stubs; plot was the one 0.9-x method left.
   bart-args-forests-guard: the reserved-argument guard in
     stan4bart_fit.R (~:541) covers sigma/resid.prior/resid.dist/
     variance but not forests, so bart_args = list(forests = ...)

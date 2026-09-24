@@ -4,6 +4,7 @@
 \alias{stan4bart-generics}
 \alias{extract.stan4bartFit}
 \alias{fitted.stan4bartFit}
+\alias{residuals.stan4bartFit}
 \alias{predict.stan4bartFit}
 
 \title{Generic Functions for stan4bart Model Fits}
@@ -31,6 +32,8 @@
   sample = c("train", "test"),
   sample_new_levels = TRUE,
   \dots)
+
+\method{residuals}{stan4bartFit}(object, \dots)
 
 \method{predict}{stan4bartFit}(
   object, newdata,
@@ -123,6 +126,11 @@
   
   \code{fitted} returns a vector of the appropriate length by averaging the
   result of a call to \code{extract}.
+
+  \code{residuals} returns the response residuals on the training rows: the
+  observed response less \code{fitted(object, type = "ev")}, the posterior
+  mean of its expected value. For a binary response that expected value is
+  the probability of a 1.
 }
 \author{
   Vincent Dorie: \email{vdorie@gmail.com}.

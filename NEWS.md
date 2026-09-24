@@ -142,6 +142,11 @@
 
 ## New features
 
+* `residuals()` works on a `stan4bart` fit, returning the response residuals
+  on the training rows: the observed response less `fitted(type = "ev")`.
+  It is the counterpart of dbarts's retired `residuals.rbart`, so a
+  grouped-effects fit moved from `dbarts::rbart_vi` keeps it.
+
 * `bart_args` now reaches the whole model-level half of a `dbarts`
   specification, not just `dbartsControl`'s formals plus a hand-wired
   `k`/`power`/`base`/`split.probs`. The BART component's control/model/data

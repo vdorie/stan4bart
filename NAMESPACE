@@ -3,6 +3,7 @@ useDynLib(stan4bart, .registration = TRUE, .fixes = "C_")
 export(stan4bart)
 S3method(extract, stan4bartFit)
 S3method(fitted, stan4bartFit)
+S3method(residuals, stan4bartFit)
 S3method(predict, stan4bartFit)
 
 S3method(as.array, stan4bartFit)
