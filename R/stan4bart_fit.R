@@ -595,6 +595,13 @@ stan4bart_fit <-
     stop("bart_args cannot set ", paste0("'", reserved, "'", collapse = ", "),
          "; the parametric component draws the residual standard deviation and ",
          "the BART component conditions on it", call. = FALSE)
+  # 'forests' is reserved for a different reason: the Gibbs loop above wires a
+  # single BART forest, not dbarts's multi-forest 'forests' list. Refuse it
+  # here rather than let it ride the generic forwarding loop below, where it
+  # would only fail later, inside dbarts, with a less useful error.
+  if ("forests" %in% names(bart_args))
+    stop("bart_args cannot set 'forests'; stan4bart wires a single BART forest, ",
+         "not dbarts's multi-forest interface", call. = FALSE)
 
   bart_family <- if (is_continuous) "gaussian" else "probit"
   if (!is.null(bart_args[["family"]]) && !identical(bart_args[["family"]], bart_family))

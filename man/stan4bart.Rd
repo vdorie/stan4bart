@@ -329,9 +329,16 @@ stan4bart(formula,
       \code{dbarts::dbartsPriors$...} instead
       \item the remaining model-level arguments of
       \code{\link[dbarts]{dbartsSpec}} - \code{proposal.probs},
-      \code{monotone}, \code{interactions}, \code{blocks}, and \code{seed}.
-      Unlike the priors these are ordinary values, evaluated in the caller's
-      frame like any other argument
+      \code{monotone}, and \code{seed}. Unlike the priors these are ordinary
+      values, evaluated in the caller's frame like any other argument
+      \item \code{interactions} and \code{blocks}, dbarts's forest vocabulary
+      (see \code{\link[dbarts]{dbartsForests}}). Written as a call inside
+      \code{bart_args}, such as \code{interactions(max.order = 1)}, they
+      resolve to the dbarts constructor whether or not \code{dbarts} is
+      attached, and are evaluated in the caller's own frame, so a local
+      variable referenced inside the call is found. A specification
+      assembled beforehand, or passed on through a wrapper's \code{...},
+      has to be built with \code{dbarts::dbartsForests$...} instead
       \item \code{k}, \code{power}, \code{base}, and \code{split.probs},
       shorthand for the corresponding \code{node.prior} and \code{tree.prior}
       arguments. These are values too, not expressions, so they do not see

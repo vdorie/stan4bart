@@ -92,8 +92,21 @@ expect_error(fitWith(list(n.trees = 3, monotone = c(X1 = 1),
              "birth/death-only proposals")
 expect_error(fitWith(list(n.trees = 3, monotone = c(nosuchvariable = 1))),
              "unrecognized variable name")
-expect_error(fitWith(list(n.trees = 3, interactions = dbarts::interactions(max.order = 0L))),
+expect_error(fitWith(list(n.trees = 3, interactions = dbarts::dbartsForests$interactions(max.order = 0L))),
              "max.order")
+
+# interactions/blocks written as a call inside bart_args resolve in the
+# caller's own frame, so a local variable defined inside a user's wrapper
+# function is found - the same as a caller's own 'fixed' above, but for the
+# forest vocabulary rather than the prior one
+fitWithLocalGroups <- function() {
+  g <- c("X1", "X2")
+  set.seed(21)
+  stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
+            cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
+            bart_args = list(n.trees = 3, interactions = interactions(groups = g)))
+}
+expect_true(inherits(fitWithLocalGroups(), "stan4bartFit"))
 
 # the residual model belongs to the parametric component, not the forest
 for (reserved in c("sigma", "resid.prior", "resid.dist", "variance"))

@@ -218,6 +218,22 @@ stan4bart <-
   for (prior_name in intersect(names(dbarts::dbartsPriors),
                                called_names(mc[["bart_args"]])))
     assign(prior_name, function(...) match.call(), envir = defn_env)
+  # TODO: the same local-variable hazard applies to the priors above - a
+  # quoted call captured here is only evaluated later by dbartsSpec, with
+  # parentEnv set to stan4bart_fit's own frame rather than this one, so a
+  # local like chi(2, exp(g)) written inside a user function can miss g or
+  # pick up an unrelated one. interactions/blocks avoid this below by binding
+  # to the real constructor and evaluating immediately, in defn_env, whose
+  # parent is the caller's own frame; out of scope to redo the priors the
+  # same way here.
+  #
+  # interactions/blocks are dbarts's forest vocabulary, not the prior one:
+  # bind the called names straight to dbarts::dbartsForests$interactions/
+  # $blocks (the real constructors, not a quoting stand-in), so the call is
+  # built right here, in the user's own frame, as a value.
+  for (forest_name in intersect(c("interactions", "blocks"),
+                                called_names(mc[["bart_args"]])))
+    assign(forest_name, dbarts::dbartsForests[[forest_name]], envir = defn_env)
 
   bart_args <- eval(mc[["bart_args"]], envir = defn_env)
 
