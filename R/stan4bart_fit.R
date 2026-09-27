@@ -49,7 +49,10 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   # object's own external pointer. The object has to outlive the handle, which
   # C_stan4bart_create pins in its own pointer's protection slot.
   sampler.bart <- new("dbartsSampler", control.bart, model.bart, data.bart)
-  if (!is.null(active.bart)) sampler.bart$setActiveRows(active.bart)
+  # updateState = FALSE explicitly: dbarts's setters default to following
+  # control@updateState, and a user's bart_args updateState = TRUE must not
+  # populate $state on a sampler that has not run yet.
+  if (!is.null(active.bart)) sampler.bart$setActiveRows(active.bart, updateState = FALSE)
   sampler <- .Call(C_stan4bart_create, sampler.bart$getPointer(), control.bart,
                    data.stan, control.stan, control.common)
   if (control.common$verbose > 0L)

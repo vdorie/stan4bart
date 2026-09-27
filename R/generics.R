@@ -208,7 +208,10 @@ restoreBartSampler <- function(control, model, data, state, active = NULL) {
   sampler <- new("dbartsSampler", control, model, data)
   sampler$setState(state)
   sampler$state <- NULL
-  if (!is.null(active)) sampler$setActiveRows(active)
+  # updateState = FALSE explicitly: dbarts's setters default to following
+  # control@updateState, and a user's bart_args updateState = TRUE would
+  # otherwise repopulate $state right after the reset above.
+  if (!is.null(active)) sampler$setActiveRows(active, updateState = FALSE)
   sampler
 }
 
