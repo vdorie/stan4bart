@@ -153,9 +153,9 @@
   triple is built by `dbarts::dbartsSpec()`, exported by dbarts 1.0-0 for
   exactly this purpose, in place of a hand-assembled `dbartsModel` and a
   `dbarts:::parsePriors` call through a `:::` shim, so `tree.prior`,
-  `node.prior`, `proposal.probs`, `monotone`, `interactions()`, `blocks()`,
+  `leaf.prior`, `proposal.probs`, `monotone`, `interactions()`, `blocks()`,
   and `seed` all pass through and are validated by dbarts itself. Priors are
-  resolved in dbarts's own vocabulary, so `node.prior = normal(k = chi(1.25,
+  resolved in dbarts's own vocabulary, so `leaf.prior = normal(k = chi(1.25,
   Inf))` works whether or not dbarts is attached, and `k`/`power`/`base`/
   `split.probs` remain as shorthand for the priors they write into (giving
   both a shorthand and its prior is now an error). Draws for every previously

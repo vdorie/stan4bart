@@ -522,7 +522,7 @@ stan4bart_fit <-
     if (length(formals(callback)) != 3L) stop("callback function must take exactly 3 arguments")
   }
   
-  # have to make sure that end node priors that are constructed as in chi(df, scale)
+  # have to make sure that leaf priors that are constructed as in chi(df, scale)
   # work correctly
   if (is.null(bart_args)) bart_args <- list()
   if (!is.list(bart_args)) bart_args <- as.list(bart_args)
@@ -626,11 +626,11 @@ stan4bart_fit <-
   # 'k' and the cgm parameters remain spellable at the top level of bart_args,
   # as they were before the priors themselves were reachable
   if (!is.null(bart_args[["k"]])) {
-    if (!is.null(bart_args[["node.prior"]]))
-      stop("bart_args cannot set both 'k' and 'node.prior'", call. = FALSE)
+    if (!is.null(bart_args[["leaf.prior"]]) || !is.null(bart_args[["node.prior"]]))
+      stop("bart_args cannot set both 'k' and 'leaf.prior'", call. = FALSE)
     end_node_prior <- quote(normal(k = k))
     end_node_prior[[2L]] <- bart_args[["k"]]
-    spec_call[["node.prior"]] <- end_node_prior
+    spec_call[["leaf.prior"]] <- end_node_prior
   }
   tree_pars <- c("power", "base", "split.probs")
   tree_pars <- tree_pars[tree_pars %in% names(bart_args)]

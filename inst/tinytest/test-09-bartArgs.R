@@ -49,7 +49,7 @@ fitWith <- function(bart_args) {
 }
 
 # The priors themselves are reachable, and the k/power/base shorthands are
-# exactly the node.prior/tree.prior they write into. dbarts's prior vocabulary
+# exactly the leaf.prior/tree.prior they write into. dbarts's prior vocabulary
 # is resolved by dbarts, so a prior has to be spelled inline in the stan4bart
 # call - the same requirement 'chi' has always had.
 set.seed(21)
@@ -59,7 +59,7 @@ fit.k <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
 set.seed(21)
 fit.node <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
                       cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
-                      bart_args = list(n.trees = 3, node.prior = normal(k = 3)))
+                      bart_args = list(n.trees = 3, leaf.prior = normal(k = 3)))
 expect_equal(fit.k$bart_train, fit.node$bart_train)
 
 set.seed(21)
@@ -76,8 +76,8 @@ expect_equal(fit.pb$bart_train, fit.tree$bart_train)
 expect_error(
   stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
             cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
-            bart_args = list(k = 3, node.prior = normal(k = 2))),
-  "both 'k' and 'node.prior'")
+            bart_args = list(k = 3, leaf.prior = normal(k = 2))),
+  "both 'k' and 'leaf.prior'")
 expect_error(
   stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
             cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,

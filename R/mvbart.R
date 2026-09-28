@@ -162,7 +162,7 @@ mvbart <-
         dbCall$offset.test <- quote(rep(0.0, nTest))
       }
       if (!is.null(bart_args[["k"]]))
-        dbCall$node.prior <- bquote(normal(.(bart_args[["k"]])))
+        dbCall$leaf.prior <- bquote(normal(.(bart_args[["k"]])))
       samplers[[k]] <- eval(dbCall)
     }
 

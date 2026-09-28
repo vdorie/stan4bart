@@ -319,10 +319,10 @@ stan4bart(formula,
       \code{n.trees}; keeping trees can be costly in terms of memory, but is
       required to use \code{\link[=stan4bart-generics]{predict}}
       \item the prior arguments of \code{\link[dbarts]{dbartsSpec}} -
-      \code{tree.prior} and \code{node.prior}. These are \emph{expressions},
+      \code{tree.prior} and \code{leaf.prior}. These are \emph{expressions},
       not values: \code{dbarts} resolves them in its own prior vocabulary
       (see \code{\link[dbarts]{dbartsPriors}}), so a bare
-      \code{node.prior = normal(k = chi(1.25, Inf))} works whether or not
+      \code{leaf.prior = normal(k = chi(1.25, Inf))} works whether or not
       \code{dbarts} is attached. They must be written literally in the
       \code{stan4bart} call, since \code{bart_args} is read off it
       unevaluated; a prior assembled beforehand has to be built with
@@ -340,7 +340,7 @@ stan4bart(formula,
       assembled beforehand, or passed on through a wrapper's \code{...},
       has to be built with \code{dbarts::dbartsForests$...} instead
       \item \code{k}, \code{power}, \code{base}, and \code{split.probs},
-      shorthand for the corresponding \code{node.prior} and \code{tree.prior}
+      shorthand for the corresponding \code{leaf.prior} and \code{tree.prior}
       arguments. These are values too, not expressions, so they do not see
       \code{dbarts}'s prior-evaluation environment; write the prior out in
       full when that matters. Supplying both a shorthand and the prior it
