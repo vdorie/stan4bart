@@ -48,7 +48,7 @@ expect_error(extract(fit.nofixed,  "fixef"), "no unmodeled parameters")
 
 expect_error(extract(fit.binary, "sigma"), "binary outcome model")
 
-expect_error(extract(fit.norandom, "k"), "not fit with end-node sensitivity")
+expect_error(extract(fit.norandom, "k"), "not fit with leaf sensitivity")
 k <- extract(fit.k, "k")
 expect_equal(length(k), (4L - 2L) * 1L)
 k2 <- extract(fit.k, "k", combine_chains = FALSE)

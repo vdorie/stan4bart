@@ -209,6 +209,10 @@
   priors are unaffected - they were already restricted to non-shrinkage
   families.
 
+* `extract(type = "trees")` now carries a leading `forest` column (always
+  `1`, since stan4bart's BART component is single-forest), following
+  `dbarts::dbartsSampler$getTrees` in dbarts 1.0-0.
+
 ## Bug fixes
 
 * Fixed `bart_args` silently dropping any name that did not match a

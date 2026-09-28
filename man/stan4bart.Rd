@@ -450,7 +450,7 @@ stan4bart(formula,
   \item{\code{bart_varcount}}{BART variable counts}
   \item{\code{sigma}}{samples of residual standard error; not present for
   binary outcomes}
-  \item{\code{k}}{samples of the end-node sensitivity parameter; only present when
+  \item{\code{k}}{samples of the leaf sensitivity parameter; only present when
   it is modeled}
   \item{\code{ranef}}{samples of random effects, or modeled coefficients; will
   be a named list, with effects for each grouping factor}

@@ -363,7 +363,7 @@ extract.stan4bartFit <-
   if (type == "sigma" && is_bernoulli)
     stop("cannot extract 'sigma': binary outcome model does not have a residual standard error parameter")
   if (type == "k" && is.null(object$k))
-    stop("cannot extract 'k': model was not fit with end-node sensitivity as a modeled parameter")
+    stop("cannot extract 'k': model was not fit with leaf sensitivity as a modeled parameter")
   
   fixef_parameters <- grep("^(beta|gamma)\\.", dimnames(object$stan)[[1L]])
   ranef_parameters <- startsWith(dimnames(object$stan)[[1L]], "b.")
