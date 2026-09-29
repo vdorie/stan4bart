@@ -150,7 +150,7 @@ mvbart <-
     ## eval()'d rather than invoked with pre-computed prior objects.
     samplers <- vector("list", q)
     for (k in seq_len(q)) {
-      seedk <- if (is.na(chainSeed)) NA_integer_
+      seedk <- if (is.na(chainSeed)) NULL
                else as.integer((chainSeed %% (.Machine$integer.max - q - 1L)) + k)
       dfk <- data.frame(.y = Y[, k], Xdf, check.names = FALSE)
       vk <- var(Y[, k])
