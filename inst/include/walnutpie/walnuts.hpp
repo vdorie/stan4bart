@@ -13,9 +13,9 @@
 
 #include <Eigen/Dense>
 
-#include "walnuts/concepts.hpp"
-#include "walnuts/util.hpp"
-#include "walnuts/validate.hpp"
+#include "walnutpie/concepts.hpp"
+#include "walnutpie/util.hpp"
+#include "walnutpie/validate.hpp"
 
 namespace walnutpie::detail {
 

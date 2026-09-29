@@ -40,8 +40,8 @@ budget: est. ~1500-2200 lines net, but the headline is a large NET DELETION
   WalnutsSampler wrapper matching the StanSampler surface init.cpp consumes
   (~250-400), the FD + distributional test harnesses (~300), build/DESCRIPTION/
   author surgery (~small but delicate). Chiefly NEW: src/parametric_model.hpp (the
-  target), src/walnuts_sampler.{hpp,cpp} (the wrapper), inst/include/walnuts/* +
-  WALNUTS_LICENSE (vendored). EDITED: src/init.cpp (the Gibbs bridge), src/Makevars.in,
+  target), src/walnuts_sampler.{hpp,cpp} (the wrapper), inst/include/walnutpie/* +
+  WALNUTPIE_LICENSE (vendored). EDITED: src/init.cpp (the Gibbs bridge), src/Makevars.in,
   configure.ac, configure.win, DESCRIPTION, readme.md. DELETED at C4: everything Stan.
 
 window: no dbarts-side window; dbarts.h is frozen. The user-facing window is the
@@ -280,7 +280,7 @@ mandatory regardless (C1's headline gate). See Q(a) for the fork and costs.
   138-147). WALNUTS mass is DIAGONAL only (config.hpp InitChainConfig mass is a
   VectorXd; adaptive_walnuts.hpp MassEstimator is a Nutpie-style diagonal estimator,
   25-90) - matching stan4bart's diagonal metric; there is no dense-metric decision.
-  Vendor provenance: inst/include/walnuts/* + WALNUTS_LICENSE (MIT, (c) 2025 Bob
+  Vendor provenance: inst/include/walnutpie/* + WALNUTPIE_LICENSE (MIT, (c) 2025 Bob
   Carpenter) + the walnuts.hpp umbrella; C++20 (concepts) + Eigen (RcppEigen).
   VENDORED-VERSION note (VD's direction): the implementer pulls WALNUTS FRESH from
   https://github.com/flatironinstitute/walnuts at C1 and RECORDS THE UPSTREAM
@@ -347,7 +347,7 @@ C0. RECORD BASELINES (Stan still the only sampler). Two kinds, plus housekeeping
    C2/C3 ungateable.
 
 C1. VENDOR WALNUTS + the CONTINUOUS logp/grad functor + the TARGET + FD GATES (Stan
-   untouched and still running). Vendor inst/include/walnuts/* + WALNUTS_LICENSE +
+   untouched and still running). Vendor inst/include/walnutpie/* + WALNUTPIE_LICENSE +
    the walnuts.hpp umbrella FRESH from https://github.com/flatironinstitute/walnuts
    (VD's direction; RECORD the upstream commit hash in this plan's VENDORED-VERSION
    note and the landing note; bairrtt's copy is integration reference only - re-verify
@@ -360,7 +360,7 @@ C1. VENDOR WALNUTS + the CONTINUOUS logp/grad functor + the TARGET + FD GATES (S
    `.stan4bart_logdensity_grad(par, data)` returning {value, gradient} (bairrtt's
    irt_item_logdensity analog) and an R-side finite-difference checker (engine.R
    analog). CXX_STD -> CXX20 here (WALNUTS needs concepts; Stan compiles fine under
-   C++20 - verify the Stan translation unit still builds). Files: inst/include/walnuts/*,
+   C++20 - verify the Stan translation unit still builds). Files: inst/include/walnutpie/*,
    src/parametric_model.hpp (new), a small src/logdensity_export.cpp (new) + its
    .Call registration in init.cpp, R/ FD helper, tests/testthat/test-*-gradient.R
    (new), Makevars.in (CXX_STD), DESCRIPTION (LinkingTo add RcppEigen already present;
@@ -384,8 +384,8 @@ C1. VENDOR WALNUTS + the CONTINUOUS logp/grad functor + the TARGET + FD GATES (S
    VENDORED-VERSION (landed at C1). WALNUTS pulled FRESH from
    https://github.com/flatironinstitute/walnuts at commit
    5854be888e5432a103275466d7d0be95c7c5c67a (upstream date 2026-07-13, vendored
-   2026-07-15) into inst/include/{walnuts/*, walnuts.hpp, WALNUTS_LICENSE} +
-   WALNUTS_VERSION; upstream layout (include/walnuts/* + umbrella) matches
+   2026-07-15) into inst/include/{walnutpie/*, walnutpie.hpp, WALNUTPIE_LICENSE} +
+   WALNUTPIE_VERSION; upstream layout (include/walnuts/* + umbrella) matches
    bairrtt's, so no layout adaptation was needed. API drift vs the bairrtt-era
    snapshot is MINOR and does not reach C1: adaptive_walnuts.hpp / handlers.hpp /
    concepts.hpp / walnuts.hpp are byte-identical; the AdaptiveWalnuts -> freeze
@@ -690,9 +690,9 @@ Q(c) USER-FACING CONTROL-ARG + DIAGNOSTICS + AUTHOR-LIST COMPATIBILITY. FORK: th
   VD signs off the author-list surgery.
 
 Q(d) WALNUTS: VENDOR into stan4bart, or a SHARED dependency. FORK: bairrtt vendors
-  the headers (inst/include/walnuts, MIT, Bob Carpenter). Vendor identically
+  the headers (inst/include/walnutpie, MIT, Bob Carpenter). Vendor identically
   (RECOMMENDED): no CRAN dependency on a package that does not exist, MIT permits it,
-  cost is one WALNUTS_LICENSE file + one author entry + carrying the headers in the
+  cost is one WALNUTPIE_LICENSE file + one author entry + carrying the headers in the
   tree (a few hundred KB vs the tens of MB of StanHeaders being removed - still a
   massive net win). Shared LinkingTo a walnuts headers package: DRY across bairrtt +
   stan4bart. Cost: that package must be authored, published to CRAN, and version-

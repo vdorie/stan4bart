@@ -97,12 +97,12 @@ Two independent oracles validated this code, built BEFORE it was trusted (C1):
 ## The WALNUTS integration
 
 WALNUTS is vendored (not a CRAN/shared dependency - Q(d) of docs/plans/walnuts.md)
-into inst/include/{walnuts/*, walnuts.hpp, WALNUTS_LICENSE, WALNUTS_VERSION}, pulled
+into inst/include/{walnutpie/*, walnutpie.hpp, WALNUTPIE_LICENSE, WALNUTPIE_VERSION}, pulled
 FRESH from https://github.com/flatironinstitute/walnuts at commit
 5854be888e5432a103275466d7d0be95c7c5c67a (upstream date 2026-07-13, vendored
 2026-07-15; MIT, (c) 2025 Bob Carpenter) - bairrtt's copy was used only as an
 integration reference, re-verified against the fresh headers at C1 (see
-inst/include/WALNUTS_VERSION for the drift notes; the only drift, a `WarmupConfig`
+inst/include/WALNUTPIE_VERSION for the drift notes; the only drift, a `WarmupConfig`
 step-size convergence tolerance and an internal `detail::sample()` signature
 change, does not touch the per-chain path this package uses).
 
@@ -180,7 +180,7 @@ regenerated.
 
 Stan's `check_sampler_diagnostics` (R/stan4bart.R) used to warn on divergent
 transitions, max-treedepth transitions, and low E-BFMI (from `energy__`). The
-vendored WALNUTS `ChainHandler` concept (inst/include/walnuts/concepts.hpp)
+vendored WALNUTS `ChainHandler` concept (inst/include/walnutpie/concepts.hpp)
 surfaces only `position`/`lp`/`step_size`/`diag_inv_mass` (`GlobalHandler` adds a
 cross-chain `on_r_hat`, but this package never wires a `GlobalHandler` in: chains
 run as independent R-level processes/threads, not a single joint WALNUTS run, so

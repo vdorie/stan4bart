@@ -43,9 +43,9 @@
 #  endif
 #endif
 
-#include <walnuts/adaptive_walnuts.hpp>
-#include <walnuts/config.hpp>
-#include <walnuts/walnuts.hpp>
+#include <walnutpie/adaptive_walnuts.hpp>
+#include <walnutpie/config.hpp>
+#include <walnutpie/walnuts.hpp>
 
 #ifdef S4B_WALNUTS_SUPPRESS_DIAGNOSTIC
 #  ifdef __clang__

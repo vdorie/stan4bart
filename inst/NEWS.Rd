@@ -7,7 +7,7 @@
       \item Requires \pkg{dbarts} (>= 1.0-0) and a C++20 compiler. Results
             differ from earlier versions, including under a fixed seed.
       \item Stan is no longer used. The parametric component is drawn with the
-            WALNUTS sampler, so the name \code{stan_args} is kept but
+            WALNUTS sampler from the Walnutpie library, so the name \code{stan_args} is kept but
             configures that sampler. The NUTS tuning arguments
             (\code{adapt_gamma}, \code{adapt_kappa}, \code{adapt_t0},
             \code{adapt_init_buffer}, \code{adapt_term_buffer},

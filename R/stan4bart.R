@@ -297,7 +297,7 @@ check_sampler_diagnostics <- function(object, stan_args, n_upars)
 {
   # NUTS diagnostics (divergent transitions, max-treedepth transitions, low
   # E-BFMI) have no WALNUTS analog: the vendored ChainHandler concept
-  # (inst/include/walnuts/concepts.hpp) surfaces only position/lp/step_size/
+  # (inst/include/walnutpie/concepts.hpp) surfaces only position/lp/step_size/
   # diag_inv_mass, so divergent__/treedepth__/energy__ are written as
   # constant-zero Stan-layout placeholders by WalnutsSampler::run
   # (src/walnuts_sampler.cpp) purely so result$stan keeps its Stan-era row

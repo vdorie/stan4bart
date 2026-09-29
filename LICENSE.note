@@ -2,21 +2,18 @@ stan4bart is licensed under GPL (>= 3).
 
 It bundles third-party components under compatible terms:
 
-WALNUTS sampler headers
-  Location:  inst/include/walnuts/*, inst/include/walnuts.hpp
-  License:   MIT (see inst/include/WALNUTS_LICENSE)
+Walnutpie headers (the WALNUTS sampler)
+  Location:  inst/include/walnutpie/*, inst/include/walnutpie.hpp
+  License:   MIT (see inst/include/WALNUTPIE_LICENSE)
   Copyright: (c) 2025--2026 by the Walnutpie Developers
-  Provenance: vendored from https://github.com/flatironinstitute/walnuts
+  Provenance: vendored from https://github.com/flatironinstitute/walnutpie
               at commit f3c1833117d9d2f76db1671d70d2ce0810ad8436
-              (see inst/include/WALNUTS_VERSION). Upstream has renamed the
-              library to walnutpie; this package keeps the walnuts/ paths.
-              Two edits are made to the vendored files and no others: the
-              include-path rewrite that makes those paths resolve, and one
-              added method, refresh_logp_grad(), without which a target
-              swapped between transitions is scored stale. Both are set out
-              in inst/include/WALNUTS_VERSION.
+              (see inst/include/WALNUTPIE_VERSION). The headers are upstream
+              verbatim except for one added method, refresh_logp_grad(),
+              without which a target swapped between transitions is scored
+              stale; it is set out in inst/include/WALNUTPIE_VERSION.
   The MIT license permits redistribution within a GPL-licensed work; the
-  copyright notice and permission notice are retained in WALNUTS_LICENSE.
+  copyright notice and permission notice are retained in WALNUTPIE_LICENSE.
 
 Other bundled sources retain their upstream terms:
   R/rstanarm_functions.R   derived from rstanarm (GPL-3)

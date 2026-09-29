@@ -4,8 +4,8 @@
 
 * The parametric conditional (fixed effects, lme4-style random effects, and
   the residual sd for continuous responses) is now drawn with a hand-derived
-  analytic log-posterior gradient and the WALNUTS sampler (vendored from
-  <https://github.com/flatironinstitute/walnuts>, commit f3c1833; MIT
+  analytic log-posterior gradient and the WALNUTS sampler (from the Walnutpie library, vendored from
+  <https://github.com/flatironinstitute/walnutpie>, commit f3c1833; MIT
   licensed, (c) 2025--2026 by the Walnutpie Developers), replacing the
   embedded Stan/NUTS sampler for both continuous and binary response
   families. This is a sampler swap only: the outer BART-vs-parametric Gibbs
@@ -27,8 +27,9 @@
   reference sizes and is unchanged (~273 MB throughout).
 
 * Dependencies: StanHeaders, BH, and RcppParallel are no longer linked to or
-  imported. C++20 is now required (`SystemRequirements: C++20`). WALNUTS
-  (MIT license, Bob Carpenter) is vendored under `inst/include/walnuts`.
+  imported. C++20 is now required (`SystemRequirements: C++20`). Walnutpie
+  (MIT license, the Walnutpie Developers) is vendored under
+  `inst/include/walnutpie`.
 
 * The warmup-phase initial mass is now seeded from the log-posterior gradient
   at each chain's initial unconstrained position (`(1 - s) * |grad| + s`, a

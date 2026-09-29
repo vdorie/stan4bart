@@ -9,12 +9,12 @@
 
 #include <Eigen/Dense>
 
-#include "walnuts/adam.hpp"
-#include "walnuts/concepts.hpp"
-#include "walnuts/config.hpp"
-#include "walnuts/online_moments.hpp"
-#include "walnuts/util.hpp"
-#include "walnuts/walnuts.hpp"
+#include "walnutpie/adam.hpp"
+#include "walnutpie/concepts.hpp"
+#include "walnutpie/config.hpp"
+#include "walnutpie/online_moments.hpp"
+#include "walnutpie/util.hpp"
+#include "walnutpie/walnuts.hpp"
 
 namespace walnutpie::detail {
 

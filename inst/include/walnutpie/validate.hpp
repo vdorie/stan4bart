@@ -9,7 +9,7 @@
 
 #include <Eigen/Dense>
 
-#include "walnuts/concepts.hpp"
+#include "walnutpie/concepts.hpp"
 
 namespace walnutpie::detail {
 
