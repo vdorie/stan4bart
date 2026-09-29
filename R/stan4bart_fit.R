@@ -543,16 +543,21 @@ stan4bart_fit <-
     names(bart_args)[names(bart_args) == "rngSeed"] <- "seed"
   }
 
+  # dbarts spells the leaf prior 'leaf.prior'; dbartsSpec does not take the
+  # old name, so it is refused here naming the new one rather than reported as
+  # unrecognized
+  if ("node.prior" %in% names(bart_args))
+    stop("bart_args: 'node.prior' is now 'leaf.prior'", call. = FALSE)
+
   # every bart_args name has to be consumed by something below - either a
   # dbartsControl/dbartsSpec formal, one of the k/power/base/split.probs
-  # shorthands, or 'resid.dist'/'resid.prior' (reserved further down alongside
-  # the other residual-model names, though neither is an actual dbarts formal
-  # any more - both now ride the family object and are only tombstones on
-  # dbartsSpec) - or it is silently dropped rather than reaching the sampler.
+  # shorthands, or 'sigma'/'resid.dist'/'resid.prior' (none a dbartsSpec
+  # formal, all reserved further down alongside the other residual-model
+  # names) - or it is silently dropped rather than reaching the sampler.
   known_bart_args <- unique(c(names(formals(dbarts::dbartsControl)),
                               names(formals(dbarts::dbartsSpec)),
                               "k", "power", "base", "split.probs",
-                              "resid.dist", "resid.prior"))
+                              "sigma", "resid.dist", "resid.prior"))
   unknown_bart_args <- setdiff(names(bart_args), known_bart_args)
   if (length(unknown_bart_args) > 0L)
     stop("bart_args has unrecognized name",
@@ -590,9 +595,8 @@ stan4bart_fit <-
   # dbarts's one home for that prior, and can carry neither a residual prior
   # nor a residual distribution nor a variance forest of its own; the
   # response family otherwise follows stan4bart's own 'family' argument.
-  # dbartsSpec spells the creation-time estimate 'sigest' now; 'sigma' still
-  # reaches the same formal for one release (dbarts tombstone), so both
-  # names are reserved.
+  # dbartsSpec spells the creation-time estimate 'sigest'; 'sigma' is its
+  # 0.9-x spelling on dbarts, so both names are reserved.
   reserved <- intersect(names(bart_args), c("sigma", "sigest", "resid.prior", "resid.dist", "variance"))
   if (length(reserved) > 0L)
     stop("bart_args cannot set ", paste0("'", reserved, "'", collapse = ", "),
@@ -626,7 +630,7 @@ stan4bart_fit <-
   # 'k' and the cgm parameters remain spellable at the top level of bart_args,
   # as they were before the priors themselves were reachable
   if (!is.null(bart_args[["k"]])) {
-    if (!is.null(bart_args[["leaf.prior"]]) || !is.null(bart_args[["node.prior"]]))
+    if (!is.null(bart_args[["leaf.prior"]]))
       stop("bart_args cannot set both 'k' and 'leaf.prior'", call. = FALSE)
     end_node_prior <- quote(normal(k = k))
     end_node_prior[[2L]] <- bart_args[["k"]]

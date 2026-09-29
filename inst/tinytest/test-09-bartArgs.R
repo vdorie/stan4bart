@@ -113,6 +113,10 @@ for (reserved in c("sigma", "resid.prior", "resid.dist", "variance"))
   expect_error(fitWith(structure(list(3, 1), names = c("n.trees", reserved))),
                paste0("cannot set '", reserved, "'"))
 
+# the leaf prior's 0.9-x name is refused naming the 1.0-0 one
+expect_error(fitWith(list(n.trees = 3, node.prior = quote(normal(2)))),
+             "'node.prior' is now 'leaf.prior'")
+
 # the response family follows the response, not bart_args
 expect_error(fitWith(list(n.trees = 3, family = "logistic")),
              "must be \"gaussian\"")
