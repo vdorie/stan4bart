@@ -15,6 +15,7 @@ using std::snprintf;
 #include <cstring> // memcpy
 #include <exception>
 #include <memory> // unique_ptr
+#include <new> // placement new
 #include <set> // external pointers set
 #include <vector>
 
@@ -231,10 +232,11 @@ extern "C" {
     dbarts_sampler_sampleTreesFromPrior(sampler.bartSampler);
     
     // draw once before running; only the training fits are needed
-    std::vector<double> firstDraw(n);
+    // on R's transient stack, so a raise from the run frees it with the call
+    double* firstDraw = reinterpret_cast<double*>(R_alloc(n, sizeof(double)));
     dbarts_results firstResults = {};
     firstResults.structSize = sizeof(firstResults);
-    firstResults.train = firstDraw.data();
+    firstResults.train = firstDraw;
     dbarts_sampler_run(sampler.bartSampler, 0, 1, &firstResults);
     
     for (size_t j = 0; j < n; ++j) firstDraw[j] -= sampler.bartOffset[j];
@@ -243,7 +245,7 @@ extern "C" {
       // Override with user supplied bart offset
       std::memcpy(sampler.stanOffset, sampler.userOffset, n * sizeof(double));
     } else {
-      std::memcpy(sampler.stanOffset, firstDraw.data(), n * sizeof(double));
+      std::memcpy(sampler.stanOffset, firstDraw, n * sizeof(double));
       if (sampler.userOffset != NULL && sampler.offsetType == OFFSET_DEFAULT)
         for (size_t j = 0; j < n; ++j)
           sampler.stanOffset[j] += sampler.userOffset[j];
@@ -438,16 +440,26 @@ extern "C" {
       ++protectCount;
     }
     
-    stan4bart::IterableBartResults* bartSamples = NULL;
-    // allocate storage for results
-    
+    // allocate storage for results: the BART draws land in the R list that
+    // is returned, PROTECTed here, so a dbarts entry that raises mid-loop -
+    // an interrupt, or a warning a handler turns into an error - leaves
+    // nothing for this frame to free
     size_t numStorageSamples = sampler.keepFits ? numIter : 1;
 
-    if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART)
-      bartSamples = new stan4bart::IterableBartResults(
-        sampler.numObservations,
-        dbarts_sampler_numPredictors(sampler.bartSampler),
+    SEXP bartResultsExpr = R_NilValue;
+    stan4bart::IterableBartResults* bartSamples = NULL;
+    if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {
+      size_t numPredictors = dbarts_sampler_numPredictors(sampler.bartSampler);
+      bartResultsExpr = PROTECT(stan4bart::allocateBartResultsExpr(
+        sampler.numObservations, numPredictors, sampler.numTestObservations,
+        numStorageSamples, sampler.kIsSampled));
+      ++protectCount;
+      bartSamples = static_cast<stan4bart::IterableBartResults*>(
+        static_cast<void*>(R_alloc(1, sizeof(stan4bart::IterableBartResults))));
+      new (bartSamples) stan4bart::IterableBartResults(
+        bartResultsExpr, sampler.numObservations, numPredictors,
         sampler.numTestObservations, numStorageSamples, sampler.kIsSampled);
+    }
     if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
       sampler.paramSampler->sample_writer.resize(sampler.paramSampler->num_pars, numStorageSamples);
     
@@ -666,7 +678,7 @@ extern "C" {
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_STAN)
         SET_VECTOR_ELT(resultExpr, pos++, createStanResultsExpr(sampler.paramSampler->sample_writer));
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART)
-        SET_VECTOR_ELT(resultExpr, pos++, stan4bart::createBartResultsExpr(*bartSamples));
+        SET_VECTOR_ELT(resultExpr, pos++, bartResultsExpr);
       if (sampler.callback != R_NilValue)
         SET_VECTOR_ELT(resultExpr, pos, callbackResults);
       
@@ -692,8 +704,6 @@ extern "C" {
       UNPROTECT(1);
     }
     
-    delete bartSamples;
-
     UNPROTECT(protectCount);
     
     return(resultExpr);
