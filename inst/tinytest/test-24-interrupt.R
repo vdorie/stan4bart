@@ -14,6 +14,7 @@ hooks <- tryCatch(
 if (is.null(hooks) || !identical(hooks$numParameters, 3L)) {
   exit_file("dbarts' count hooks are not the ones this file drives")
 }
+# returns the slow-count threshold it replaced, so a caller can put it back
 countHooks <- function(slowSeconds = NA_real_, interruptAfterPolls = NA_integer_) {
   invisible(.Call(hooks, as.double(slowSeconds), FALSE,
                   as.integer(interruptAfterPolls)))
@@ -51,8 +52,8 @@ expect_equal(after$stan, before$stan)
 # a monotone component whose leaf-order counts are slow warns once per fit:
 # warmup and sampling run on one sampler, and dbarts warns once per sampler
 slowWarnings <- local({
-  on.exit(countHooks(slowSeconds = 1))
-  countHooks(slowSeconds = -1)
+  previous <- countHooks(slowSeconds = -1)
+  on.exit(countHooks(slowSeconds = previous))
   count <- 0L
   withCallingHandlers(
     fitOnce(bart_args = list(
