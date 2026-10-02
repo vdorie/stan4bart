@@ -80,6 +80,20 @@ items
     n.chains on this route and never sets cores, so the fit silently
     runs 10 chains at this package's own iter/warmup defaults - 5x the
     work asked for, and the single largest factor. Report that upward.
+  per-chain-leaf-prior-anchor: each chain's BART sampler re-anchors its
+    response transform on its own offsets through warmup, so under a
+    k-named leaf prior the chains end warmup with different priors in
+    response units: anchors 2.82 and 2.50, centres 2.28 and 2.75, in a
+    two-chain fit measured at dbarts 2ca15722. dbarts does not check
+    that samplers whose chains are combined share a prior (VD
+    2026-10-02: the enforcement is stan4bart's business). Once dbarts
+    converts a restored state into the restoring sampler's units, the
+    sampler rebuilt for kept-tree prediction reports the prior of its
+    own creation, which no chain drew under; predictions are unaffected.
+    To settle: whether the chains should share one anchor (fixed before
+    warmup, or agreed at its end), and whether 0.0-13 against dbarts
+    0.9-x behaved the same, which has not been checked. VD 2026-10-02:
+    look at it later.
   ranef-shared-level: the shared level of the group intercepts does not
     mix - lag-1 0.97-0.99 and ESS 1.5-19 per 1000 on every design at
     every skip in benchmarks/baselines/re-scale-BASELINE.csv. It is
