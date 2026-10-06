@@ -1,6 +1,6 @@
 # An interrupt during a fit, and the slow-count warning of a monotone BART
-# component. dbarts' run polls for R's interrupt and turns it into an error
-# that unwinds through stan4bart's sweep loop; the loop's draws land in R
+# component. dbarts' run polls for R's interrupt and raises it as R's interrupt
+# condition, which unwinds through stan4bart's sweep loop; the loop's draws land in R
 # storage, so nothing is stranded and a later fit is unaffected. The interrupt
 # is injected through dbarts' internal count hooks, which report an interrupt
 # on the Nth poll without touching R's signal state. They are an internal
@@ -39,10 +39,10 @@ before <- fitOnce()
 interrupted <- local({
   on.exit(countHooks(interruptAfterPolls = 0L))
   countHooks(interruptAfterPolls = 5L)
-  tryCatch(fitOnce(), error = conditionMessage)
+  tryCatch(fitOnce(), interrupt = function(cond) class(cond),
+           error = conditionMessage)
 })
-expect_true(is.character(interrupted) &&
-            grepl("sampler run interrupted", interrupted))
+expect_equal(interrupted, c("interrupt", "condition"))
 
 # a fresh fit afterwards is the fit it would have been
 after <- fitOnce()
