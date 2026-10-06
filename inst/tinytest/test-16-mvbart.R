@@ -158,14 +158,15 @@ if (at_home()) {
   }
   indepBart <- function(Y, X, Xtest, n.trees, n.burn, n.save, seed = 21L) {
     q <- ncol(Y); nT <- nrow(Xtest)
-    ctrl <- dbarts::dbartsControl(n.chains = 1L, n.threads = 1L, n.trees = n.trees,
+    ctrl <- dbarts::dbartsControl(n.chains = 1L, n.threads = 1L,
                                   n.burn = 0L, n.samples = 1L, updateState = FALSE,
                                   verbose = FALSE)
     fTest <- array(0.0, c(nT, q, n.save)); sigma <- matrix(0.0, n.save, q)
     for (k in seq_len(q)) {
       dfk <- data.frame(.y = Y[, k], X)
       s <- eval(bquote(dbarts::dbarts(.y ~ ., data = dfk, test = Xtest,
-                                      control = ctrl, seed = .(as.integer(seed + k)))))
+                                      control = ctrl, seed = .(as.integer(seed + k)),
+                                      forests = list(dbarts::dbartsForests$forest(n.trees = .(n.trees))))))
       for (it in seq_len(n.burn)) s$run(0L, 1L)
       for (it in seq_len(n.save)) {
         r <- s$run(0L, 1L); fTest[, k, it] <- r$test[, 1L]; sigma[it, k] <- r$sigma[1L]
@@ -207,3 +208,13 @@ expect_error(mvbart(cbind(y1, y2) ~ x1 + x2 + x3, data = df[tr, ],
                     n.samples = 2L, n.burn = 1L, n.chains = 1L, n.trees = 3L,
                     seed = 5L, bart_args = list(seed = 5L)),
              "cannot set the rng seed")
+
+# the tree count reaches each equation's forest, and bart_args cannot state one
+fitTrees <- function(n.trees)
+  mvbart(cbind(y1, y2) ~ x1 + x2 + x3, data = df[tr, ],
+         n.samples = 5L, n.burn = 2L, n.chains = 1L, n.trees = n.trees, seed = 5L)
+expect_false(identical(fitTrees(7L)$train, fitTrees(8L)$train))
+expect_error(mvbart(cbind(y1, y2) ~ x1 + x2 + x3, data = df[tr, ],
+                    n.samples = 2L, n.burn = 1L, n.chains = 1L, n.trees = 7L,
+                    seed = 5L, bart_args = list(n.trees = 99L)),
+             "'n.trees'")

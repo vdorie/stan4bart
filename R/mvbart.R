@@ -118,8 +118,7 @@ mvbart <-
   ## Each sweep advances every forest by a single Gibbs step (n.burn = 0,
   ## n.samples = 1); the OUTER loop here supplies burn-in and thinning.
   ctrlCall <- quote(dbarts::dbartsControl(n.chains = 1L, n.threads = 1L,
-                                          n.trees = n.trees, n.burn = 0L,
-                                          n.samples = 1L, updateState = FALSE,
+                                          n.burn = 0L, n.samples = 1L, updateState = FALSE,
                                           verbose = FALSE))
   ctrlFormals <- names(formals(dbarts::dbartsControl))
   ## a bart_args name that matches no control formal used to be dropped in
@@ -129,6 +128,8 @@ mvbart <-
   ## spelling of it is accepted here.
   if (any(c("seed", "rngSeed") %in% names(bart_args)))
     stop("bart_args cannot set the rng seed; use mvbart's own 'seed' argument")
+  if ("n.trees" %in% names(bart_args))
+    stop("bart_args cannot set 'n.trees'; use mvbart's own 'n.trees' argument")
   unknown <- setdiff(names(bart_args), c(ctrlFormals, "k"))
   if (length(unknown) > 0L)
     stop("bart_args has unrecognized name", if (length(unknown) > 1L) "s" else "", ": ",
@@ -156,7 +157,8 @@ mvbart <-
       vk <- var(Y[, k])
       dbCall <- bquote(dbarts::dbarts(.y ~ ., data = dfk,
                                       family = gaussian(sigma = fixed(.(vk))),
-                                      control = control, seed = .(seedk)))
+                                      control = control, seed = .(seedk),
+                                      forests = list(dbarts::dbartsForests$forest(n.trees = .(n.trees)))))
       if (hasTest) {
         dbCall$test <- quote(Xtest)
         dbCall$offset.test <- quote(rep(0.0, nTest))
