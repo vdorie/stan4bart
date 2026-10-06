@@ -29,6 +29,16 @@ if (FALSE) getRanef <- function(group, samples) {
   res
 }
 
+# one whole positive cut count per BART column, from one count or one per column
+resolve_n_cuts <- function(n.cuts, n.cols)
+{
+  if (!is.numeric(n.cuts) || !all(is.finite(n.cuts)) ||
+      !(length(n.cuts) %in% c(1L, n.cols)) ||
+      any(n.cuts < 1) || any(n.cuts != round(n.cuts)))
+    stop("'n.cuts' must be one positive whole number, or one per BART column", call. = FALSE)
+  rep_len(as.integer(n.cuts), n.cols)
+}
+
 # putting this out here so we can export it when parallelizing
 stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model.bart, data.stan, control.stan, control.common, group, active.bart = NULL)
 {
@@ -556,7 +566,7 @@ stan4bart_fit <-
   # names) - or it is silently dropped rather than reaching the sampler.
   known_bart_args <- unique(c(names(formals(dbarts::dbartsControl)),
                               names(formals(dbarts::dbartsSpec)),
-                              "k", "power", "base", "split.probs",
+                              "k", "power", "base", "split.probs", "n.cuts",
                               "sigma", "resid.dist", "resid.prior"))
   unknown_bart_args <- setdiff(names(bart_args), known_bart_args)
   if (length(unknown_bart_args) > 0L)
@@ -569,18 +579,17 @@ stan4bart_fit <-
                                               n.thin = skip.bart, n.threads = 1L,
                                               updateState = FALSE))
   for (name in intersect(names(bart_args), setdiff(names(formals(dbarts::dbartsControl)),
-                                                   names(control_call))))
+                                                   c(names(control_call), "n.cuts"))))
   {
     control_call[[name]] <- bart_args[[name]]
   }
-  # n.cuts is already picked up by the loop above when supplied in bart_args
-  # (it is a dbartsControl formal), and dbartsControl() coerces and validates
-  # it there - no separate assignment into the slot is needed or wanted.
   control.bart <- eval(control_call)
 
   if (length(weights) > 0L) data.bart@weights <- weights
 
-  data.bart@n.cuts <- rep_len(control.bart@n.cuts, ncol(data.bart@x))
+  # n.cuts lives on the data object; when not given, dbarts's default stands
+  if ("n.cuts" %in% names(bart_args))
+    data.bart@n.cuts <- resolve_n_cuts(bart_args[["n.cuts"]], ncol(data.bart@x))
   evalEnv <- sys.frame(sys.nframe())
 
   # dbarts::dbartsSpec resolves the control/model/data triple and the family

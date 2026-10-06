@@ -163,11 +163,20 @@ expect_error(fitWith(list(n.trees = 3, seed = 1L, rngSeed = 1L)),
 expect_error(fitWith(list(n.trees = 3, notAnArgument = 1)),
              "'notAnArgument'")
 
-# n.cuts (a double, as arrives from ordinary R arithmetic) reaches the
-# dbartsControl slot properly coerced to integer, and the control object
-# validates
-fit.nCuts <- fitWith(list(n.trees = 3, n.cuts = 100, keepTrees = TRUE))
+# n.cuts (a double, as arrives from ordinary R arithmetic) is written to the
+# data object as whole counts, one per BART column; the default cannot pass
+fit.nCuts <- fitWith(list(n.trees = 3, n.cuts = 20, keepTrees = TRUE))
 expect_inherits(fit.nCuts, "stan4bartFit")
-control.nCuts <- fit.nCuts$state.bart$control
-expect_equal(control.nCuts@n.cuts, 100L)
-expect_true(validObject(control.nCuts))
+data.nCuts <- fit.nCuts$state.bart$data
+expect_equal(data.nCuts@n.cuts, rep(20L, 3L))
+expect_true(validObject(fit.nCuts$state.bart$control))
+fit.nCutsDouble <- fitWith(list(n.trees = 3, n.cuts = 100, keepTrees = TRUE))
+expect_equal(fit.nCutsDouble$state.bart$data@n.cuts, rep(100L, 3L))
+
+# a 20-cut fit is not the default fit under one seed
+fit.defaultCuts <- fitWith(list(n.trees = 3))
+expect_false(identical(fit.nCuts$bart_train, fit.defaultCuts$bart_train))
+
+# a bad count is refused naming n.cuts
+for (bad in list(0, -5, 2.5, NA, NA_real_, "20", c(1, 2), Inf))
+  expect_error(fitWith(list(n.trees = 3, n.cuts = bad)), "'n.cuts'")
