@@ -158,5 +158,8 @@ items
     the older side against the older dbarts is the only honest pairing.
     This is how NEWS.md's 53-95x was derived; see the cb809b1 MANIFEST
     row.
+  test-cores-literal: inst/tinytest/test-01-continuous.R passes a literal
+    cores = 4 inside its at_home block; tests pass at most 2 cores (the
+    machine is shared with other jobs). Before the release.
   release: stan4bart 0.0-14, in lockstep with dbarts 1.0-0. dbarts
     ships first; its TODO owns the ordered procedure. LAST.
