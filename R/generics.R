@@ -206,10 +206,11 @@ get_samples <- function(expr, include_warmup, only_warmup)
 # re-derives it from a response spanning the recorded range and then returns
 # the fit's response with the mapping locked. That lands on the recorded range
 # only while the sampler holds no offset, so data carrying one is refused. A
-# binary response's mapping is fixed, and takes reanchor = FALSE. The state is dropped from each object
-# afterwards because this fit retains its own serializable copy (state.bart)
-# and must not write a second one into saveRDS; the dead-pointer rebuild after
-# a reload is getBartSampler's below, not dbarts's transparent re-creation.
+# binary response's mapping is fixed, and takes reanchor = FALSE. The state is
+# dropped from each object afterwards because this fit retains its own
+# serializable copy (state.bart) and must not write a second one into saveRDS;
+# the dead-pointer rebuild after a reload is getBartSampler's below, not
+# dbarts's transparent re-creation.
 # 'active' is the probit/ordinal active-row mask a binary fit's 0/1 weights
 # resolved to (see dbarts::dbartsSpec); like the state, it does not ride the
 # sampler's saved state and has to be reinstalled on every re-creation.
