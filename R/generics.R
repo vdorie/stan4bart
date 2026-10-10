@@ -227,7 +227,7 @@ restoreBartSampler <- function(control, model, data, state, active = NULL, reanc
                           updateScale = TRUE, updateState = FALSE)
       sampler$setResponse(data@y, updateScale = FALSE, updateState = FALSE)
     }
-    sampler$setState(state.chain)
+    sampler$setState(state.chain, forceUpdate = TRUE)
     sampler$state <- NULL
     if (!is.null(active)) sampler$setActiveRows(active, updateState = FALSE)
     sampler
