@@ -204,8 +204,9 @@ get_samples <- function(expr, include_warmup, only_warmup)
 # each chain's own is put at the mapping its state records before the install.
 # The mapping is the range of the response less the offset, so 'reanchor'
 # re-derives it from a response spanning the recorded range and then returns
-# the fit's response with the mapping locked. A binary response's mapping is
-# fixed, and takes reanchor = FALSE. The state is dropped from each object
+# the fit's response with the mapping locked. That lands on the recorded range
+# only while the sampler holds no offset, so data carrying one is refused. A
+# binary response's mapping is fixed, and takes reanchor = FALSE. The state is dropped from each object
 # afterwards because this fit retains its own serializable copy (state.bart)
 # and must not write a second one into saveRDS; the dead-pointer rebuild after
 # a reload is getBartSampler's below, not dbarts's transparent re-creation.
@@ -213,6 +214,8 @@ get_samples <- function(expr, include_warmup, only_warmup)
 # resolved to (see dbarts::dbartsSpec); like the state, it does not ride the
 # sampler's saved state and has to be reinstalled on every re-creation.
 restoreBartSampler <- function(control, model, data, state, active = NULL, reanchor = FALSE) {
+  if (reanchor && !is.null(data@offset))
+    stop("internal error: cannot restore the BART samplers of a continuous fit from data carrying an offset")
   lapply(state, function(state.chain) {
     sampler <- new("dbartsSampler", control, model, data)
     # updateState = FALSE explicitly: dbarts's setters default to following

@@ -111,7 +111,11 @@
       \item \code{"trees"} - a data frame of flatted trees; see the subsection
       on extracted trees in \code{\link[dbarts]{bart}} and note that stan4bart variable
       names can be found in the \code{bartData@x} element of a fitted stan4bart
-      model
+      model. The \code{chain} column is present only for a fit with more than
+      one chain. For a continuous response, each chain's BART sampler fixes
+      its own internal scale during warmup, and a leaf's \code{value} is on
+      the internal scale of its chain: leaf values are neither in units of the
+      response nor comparable across chains
       \item \code{"callback"} - if a callback function was provided while
       fitting, the results of that for each sample
     }

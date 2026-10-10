@@ -131,6 +131,31 @@ local({
   expect_equal(predict(fit2, df, type = "ev"), extract(fit, "ev"), tolerance = 1e-10)
   expect_identical(length(stan4bart:::getBartSampler(fit2)), 3L)
   expect_identical(extract(fit2, "trees"), extract(fit, "trees"))
+
+  # each restored sampler reports the mapping its chain recorded, as the
+  # width and the midpoint dbarts's getLeafPrior reads off the sampler
+  for (restored in list(fit, fit2)) for (i in seq_len(3L)) {
+    leafPrior <- stan4bart:::getBartSampler(restored)[[i]]$getLeafPrior()
+    expect_identical(leafPrior$response.scale, mappings[2L, i] - mappings[1L, i])
+    expect_equal(leafPrior$response.shift, mean(mappings[, i]), tolerance = 1e-12)
+  }
+
+  # the re-anchor lands on the recorded mapping only with no offset in force
+  restore <- fit$state.bart
+  restore$data@offset <- double(nrow(df))
+  expect_error(stan4bart:::restoreBartSampler(restore$control, restore$model, restore$data,
+                                              restore$state, restore$active, TRUE),
+               "carrying an offset", fixed = TRUE)
+
+  # the reloaded trees are tied to the fits the run stored: a leaf's value is
+  # its share of the fit on its chain's mapping, so over a draw's leaves the
+  # values weighted by their row counts sum to that draw's stored fits
+  trees <- extract(fit2, "trees")
+  leaves <- trees[trees$var == -1L, ]
+  leafSums <- tapply(leaves$n * leaves$value, list(leaves$sample, leaves$chain), sum)
+  storedSums <- sweep(sweep(leafSums, 2L, mappings[2L, ] - mappings[1L, ], "*"), 2L,
+                      nrow(df) * colMeans(mappings), "+")
+  expect_equal(storedSums, apply(stored, c(2L, 3L), sum), tolerance = 1e-10, check.attributes = FALSE)
 })
 
 # a binary fit's mapping is fixed, and its kept trees replay to its stored fits
