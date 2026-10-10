@@ -86,10 +86,11 @@ items
     response units: anchors 2.82 and 2.50, centres 2.28 and 2.75, in a
     two-chain fit measured at dbarts 2ca15722. dbarts does not check
     that samplers whose chains are combined share a prior (VD
-    2026-10-02: the enforcement is stan4bart's business). Once dbarts
-    converts a restored state into the restoring sampler's units, the
-    sampler rebuilt for kept-tree prediction reports the prior of its
-    own creation, which no chain drew under; predictions are unaffected.
+    2026-10-02: the enforcement is stan4bart's business). Kept-tree
+    prediction restores one sampler per chain, each at its chain's
+    transform, so each reports the prior its chain drew under and
+    extract(type = "trees") reports each chain's leaf values in that
+    chain's own internal units.
     To settle: whether the chains should share one anchor (fixed before
     warmup, or agreed at its end), and whether 0.0-13 against dbarts
     0.9-x behaved the same, which has not been checked. VD 2026-10-02:

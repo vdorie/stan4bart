@@ -3,9 +3,11 @@
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 
 testData <- generateFriedmanData(120, TRUE, TRUE, FALSE)
+binaryData <- generateFriedmanData(120, TRUE, TRUE, TRUE)
 rm(generateFriedmanData)
 
 df <- with(testData, data.frame(x, g.1, g.2, y, z))
+df_b <- with(binaryData, data.frame(x, g.1, g.2, y, z))
 
 # Run an expression in a FRESH R session (no callr dependency): write a script
 # that inherits this session's library paths, run it with Rscript, and read
@@ -92,4 +94,60 @@ local({
   expect_null(fit0$sampler.bart)
   expect_null(fit0$state.bart)
   expect_null(fit0$bart_env)
+})
+
+# A serialized external pointer reads back dead in the same session, so the
+# rebuild after a reload is reached without a fresh one.
+reload <- function(fit) {
+  file <- tempfile(fileext = ".rds")
+  on.exit(unlink(file))
+  saveRDS(fit, file)
+  readRDS(file)
+}
+fit_kept <- function(df) {
+  stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+            cores = 1L, verbose = -1L, chains = 3L, warmup = 7L, iter = 13L, seed = 5L,
+            bart_args = list(n.trees = 10L, keepTrees = TRUE))
+}
+
+# a continuous fit's kept trees replay to its stored fits after a reload, each
+# chain through a sampler of its own at the response mapping it ended warmup on
+local({
+  fit <- fit_kept(df)
+
+  # PRECONDITION: no two chains ended warmup on the same mapping, so no one
+  # sampler's mapping reads every chain's trees
+  mappings <- vapply(fit$state.bart$state, function(state) state[[1L]]$fit.scale, double(2L))
+  expect_identical(anyDuplicated(mappings, MARGIN = 2L), 0L)
+
+  stored <- extract(fit, "indiv.bart", combine_chains = FALSE)
+  expect_equal(predict(fit, df, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
+
+  fit2 <- reload(fit)
+  expect_false(stan4bart:::bart_pointer_is_live(fit2$sampler.bart))
+  expect_equal(predict(fit2, df, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
+  expect_equal(predict(fit2, df, type = "ev"), extract(fit, "ev"), tolerance = 1e-10)
+  expect_identical(length(stan4bart:::getBartSampler(fit2)), 3L)
+  expect_identical(extract(fit2, "trees"), extract(fit, "trees"))
+})
+
+# a binary fit's mapping is fixed, and its kept trees replay to its stored fits
+# the same way
+local({
+  fit <- fit_kept(df_b)
+
+  mappings <- vapply(fit$state.bart$state, function(state) state[[1L]]$fit.scale, double(2L))
+  expect_identical(anyDuplicated(mappings, MARGIN = 2L), 2L)
+
+  stored <- extract(fit, "indiv.bart", combine_chains = FALSE)
+  expect_equal(predict(fit, df_b, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
+
+  fit2 <- reload(fit)
+  expect_false(stan4bart:::bart_pointer_is_live(fit2$sampler.bart))
+  expect_equal(predict(fit2, df_b, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
+  expect_equal(predict(fit2, df_b, type = "ev"), extract(fit, "ev"), tolerance = 1e-10)
 })

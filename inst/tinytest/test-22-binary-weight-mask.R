@@ -15,7 +15,7 @@ fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1
                  weights = a,
                  cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6, seed = 11,
                  bart_args = list(n.trees = 5, keepTrees = TRUE))
-expect_identical(stan4bart:::getBartSampler(fit)$activeRows, a)
+expect_identical(lapply(stan4bart:::getBartSampler(fit), function(sampler) sampler$activeRows), list(a))
 
 # a masked row leaves the likelihood: substituting arbitrary labels at the
 # inactive rows leaves every active row's draw bitwise, matching dbarts's own

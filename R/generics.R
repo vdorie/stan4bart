@@ -194,46 +194,63 @@ get_samples <- function(expr, include_warmup, only_warmup)
   result
 }
 
-# Builds the dbarts sampler a restored fit drives: dbarts.h has no creation
-# entry, so the sampler is a dbartsSampler object built here from the
-# (control, model, data) triple and handed its saved forests through the
-# object's own setState. The state is dropped from the object afterwards
-# because this fit retains its own serializable copy (state.bart) and must not
-# write a second one into saveRDS; the dead-pointer rebuild after a reload is
-# getBartSampler's below, not dbarts's transparent re-creation. 'active' is the
-# probit/ordinal active-row mask a binary fit's 0/1 weights resolved to (see
-# dbarts::dbartsSpec); like the state, it does not ride the sampler's saved
-# state and has to be reinstalled on every re-creation.
-restoreBartSampler <- function(control, model, data, state, active = NULL) {
-  sampler <- new("dbartsSampler", control, model, data)
-  sampler$setState(state)
-  sampler$state <- NULL
-  # updateState = FALSE explicitly: dbarts's setters default to following
-  # control@updateState, and a user's bart_args updateState = TRUE would
-  # otherwise repopulate $state right after the reset above.
-  if (!is.null(active)) sampler$setActiveRows(active, updateState = FALSE)
-  sampler
+# Builds the dbarts samplers a restored fit drives, one per chain: dbarts.h has
+# no creation entry, so each is a dbartsSampler object built here from the
+# (control, model, data) triple and handed its chain's saved forests through
+# the object's own setState. 'state' holds one single-chain state per chain, in
+# chain order. dbarts installs a state as stored, read against the receiving
+# sampler's response mapping, and a continuous response's chains each re-derive
+# that mapping through their own warmup: the chains cannot share a sampler, and
+# each chain's own is put at the mapping its state records before the install.
+# The mapping is the range of the response less the offset, so 'reanchor'
+# re-derives it from a response spanning the recorded range and then returns
+# the fit's response with the mapping locked. A binary response's mapping is
+# fixed, and takes reanchor = FALSE. The state is dropped from each object
+# afterwards because this fit retains its own serializable copy (state.bart)
+# and must not write a second one into saveRDS; the dead-pointer rebuild after
+# a reload is getBartSampler's below, not dbarts's transparent re-creation.
+# 'active' is the probit/ordinal active-row mask a binary fit's 0/1 weights
+# resolved to (see dbarts::dbartsSpec); like the state, it does not ride the
+# sampler's saved state and has to be reinstalled on every re-creation.
+restoreBartSampler <- function(control, model, data, state, active = NULL, reanchor = FALSE) {
+  lapply(state, function(state.chain) {
+    sampler <- new("dbartsSampler", control, model, data)
+    # updateState = FALSE explicitly: dbarts's setters default to following
+    # control@updateState, and a user's bart_args updateState = TRUE would
+    # otherwise populate $state ahead of the install or after the reset below.
+    if (reanchor) {
+      sampler$setResponse(rep_len(state.chain[[1L]]$fit.scale, length(data@y)),
+                          updateScale = TRUE, updateState = FALSE)
+      sampler$setResponse(data@y, updateScale = FALSE, updateState = FALSE)
+    }
+    sampler$setState(state.chain)
+    sampler$state <- NULL
+    if (!is.null(active)) sampler$setActiveRows(active, updateState = FALSE)
+    sampler
+  })
 }
 
-# Liveness probe for a restored sampler. Its 'pointer' field is read directly
-# rather than through $getPointer(), which would re-create the engine instead
-# of reporting it dead; predictBART null-checks the handle BEFORE its early
-# return on a NULL test matrix, so predictBART(pointer, NULL, NULL) is a cheap,
-# side-effect-free test: NULL for a live pointer, an error for the dead one a
-# saveRDS/readRDS round trip leaves behind.
-bart_pointer_is_live <- function(sampler) {
-  if (is.null(sampler)) return(FALSE)
-  !inherits(tryCatch(.Call(C_stan4bart_predictBART, sampler$pointer, NULL, NULL),
-                     error = function(e) e), "error")
+# Liveness probe for a fit's restored samplers: TRUE when there are any and
+# every one is live. A sampler's 'pointer' field is read directly rather than
+# through $getPointer(), which would re-create the engine instead of reporting
+# it dead; predictBART null-checks the handle BEFORE its early return on a NULL
+# test matrix, so predictBART(pointer, NULL, NULL) is a cheap, side-effect-free
+# test: NULL for a live pointer, an error for the dead one a saveRDS/readRDS
+# round trip leaves behind.
+bart_pointer_is_live <- function(samplers) {
+  length(samplers) > 0L && all(vapply(samplers, function(sampler)
+    !inherits(tryCatch(.Call(C_stan4bart_predictBART, sampler$pointer, NULL, NULL),
+                       error = function(e) e), "error"), NA))
 }
 
-# Return a live dbarts sampler for `object`, rebuilding it from the
-# retained serializable state (object$state.bart) when the live pointer has
-# died in a fresh session after reload. The training design matrix, dropped
-# from the retained bundle to keep it n-independent, is re-spliced from
-# $bartData. The rebuilt pointer is cached in object$bart_env (a reference
-# cell), so a reloaded fit rebuilds at most once and holds the pointer for the
-# session; the in-session path returns the original live pointer untouched.
+# Return the live dbarts samplers for `object`, one per chain in chain order,
+# rebuilding them from the retained serializable state (object$state.bart)
+# when the live pointers have died in a fresh session after reload. The
+# training design matrix, dropped from the retained bundle to keep it
+# n-independent, is re-spliced from $bartData. The rebuilt samplers are cached
+# in object$bart_env (a reference cell), so a reloaded fit rebuilds at most
+# once and holds them for the session; the in-session path returns the
+# original live samplers untouched.
 getBartSampler <- function(object) {
   if (bart_pointer_is_live(object$sampler.bart))
     return(object$sampler.bart)
@@ -247,9 +264,24 @@ getBartSampler <- function(object) {
   data.bart@x <- object$bartData@x
   data.bart@x.test <- object$bartData@x.test
   ptr <- restoreBartSampler(restore$control, restore$model, data.bart,
-                            restore$state, restore$active)
+                            restore$state, restore$active,
+                            object$family$family != "binomial")
   if (!is.null(env)) env$ptr <- ptr
   ptr
+}
+
+# Replays every chain's kept trees over the design matrix X, each chain through
+# its own sampler (predictBART, init.cpp): observations x draws x chains, in
+# chain order, on the original response scale.
+predict_bart_chains <- function(object, X) {
+  samplers <- getBartSampler(object)
+  result <- NULL
+  for (i in seq_along(samplers)) {
+    draws <- .Call(C_stan4bart_predictBART, samplers[[i]]$getPointer(), X, NULL)
+    if (is.null(result)) result <- array(0, c(dim(draws), length(samplers)))
+    result[, , i] <- draws
+  }
+  result
 }
 
 # The sampling run's draw x chain counts, read off whichever per-draw BART
@@ -279,9 +311,9 @@ bart_needs_recompute <- function(object, sample) {
 
 # Reproduce the n x draws x chains bart_train / bart_test block a store = "trees"
 # fit did not retain, by replaying the kept trees over the training / test
-# design matrix through dbarts's predict path (predictBART, init.cpp).
-# Predictions arrive on the original response scale (the restored state carries
-# each chain's fit transform), shaped and named like the stored block. `rows`
+# design matrix through dbarts's predict path (predict_bart_chains above).
+# Predictions arrive on the original response scale (each chain's restored sampler
+# sits at its fit transform), shaped and named like the stored block. `rows`
 # restricts to a row subset (row-block streaming for fitted()); NULL is the full
 # matrix - the cost extract() documents.
 recompute_bart_block <- function(object, sample, rows = NULL) {
@@ -293,8 +325,7 @@ recompute_bart_block <- function(object, sample, rows = NULL) {
   # as.matrix() is dbarts's own dense conversion, encoding factor columns the
   # same 0-indexed-double way x.test already does.
   if (inherits(X, "dbartsMixedMatrix")) X <- as.matrix(X)
-  result <- .Call(C_stan4bart_predictBART, getBartSampler(object)$getPointer(), X, NULL)
-  if (length(dim(result)) == 2L) dim(result) <- c(dim(result), 1L)
+  result <- predict_bart_chains(object, X)
   dimnames(result) <- list(observation = NULL, iterations = NULL,
                            chain = paste0("chain:", seq_len(dim(result)[3L])))
   result
@@ -326,9 +357,27 @@ extract.stan4bartFit <-
     # only the ones the caller named are passed on
     treeArgs <- list(current = FALSE)
     if (!is.null(treeNums)) treeArgs$treeNums <- treeNums
-    if (!is.null(chainNums)) treeArgs$chainNums <- chainNums
     if (!is.null(sampleNums)) treeArgs$sampleNums <- sampleNums
-    return(do.call(getBartSampler(object)$getTrees, treeArgs))
+    # Each chain's trees are read off its own single-chain sampler, which
+    # reports no chain column: the chains are selected and labeled here, and
+    # stacked in the order asked for, as one sampler holding them all reports
+    # them. An empty selection still reads one sampler, for its columns.
+    samplers <- getBartSampler(object)
+    if (is.null(chainNums)) chainNums <- seq_along(samplers)
+    if (anyNA(chainNums)) stop("'chainNums' contains missing values")
+    if (any(chainNums <= 0L | chainNums > length(samplers)))
+      stop("'chainNums' must be in [1, ", length(samplers), "]")
+    if (length(chainNums) == 0L) {
+      treeArgs$chainNums <- chainNums
+      chainNums <- 1L
+    }
+    trees <- lapply(chainNums, function(chainNum) do.call(samplers[[chainNum]]$getTrees, treeArgs))
+    if (length(samplers) == 1L && length(trees) == 1L) return(trees[[1L]])
+    chain <- rep.int(chainNums, vapply(trees, nrow, 0L))
+    trees <- do.call(rbind, trees)
+    if (length(samplers) > 1L) trees <- cbind(chain = chain, trees)
+    row.names(trees) <- as.character(seq_len(nrow(trees)))
+    return(trees)
   } else {
     if (length(list(...)) > 0) warning("unused arguments ignored")
   }
@@ -996,12 +1045,9 @@ predict.stan4bartFit <-
   if (type %in% c("ev", "ppd", "indiv.bart")) {
     if (is.null(object$sampler.bart))
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
-    # predictions arrive on the original response scale: the restored
-    # sampler's state carries each chain's fit transform
-    indiv.bart <- .Call(C_stan4bart_predictBART, getBartSampler(object)$getPointer(),
-                        testData$X.bart, NULL)
-    if (length(dim(indiv.bart)) == 2L)
-      dim(indiv.bart) <- c(dim(indiv.bart), 1L)
+    # predictions arrive on the original response scale: each chain's
+    # restored sampler sits at its fit transform
+    indiv.bart <- predict_bart_chains(object, testData$X.bart)
     dimnames(indiv.bart) <-  list(observation = NULL, sample = NULL, chain = NULL)
   }
   if (type %in% c("ev", "ppd", "indiv.ranef")) {

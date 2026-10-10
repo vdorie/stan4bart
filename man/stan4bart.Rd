@@ -473,7 +473,8 @@ stan4bart(formula,
   thinned warmup trace of the monitored scalars: the parametric \code{stan}
   rows and the BART \code{sigma}) for a qualitative where-did-it-stabilize
   plot}
-  \item{\code{sampler.bart}}{external points to BART samplers; used only for
+  \item{\code{sampler.bart}}{a list of BART samplers holding the kept trees,
+  one per chain; used only for
   \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}
   \item{\code{range.bart}}{internal scale used by BART samplers, used by 
   \code{\link[=stan4bart-generics]{predict}} when \code{keepTrees} is \code{TRUE}}

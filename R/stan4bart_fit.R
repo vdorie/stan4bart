@@ -781,17 +781,16 @@ stan4bart_fit <-
   }
   
   if (!is.null(chainResults[[1L]]$state.bart)) {
-    all_state <- chainResults[[1L]]$state.bart
-    if (chains > 1L) for (i in seq.int(2L, chains))
-      all_state[[i]] <- chainResults[[i]]$state.bart[[1L]]
+    # one state per chain, each as its own single-chain sampler stored it
+    all_state <- lapply(chainResults, function(chainResult) chainResult$state.bart)
     
-    # restoration needs the control shaped to the state: one entry per chain
-    # and tree storage sized to the saved sampling iterations
-    control.bart@n.chains <- chains
+    # restoration needs the control shaped to a chain's state: tree storage
+    # sized to the saved sampling iterations
     control.bart@keepTrees <- TRUE
     control.bart@n.samples <- as.integer(iter - warmup)
     attr(chainResults, "sampler.bart") <-
-      restoreBartSampler(control.bart, model.bart, data.bart, all_state, active.bart)
+      restoreBartSampler(control.bart, model.bart, data.bart, all_state, active.bart,
+                         is_continuous)
 
     # Retain the SERIALIZABLE inputs so the stored-tree external pointer can be
     # rebuilt lazily after saveRDS/readRDS (the live pointer dies on reload).
