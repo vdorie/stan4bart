@@ -159,6 +159,11 @@ items
     the older side against the older dbarts is the only honest pairing.
     This is how NEWS.md's 53-95x was derived; see the cb809b1 MANIFEST
     row.
+  predict-weights-deparse: predict(fit, newdata) errors in
+    getTestDataFrames ("'length = 26' in coercion to 'logical(1)'") when
+    the fit's call holds the weights as a value, not a name.
+  extract-test-no-test-data: extract and fitted at sample = "test" on a
+    fit with no test data say "newdata has unrecognized fixef names".
   test-cores-literal: inst/tinytest/test-01-continuous.R passes a literal
     cores = 4 inside its at_home block; tests pass at most 2 cores (the
     machine is shared with other jobs). Before the release.
