@@ -118,6 +118,16 @@ items
     predict() on new data then has to take its levels from the kept
     rows, where get.orig.levs reads the whole frame, and a new row
     holding the lost level stops as lm's does.
+  posterior-nc2-seed: the continuous_nc2 tier of the posterior baseline
+    (benchmarks/baselines/MANIFEST, the 83e0c1a row) sits at an outlying
+    seed. At its recorded seed the random slope's scale reads 0.975, the
+    lowest of 25 seeds on the same data; the other 24 average 1.039 with
+    a standard deviation over seeds of 0.017, on the build before the
+    one response range as well (1.038, 0.025). A later build whose draws
+    shift will read near 1.039 and can fail the tier's mean gate, as the
+    comparison against the Stan-era baseline did at 43 of 45, with the
+    posterior unmoved. Recording that tier at another seed, or gating a
+    tier on several seeds, would end it; neither is decided.
   ppd-zero-weight: extract(type = "ppd") gives NaN, with rnorm's
     warning, on a continuous fit's rows of weight zero.
   ranef-shared-level: the shared level of the group intercepts does not
