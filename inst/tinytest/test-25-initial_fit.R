@@ -1028,16 +1028,16 @@ local({
     expect_identical(seen$value$range, route_of(fit0, "mixed")$range)
   }
 })
-# group effects a million times the noise: lme4's optimizer warns of roundoff
-# and its estimates are used as they come. At home only: whether an optimizer
-# ends there in a warning is its own affair.
+# group effects a million times the noise: where lme4's optimizer warns of
+# roundoff its estimates are used as they come. At home only, and only where
+# the fit itself warns: whether an optimizer ends there in a warning is its
+# own affair, and differs by platform.
 if (has_lme4 && at_home()) local({
   set.seed(26L)
   n <- 80L
   far <- data.frame(g = factor(rep(1:40, each = 2L)), x = rnorm(n), u = runif(n))
   far$y <- as.numeric(far$g) * 1e6 + rnorm(n) * 1e-6
   far0 <- stan4bart(y ~ x + (1 | g) + bart(u), far, iter = 0L)
-  # PRECONDITION: the fit itself warns
   heard <- character()
   rows <- stan4bart:::initial_fit_rows(far0)
   columns <- stan4bart:::range_fixed_block(far0, rows$rows_in, rows$w)
@@ -1048,12 +1048,13 @@ if (has_lme4 && at_home()) local({
       heard <<- c(heard, conditionMessage(w))
       invokeRestart("muffleWarning")
     })
-  expect_true(length(heard) > 0L)
-  seen <- observe(route_of(far0, "mixed", verbose = 1L))
-  expect_identical(seen$warned, character())
-  expect_identical(length(seen$printed), 1L)
-  expect_identical(seen$value[c("route", "fallback")], list(route = "mixed", fallback = NULL))
-  expect_identical(seen$value$info$fit, "lme4")
+  if (length(heard) > 0L) {
+    seen <- observe(route_of(far0, "mixed", verbose = 1L))
+    expect_identical(seen$warned, character())
+    expect_identical(length(seen$printed), 1L)
+    expect_identical(seen$value[c("route", "fallback")], list(route = "mixed", fallback = NULL))
+    expect_identical(seen$value$info$fit, "lme4")
+  }
 })
 
 # what the C++ creation hands the forest --------------------------------------
