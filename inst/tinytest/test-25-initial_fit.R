@@ -168,10 +168,11 @@ local({
     expect_identical(unname(columns$X[, paste0("f", level)]), as.double(d$f == level))
   expect_identical(unname(columns$X[, "coarse2"]), as.double(d$coarse == "2"))
 
-  # a level present on no row in has no indicator
+  # a level present on no row in has no indicator, kept or dropped
   rows <- which(d$f != "d")
   columns <- stan4bart:::range_fixed_block(fit0, rows, rep_len(1, length(rows)))
   expect_identical(grep("^f", columns$added, value = TRUE), c("fb", "fc"))
+  expect_identical(columns$dropped, c("one", "su", "xcopy"))
   expect_identical(nrow(columns$X), length(rows))
 })
 
@@ -436,7 +437,8 @@ local({
       expect_error(fit_with(bart_range), words, fixed = TRUE)
   }
   # the names abbreviate, as those of 'offset_type' and 'store' do
-  expect_identical(stan4bart:::resolve_bart_range("resp"), "response")
+  expect_identical(tryCatch(stan4bart:::resolve_bart_range("resp"), error = conditionMessage),
+                   "response")
   expect_identical(stan4bart:::resolve_bart_range(NULL), "mixed")
   expect_identical(stan4bart:::resolve_bart_range(c(2L, 5L)), c(2, 5))
   seen <- observe(fit_short(plain, d, weights = w, offset = o, bart_range = "resp"))
