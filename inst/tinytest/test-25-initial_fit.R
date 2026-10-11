@@ -361,7 +361,30 @@ local({
   expect_identical(seen$value$fallback, "undefined")
   expect_identical(seen$value$own, numeric(20L))
   expect_identical(seen$warned, character())
-  expect_identical(seen$printed[2L], undefined_line(c(1, 5), 20L))
+  # the fit ran, so the line does not say it is not defined
+  expect_identical(seen$printed[2L], paste0("the BART response range is the response's own, 1 to 5: ",
+                                            "the fitted range has no width; see 'bart_range'"))
+  expect_identical(observe(route_of(flat0, "lm", verbose = 0L, fitter = function(z, w, X)
+    list(beta = c(3, 2, 0), sigma = 0)))$printed, character())
+
+  # a random slope beside its intercept doubles the term's effects: with half
+  # as many levels as rows in, the term has as many effects as rows
+  if (has_lme4) {
+    n_in <- sum(rows_in)
+    for (n_levels in (n_in + 1L) %/% 2L - 0:1) {
+      d$half <- factor(1L + seq_len(n) %% n_levels)
+      d$half[rows_in] <- factor(1L + seq_len(n_in) %% n_levels, levels = levels(d$half))
+      half0 <- stan4bart(y ~ x + (1 + s | half) + bart(u + v), d, weights = w, offset = o, iter = 0L)
+      seen <- observe(route_of(half0, "mixed", verbose = 1L, fitter = function(z, w, X, reTrms) {
+        if (2L * n_levels >= n_in) stop("fitted")
+        list(beta = numeric(ncol(X)), b = numeric(nrow(reTrms$Zt)))
+      }))
+      expect_identical(seen$value$fallback, if (2L * n_levels >= n_in) "undefined", info = n_levels)
+      expect_identical(seen$warned, character(), info = n_levels)
+      if (2L * n_levels >= n_in)
+        expect_identical(seen$printed, undefined_line(own_range, n_in), info = n_levels)
+    }
+  }
 })
 
 # the fit fails: a warning
@@ -606,6 +629,8 @@ local({
   held(fit_short(mixed, d, weights = w, offset = o, bart_range = "lm"), route_of(mixed0, "lm")$range)
   if (has_lme4)
     held(fit_short(mixed, d, weights = w, offset = o), route_of(mixed0, "mixed")$range)
+  # on two workers each worker's sampler is put on the pair
+  held(fit_short(mixed, d, weights = w, offset = o, bart_range = pair, cores = 2L), pair)
   if (at_home()) {
     held(fit_short(mixed, d, weights = w, offset = o, bart_range = pair, chains = 3L, cores = 2L),
          pair, 3L)
@@ -833,6 +858,242 @@ local({
   }
 })
 
+# the bound, the lines and the record, once more -----------------------------
+
+# an estimated range from lme4's fit is bounded as the linear fit's is
+if (has_lme4) local({
+  set.seed(25L)
+  n <- 300L
+  near <- data.frame(g = factor(sample(10L, n, TRUE)), x = rnorm(n), u = runif(n), v = runif(n))
+  near$xnear <- near$x + 0.01 * rnorm(n)
+  near$y <- 2 * near$x + 10 * sin(pi * near$u * near$v) + rnorm(10L)[near$g] + rnorm(n)
+  near0 <- stan4bart(y ~ x + (1 | g) + bart(xnear + u + v), near, iter = 0L)
+  oracle <- lme4::lmer(y ~ x + xnear + u + v + (1 | g), near,
+                       control = lme4::lmerControl(check.conv.grad = "ignore",
+                                                   check.conv.singular = "ignore",
+                                                   check.conv.hess = "ignore"))
+  own <- (near$x - mean(near$x)) * lme4::fixef(oracle)[["x"]] +
+    lme4::ranef(oracle)$g[as.character(near$g), 1L]
+  # PRECONDITION: lme4's fitted range is the wider of the two
+  expect_true(diff(range(near$y - own)) > diff(range(near$y)))
+
+  seen <- observe(route_of(near0, "mixed", verbose = 1L))
+  expect_identical(seen$value$range, range(near$y))
+  expect_identical(seen$value[c("route", "fallback")], list(route = "mixed", fallback = "wider"))
+  expect_identical(seen$value$info$fit, "lme4")
+  expect_identical(seen$value$own, numeric(n))
+  expect_identical(seen$value$sigma, sd(near$y))
+  expect_identical(seen$warned, character())
+  expect_identical(seen$printed, c(
+    paste0("estimating the BART response range by a linear mixed model (lme4) on ", n,
+           " rows and 5 fixed columns; see 'bart_range'"),
+    paste0("the BART response range is the response's own, ", format(min(near$y), digits = 6L),
+           " to ", format(max(near$y), digits = 6L), ": the fitted range was wider; see 'bart_range'")))
+  fit <- fit_short(y ~ x + (1 | g) + bart(xnear + u + v), near)
+  expect_identical(fit$range.bart, range(near$y))
+  expect_identical(fit$range.fallback, "wider")
+  expect_identical(state_pairs(fit), matrix(range(near$y), 2L, 2L))
+})
+
+# the bound is the response's own range over the rows in: rows of weight zero
+# widen neither side of the comparison
+local({
+  set.seed(24L)
+  n <- 300L
+  near <- data.frame(x = rnorm(n), u = runif(n), v = runif(n), w = 1)
+  near$xnear <- near$x + 0.01 * rnorm(n)
+  near$y <- 2 * near$x + 10 * sin(pi * near$u * near$v) + rnorm(n)
+  out <- c(11L, 77L)
+  near$w[out] <- 0
+  near$y[out] <- near$y[out] + c(-1000, 1000)
+  rows_in <- near$w > 0
+  near0 <- stan4bart(y ~ x + bart(xnear + u + v), near, weights = w, iter = 0L)
+  fit <- lm.wfit(cbind(1, near$x, near$xnear, near$u, near$v)[rows_in, ], near$y[rows_in],
+                 near$w[rows_in])
+  width <- diff(range((near$y - (near$x - mean(near$x)) * fit$coefficients[[2L]])[rows_in]))
+  # PRECONDITION: the fitted width lies between the response's own over the
+  # rows in and over every row
+  expect_true(width > diff(range(near$y[rows_in])) && width < diff(range(near$y)))
+  route <- route_of(near0, "lm")
+  expect_identical(route$fallback, "wider")
+  expect_identical(route$range, range(near$y[rows_in]))
+})
+
+# the lines: the estimating line names lme4 for the mixed fit alone, and a
+# pair prints nothing
+local({
+  seen <- observe(route_of(plain0, "mixed", verbose = 1L))
+  expect_identical(seen$printed, paste("estimating the BART response range by a linear model on",
+                                       sum(rows_in), "rows and 6 fixed columns; see 'bart_range'"))
+  if (has_lme4) {
+    seen <- observe(route_of(mixed0, "mixed", verbose = 1L))
+    expect_identical(seen$printed, paste("estimating the BART response range by a linear mixed",
+                                         "model (lme4) on", sum(rows_in),
+                                         "rows and 6 fixed columns; see 'bart_range'"))
+  }
+  for (fit0 in list(plain0, mixed0)) {
+    seen <- observe(route_of(fit0, c(0, 100), verbose = 1L))
+    expect_identical(c(seen$printed, seen$warned), character())
+  }
+})
+
+# a model with no random term records the route asked for, "mixed", and that
+# its fit was linear
+local({
+  seen <- without_lme4(observe(fit_short(plain, d, weights = w, offset = o)))
+  expect_identical(seen$warned, character())
+  expect_identical(seen$value$range.route, "mixed")
+  expect_null(seen$value$range.fallback)
+  expect_identical(seen$value$range.info$fit, "linear")
+  expect_identical(seen$value$range.bart, route_of(plain0, "lm")$range)
+})
+
+# a pair is warned of where it misses the values on the rows in, whatever
+# the rows of weight zero hold
+local({
+  pair <- lm_range[2L] + c(5, 10)
+  # PRECONDITION: a row of weight zero lies above the pair
+  expect_true(max(d$y - d$o - lm_own) > pair[2L] && max((d$y - d$o - lm_own)[rows_in]) < pair[1L])
+  seen <- observe(route_of(plain0, pair))
+  expect_identical(length(seen$warned), 1L)
+  expect_true(startsWith(seen$warned, "'bart_range' ("))
+  expect_identical(seen$value$range, pair)
+})
+
+# an offset that is zero on every row is no offset, whatever its type
+local({
+  d$z0 <- 0
+  for (fit0 in list(plain0, mixed0)) {
+    formula <- if (length(fit0$reTrms) > 0L) mixed else plain
+    reference <- route_of(stan4bart(formula, d, weights = w, iter = 0L), "lm")
+    expect_identical(reference$info$fit, "linear")
+    for (offset_type in c("fixef", "ranef", "bart", "parametric")) {
+      zero0 <- stan4bart(formula, d, weights = w, offset = z0, offset_type = offset_type, iter = 0L)
+      expect_identical(route_of(zero0, "lm")[c("range", "own", "sigma", "info")],
+                       reference[c("range", "own", "sigma", "info")], info = offset_type)
+    }
+  }
+})
+
+# a forest factor's nesting in a grouping factor is judged on the rows in
+local({
+  set.seed(28L)
+  d$fine <- factor(paste(d$g, sample(2L, n, TRUE)))
+  # on one row of weight zero the factor's level belongs to another group
+  out <- which(!rows_in & d$g != d$g[1L])[1L]
+  d$fine[out] <- d$fine[1L]
+  # PRECONDITION: nested over the rows in, and not over every row
+  nested <- function(rows) all(tapply(as.integer(d$g)[rows], droplevels(d$fine[rows]),
+                                      function(group) length(unique(group)) == 1L))
+  expect_true(nested(rows_in) && !nested(seq_len(n)))
+  fine0 <- stan4bart(y ~ x + (1 | g) + bart(u + fine), d, weights = w, offset = o, iter = 0L)
+  columns <- stan4bart:::range_fixed_block(fine0, which(rows_in), d$w[rows_in])
+  expect_identical(columns$left.out, "fine")
+  expect_identical(columns$added, "u")
+})
+
+# lme4's and the optimizer's complaints change nothing and are not passed on
+local({
+  loud <- function(z, w, X, reTrms = NULL) {
+    warning("an optimizer's complaint")
+    message("boundary (singular) fit")
+    stan4bart:::range_fit(z, w, X, reTrms)
+  }
+  for (fit0 in c(list(plain0), if (has_lme4) list(mixed0))) {
+    seen <- observe(suppressMessages(route_of(fit0, "mixed", fitter = loud)))
+    expect_identical(seen$warned, character())
+    expect_null(seen$value$fallback)
+    heard <- character()
+    withCallingHandlers(route_of(fit0, "mixed", fitter = loud), message = function(m) {
+      heard <<- c(heard, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    })
+    expect_identical(heard, character())
+    expect_identical(seen$value$range, route_of(fit0, "mixed")$range)
+  }
+})
+# group effects a million times the noise: lme4's optimizer warns of roundoff
+# and its estimates are used as they come. At home only: whether an optimizer
+# ends there in a warning is its own affair.
+if (has_lme4 && at_home()) local({
+  set.seed(26L)
+  n <- 80L
+  far <- data.frame(g = factor(rep(1:40, each = 2L)), x = rnorm(n), u = runif(n))
+  far$y <- as.numeric(far$g) * 1e6 + rnorm(n) * 1e-6
+  far0 <- stan4bart(y ~ x + (1 | g) + bart(u), far, iter = 0L)
+  # PRECONDITION: the fit itself warns
+  heard <- character()
+  rows <- stan4bart:::initial_fit_rows(far0)
+  columns <- stan4bart:::range_fixed_block(far0, rows$rows_in, rows$w)
+  withCallingHandlers(
+    stan4bart:::range_fit(rows$target, rows$w, columns$X,
+                          stan4bart:::range_cut_reTrms(far0$reTrms, rows$rows_in)),
+    warning = function(w) {
+      heard <<- c(heard, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
+  expect_true(length(heard) > 0L)
+  seen <- observe(route_of(far0, "mixed", verbose = 1L))
+  expect_identical(seen$warned, character())
+  expect_identical(length(seen$printed), 1L)
+  expect_identical(seen$value[c("route", "fallback")], list(route = "mixed", fallback = NULL))
+  expect_identical(seen$value$info$fit, "lme4")
+})
+
+# what the C++ creation hands the forest --------------------------------------
+
+# With a user offset beside it, the forest's first offset is the offset plus
+# the model's own part, and its first residual standard deviation the spread
+# of what is left: a sampler given those through dbarts's own methods, both
+# computed here, ends its first sweep in the state the creation leaves.
+local({
+  captured <- NULL
+  invisible(suppressMessages(trace("stan4bart_fit_worker", where = asNamespace("stan4bart"),
+                                   print = FALSE,
+                                   tracer = function() captured <<- as.list(parent.frame()))))
+  fit <- tryCatch(stan4bart(y ~ x + bart(u + v), d, weights = w, offset = o, bart_range = "lm",
+                            cores = 1L, verbose = -1L, chains = 1L, warmup = 2L, iter = 4L,
+                            seed = 5L, bart_args = list(n.trees = 5L)),
+                  finally = invisible(suppressMessages(
+                    untrace("stan4bart_fit_worker", where = asNamespace("stan4bart")))))
+  expect_inherits(fit, "stan4bartFit")
+  expect_true(is.list(captured))
+
+  block <- cbind(1, d$x, d$u, d$v)
+  coefficients <- lm.wfit(block[rows_in, ], (d$y - d$o)[rows_in], d$w[rows_in])$coefficients
+  own <- (d$x - mean(d$x)) * coefficients[[2L]]
+  sigma <- sd((d$y - d$o - own)[rows_in])
+  pair <- range((d$y - d$o - own)[rows_in])
+  # PRECONDITION: neither starting value is the one a creation that dropped it
+  # would use
+  expect_true(sd(own) > 1 && abs(sigma - 1) > 0.5)
+
+  created <- function(by_cpp, first_offset = d$o + own, first_sigma = sigma) {
+    set.seed(31L)
+    sampler <- new("dbartsSampler", captured$control.bart, captured$model.bart, captured$data.bart)
+    stan4bart:::install_bart_range(sampler, pair)
+    if (by_cpp) {
+      control.stan <- captured$control.stan
+      control.stan$seed <- 99L
+      handle <- .Call(stan4bart:::C_stan4bart_create, sampler$getPointer(), captured$control.bart,
+                      captured$data.stan, control.stan, captured$control.common)
+    } else {
+      sampler$setOffset(first_offset, updateScale = FALSE, updateState = FALSE)
+      sampler$setSigma(first_sigma, updateState = FALSE)
+      sampler$sampleTreesFromPrior(updateState = FALSE)
+      sampler$run(0L, 1L, updateState = FALSE)
+    }
+    sampler$storeState()
+    sampler$state[[1L]][c("forests", "fit.scale", "rng.state")]
+  }
+  by_cpp <- created(TRUE)
+  expect_identical(by_cpp$fit.scale, pair)
+  expect_identical(by_cpp, created(FALSE))
+  # PRECONDITION: the state tells both starting values
+  expect_false(identical(by_cpp$forests, created(FALSE, first_offset = d$o)$forests))
+  expect_false(identical(by_cpp$forests, created(FALSE, first_sigma = 1)$forests))
+})
+
 # a constant response -------------------------------------------------------
 
 local({
@@ -935,4 +1196,57 @@ if (has_lme4) local({
   expect_identical(seen$warned, paste0("the initial fit for the binary response failed (its ",
                                        "estimates are not of the model's size); the fit starts ",
                                        "from zero"))
+})
+
+# under an 'offset_type' the start holds what the forest's offset holds in
+# the sweeps
+if (has_lme4) local({
+  control <- lme4::glmerControl(check.conv.grad = "ignore", check.conv.singular = "ignore",
+                                check.conv.hess = "ignore")
+  parts_of <- function(oracle) {
+    fixed <- lme4::fixef(oracle)
+    effects <- lme4::ranef(oracle)$g
+    effects <- effects[match(as.character(d$g), rownames(effects)), 1L]
+    effects[is.na(effects)] <- 0
+    list(fixed = (d$x - mean(d$x)) * fixed[["x"]] + (d$s - mean(d$s)) * fixed[["s"]],
+         random = effects)
+  }
+  # the offset is in the fit except where it stands for the forest
+  less <- parts_of(lme4::glmer(yb ~ x + s + (1 | g), d[rows_b, ], family = binomial("probit"),
+                               offset = o, control = control))
+  whole <- parts_of(lme4::glmer(yb ~ x + s + (1 | g), d[rows_b, ], family = binomial("probit"),
+                                control = control))
+  expected <- list(default = less$fixed + less$random, fixef = less$random, ranef = less$fixed,
+                   bart = whole$fixed + whole$random)
+  for (offset_type in names(expected)) {
+    fit0 <- stan4bart(binary, d, weights = a, offset = o, offset_type = offset_type, iter = 0L)
+    seen <- observe(start_of(fit0))
+    expect_true(max(abs(seen$value - expected[[offset_type]])) < 1e-8, info = offset_type)
+    expect_identical(seen$warned, character(), info = offset_type)
+  }
+  # PRECONDITION: the four starts differ
+  for (pair in list(c("default", "fixef"), c("default", "ranef"), c("default", "bart")))
+    expect_true(max(abs(expected[[pair[1L]]] - expected[[pair[2L]]])) > 0.1, info = pair[2L])
+})
+# and without lme4: the regression's fixed part, or zero where the offset
+# stands for the fixed effects, with a warning that says which
+local({
+  regression <- function(offset) {
+    fit <- suppressWarnings(glm.fit(cbind(1, d$x, d$s)[rows_b, ], d$yb[rows_b], offset = offset,
+                                    family = binomial("probit")))
+    (d$x - mean(d$x)) * fit$coefficients[[2L]] + (d$s - mean(d$s)) * fit$coefficients[[3L]]
+  }
+  expected <- list(ranef = regression(d$o[rows_b]), bart = regression(NULL), fixef = numeric(n))
+  for (offset_type in names(expected)) {
+    fit0 <- stan4bart(binary, d, weights = a, offset = o, offset_type = offset_type, iter = 0L)
+    seen <- without_lme4(observe(start_of(fit0, fitter = if (offset_type == "fixef")
+      function(...) stop("fitted") else stan4bart:::binary_fit)))
+    expect_true(max(abs(seen$value - expected[[offset_type]])) < 1e-10, info = offset_type)
+    expect_identical(seen$warned, if (offset_type == "fixef") paste0(
+      "lme4 is not installed, so the binary fit starts from zero: with an offset that stands ",
+      "for the fixed effects its start is the mixed model's random effects; install lme4 to ",
+      "start from them") else lme4_words, info = offset_type)
+  }
+  # PRECONDITION: the regression's start is not zero
+  expect_true(max(abs(expected$ranef)) > 0.5)
 })

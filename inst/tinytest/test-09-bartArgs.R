@@ -41,13 +41,17 @@ expect_equal(splitProbs, c(0.1, 0.1, 0.2, 0.1, 0.1))
 
 # dbartsSpec's own arguments ride through bart_args ---------------------------
 
-# bart_range = "lm": the silence asserted below is of bart_args' own warnings,
-# and a model with random terms warns of its own where lme4 is not installed
+# The silence asserted below is of bart_args' own warnings. The model has
+# random terms, so where lme4 is not installed the fit warns of that: that one
+# warning is muffled, and no other.
 fitWith <- function(bart_args) {
   set.seed(21)
-  stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
-            cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
-            bart_args = bart_args, bart_range = "lm")
+  withCallingHandlers(
+    stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
+              cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
+              bart_args = bart_args),
+    warning = function(w)
+      if (startsWith(conditionMessage(w), "lme4 is not installed")) invokeRestart("muffleWarning"))
 }
 
 # The priors themselves are reachable, and the k/power/base shorthands are

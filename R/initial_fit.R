@@ -235,10 +235,13 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
   }
 
   range_own <- range(target[rows_in])
+  no_width <- FALSE
   if (is.null(fallback) && info$fit != "none") {
     width <- diff(range((target - own)[rows_in]))
-    if (width == 0) fallback <- "undefined"
-    else if (width > diff(range_own)) fallback <- "wider"
+    if (width == 0) {
+      fallback <- "undefined"
+      no_width <- TRUE
+    } else if (width > diff(range_own)) fallback <- "wider"
   }
   # a fallback takes the response's own range whole, starting values included
   if (!is.null(fallback)) own <- numeric(length(target))
@@ -259,6 +262,7 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
     cat("the BART response range is the response's own, ",
         paste(format_range(range_bart), collapse = " to "), ": ",
         if (fallback == "wider") "the fitted range was wider"
+        else if (no_width) "the fitted range has no width"
         else paste("the initial fit is not defined on", n, "rows"),
         "; see 'bart_range'\n", sep = "")
   }
@@ -342,10 +346,19 @@ binary_start <- function(object, verbose = 0L, fitter = binary_fit)
 
   reTrms <- object$reTrms
   mixed <- length(reTrms) > 0L && lme4_is_used()
-  if (length(reTrms) > 0L && !mixed)
+  if (length(reTrms) > 0L && !mixed) {
+    # where the offset stands for the fixed effects the start is the random
+    # part alone, which a regression on the fixed columns does not have
+    if (rows$offset_type == "fixef") {
+      warning("lme4 is not installed, so the binary fit starts from zero: with an offset that ",
+              "stands for the fixed effects its start is the mixed model's random effects; ",
+              "install lme4 to start from them", call. = FALSE)
+      return(own)
+    }
     warning("lme4 is not installed, so the binary fit starts from a probit regression on ",
             "the fixed effects alone; install lme4 to start from the mixed model",
             call. = FALSE)
+  }
   columns <- range_fixed_block(object, rows_in, rows$w, forest = FALSE)
   offset <- rows$offset[rows_in]
   fit <- tryCatch(suppressMessages(suppressWarnings(
