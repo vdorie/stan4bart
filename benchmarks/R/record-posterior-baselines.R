@@ -377,8 +377,11 @@ record_one_tier <- function(tier_name, cfg, mcmc_seed = cfg$seed) {
 ## completed tiers); re-recording a subset merges into an existing outfile.
 record_baselines <- function(outfile, tier_names = names(TIERS)) {
   existing <- if (file.exists(outfile)) readRDS(outfile)$tiers else list()
-  manifest <- list(commit = "967a1c6",
-                   package_state = "967a1c6 + bart_util.hpp structSize fix (C0(c); see module docstring)",
+  # the outfile is named for the commit recorded on; baselines/MANIFEST holds
+  # the build's state and why it was recorded
+  commit <- sub("^posterior-baselines-(.+)\\.rds$", "\\1", basename(outfile))
+  manifest <- list(commit = commit,
+                   package_state = paste(commit, "(see benchmarks/baselines/MANIFEST)"),
                    date = as.character(Sys.Date()),
                    package_version = as.character(utils::packageVersion("stan4bart")),
                    r_version = R.version.string,

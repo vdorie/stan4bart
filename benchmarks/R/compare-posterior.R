@@ -11,6 +11,11 @@
 # batch_means_summary from record-posterior-baselines.R (sourced; its CLI is
 # guarded, so sourcing is inert).
 #
+# The baseline is the one baselines/MANIFEST marks current. Since 83e0c1a it
+# is recorded from this package's own sampler, re-recorded when a change
+# moves the posterior on purpose; the columns suffixed _stan hold the
+# baseline's values and those suffixed _wal the build's under test.
+#
 # Usage (one tier per invocation to stay inside the foreground time budget):
 #   Rscript benchmarks/R/compare-posterior.R compare <tier> [baseline.rds]
 #   Rscript benchmarks/R/compare-posterior.R compare-all [baseline.rds]
@@ -24,7 +29,7 @@ suppressMessages(library(stan4bart))
 if (!file.exists(.rpb)) .rpb <- "benchmarks/R/record-posterior-baselines.R"
 source(.rpb, local = FALSE)   # fit_tier, summarize_fit, chain_health, batch_means_summary
 
-.default_baseline <- "benchmarks/baselines/posterior-baselines-75d7970.rds"
+.default_baseline <- "benchmarks/baselines/posterior-baselines-83e0c1a.rds"
 GATED_TIERS <- c("continuous_nc1", "continuous_nc2", "continuous_nc3",
                  "weighted_continuous", "binary_multilevel")
 

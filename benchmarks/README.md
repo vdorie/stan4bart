@@ -36,7 +36,15 @@ far past any within-chain batch (observed 3-8x the sqrt(n)-batch estimate
 on ranef summaries).
 
     Rscript benchmarks/R/record-posterior-baselines.R record \
-      benchmarks/baselines/posterior-baselines-75d7970.rds
+      benchmarks/baselines/posterior-baselines-<commit>.rds
+
+The file is named for the commit it is recorded on, which the recorder writes
+into its manifest. The first recording, 75d7970, is the Stan-era oracle. The
+current one, 83e0c1a, is recorded from the package's own sampler on the same
+data, seeds and control, after a continuous fit's BART response range became
+one pair fixed before sampling: a change that moves the posterior on purpose
+is re-recorded, and its row in baselines/MANIFEST says why and what the
+comparison against the previous baseline read.
 
 Recording saves after every tier and merges into an existing outfile, so a
 subset can be re-recorded. `rerun-check` is the C0 stability gate: refits
@@ -47,11 +55,18 @@ MCSEs, not instability; the verdict line prints the expected exceedance
 count.
 
     Rscript benchmarks/R/record-posterior-baselines.R rerun-check \
-      continuous_nc3 4242 benchmarks/baselines/posterior-baselines-75d7970.rds
+      continuous_nc3 4242 benchmarks/baselines/posterior-baselines-83e0c1a.rds
 
-Gate results at recording (2026-07-15): continuous_nc3 at seed 4242 -
-94/98 within 2x (expected ~4.5 exceedances, max ratio 2.85);
+Gate results at the first recording (2026-07-15): continuous_nc3 at seed
+4242 - 94/98 within 2x (expected ~4.5 exceedances, max ratio 2.85);
 binary_multilevel at seed 5151 - 53/55 (expected ~2.5, max 2.33). PASS.
+At the re-recording (2026-10-11): continuous_nc3 at seed 4242 - 89/98 (max
+2.92); binary_multilevel at 5151 - 55/55 (max 1.62); continuous_nc1 at 4444 -
+21/23 (max 2.58); continuous_nc2 at 4343 - 38/45 (max 3.02);
+weighted_continuous at 4545 - 41/45 (max 3.24). No ratio reaches the
+comparison's k = 4; the continuous tiers exceed 2x more often than
+calibrated MCSEs would, so read a comparison's 4x band as the gate and not
+the 2x count.
 
 ## R/bench-perf.R - the C0(a) perf baselines (written, not yet run)
 
@@ -65,8 +80,8 @@ machine, a later grant. Re-run identically at C4 and diff by hand.
 
 ## baselines/ - recorded output
 
-`posterior-baselines-<commit>.rds`: `$manifest` (commit, package_state -
-NOTE: includes the structSize fix, date, package/R versions, MCMC control,
+`posterior-baselines-<commit>.rds`: `$manifest` (commit, package_state,
+date, package/R versions, MCMC control,
 chain-health thresholds) and `$tiers` (per-tier simulated data, formula
 shape, healthy-chain mask, summary data frame with mean/sd/mcse/mcse_bm/
 mcse_bc per gated quantity). See baselines/MANIFEST for provenance.
