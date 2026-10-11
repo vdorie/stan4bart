@@ -43,8 +43,7 @@ LinkingTo:
   dbarts (>= 1.0-0)
 Suggests:
   tinytest,
-  lme4,
-  reformulas
+  lme4
 Description: Fits semiparametric linear and multilevel models with non-parametric additive Bayesian additive regression tree (BART; Chipman, George, and McCulloch (2010) <doi:10.1214/09-AOAS285>) components and gradient-sampled parametric ones. The parametric conditional is drawn with a hand-derived analytic log-posterior gradient and the WALNUTS sampler (<arXiv:2506.18746>), taken from the Walnutpie library (vendored from <https://github.com/flatironinstitute/walnutpie>, commit f3c1833; MIT licensed, Copyright (c) 2025--2026 by the Walnutpie Developers). Multilevel models can be expressed using 'lme4' syntax (Bates, Maechler, Bolker, and Walker (2015) <doi:10.18637/jss.v067.i01>).
 License: GPL (>= 3)
 NeedsCompilation: true

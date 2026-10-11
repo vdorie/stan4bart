@@ -94,3 +94,11 @@ init_fixed_formula <- function(formula)
   
   result
 }
+
+# Whether lme4 does the mixed-model fits: it is installed, and the option
+# 'stan4bart.lme4' is not FALSE. The option is how a test reaches the paths
+# that run without lme4 on a machine that has it.
+lme4_is_used <- function()
+{
+  !isFALSE(getOption("stan4bart.lme4")) && requireNamespace("lme4", quietly = TRUE)
+}

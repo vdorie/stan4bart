@@ -133,7 +133,7 @@ stan4bart <-
   bart_offset_init <- NULL
   sigma_init <- 1.0
   
-  if (nzchar(system.file(package = "lme4"))) {
+  if (lme4_is_used()) {
     if (family$family == "gaussian") {
       init_call[[1L]] <- quote(lme4::lmer)
     } else {

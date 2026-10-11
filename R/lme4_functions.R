@@ -217,30 +217,6 @@ glFormula <- function(formula, data = NULL, subset, weights,
     result
 }
 
-`%ORifNotInLme4%` <- tryCatch(
-  {
-    lme4ns <- getNamespace("lme4")
-    function(a, b) {
-      mc <- match.call()
-      if (is.symbol(mc[["a"]])) a <- deparse(mc[["a"]])
-      if (!is.null(lme4ns[[a]])) lme4ns[[a]] else b
-    }
-  },
-  error = function(e) function(a, b) b
-)
-
-`%ORifNotInReformulas%` <- tryCatch(
-  {
-    reformulasns <- getNamespace("reformulas")
-    function(a, b) {
-      mc <- match.call()
-      if (is.symbol(mc[["a"]])) a <- deparse(mc[["a"]])
-      if (!is.null(reformulasns[[a]])) reformulasns[[a]] else b
-    }
-  },
-  error = function(e) function(a, b) b
-)
-
 getMerControls <- function() {
   merControl <-
     function(optimizer="nloptwrap",
@@ -352,17 +328,17 @@ getMerControls <- function() {
 merControls <- getMerControls()
 rm(getMerControls)
 
-glmerControl <- glmerControl %ORifNotInLme4% merControls$glmer
+glmerControl <- merControls$glmer
 
-tolPwrss <- tolPwrss %ORifNotInLme4% NULL
-compDev <- compDev %ORifNotInLme4% NULL
-nAGQ0initStep <- nAGQ0initStep %ORifNotInLme4% NULL
-check.response.not.const <- check.response.not.const %ORifNotInLme4% NULL
+tolPwrss <- NULL
+compDev <- NULL
+nAGQ0initStep <- NULL
+check.response.not.const <- NULL
 
 lmerControl <- merControls$lmer
 rm(merControls)
 
-checkArgs <- checkArgs %ORifNotInLme4% function (type, ...) 
+checkArgs <- function (type, ...) 
 {
   l... <- list(...)
   if (isTRUE(l...[["sparseX"]])) warning("sparseX = TRUE has no effect at present",call.=FALSE)
@@ -389,7 +365,7 @@ checkArgs <- checkArgs %ORifNotInLme4% function (type, ...)
   }
 }
 
-checkCtrlLevels <- checkCtrlLevels %ORifNotInLme4% function (cstr, val, smallOK=FALSE)
+checkCtrlLevels <- function (cstr, val, smallOK=FALSE)
 {
   bvals <- c("message","warning","stop","ignore")
   if (smallOK) bvals <- outer(bvals, c("","Small"), paste0)
@@ -399,7 +375,7 @@ checkCtrlLevels <- checkCtrlLevels %ORifNotInLme4% function (cstr, val, smallOK=
   invisible(NULL)
 }
 
-checkFormulaData <- checkFormulaData %ORifNotInLme4% function (formula, data, checkLHS = TRUE, checkData = TRUE, debug = FALSE) 
+checkFormulaData <- function (formula, data, checkLHS = TRUE, checkData = TRUE, debug = FALSE) 
 {
     wd <- tryCatch(force(data), error = identity)
     if (bad.data <- inherits(wd,"error")) {
@@ -449,7 +425,7 @@ checkFormulaData <- checkFormulaData %ORifNotInLme4% function (formula, data, ch
 
 }
 
-mkReTrms <- mkReTrms %ORifNotInReformulas% function (bars, fr, drop.unused.levels=TRUE,
+mkReTrms <- function (bars, fr, drop.unused.levels=TRUE,
                      reorder.terms=TRUE,
                      reorder.vars=FALSE,
                      calc.lambdat = TRUE,
@@ -546,7 +522,7 @@ mkReTrms <- mkReTrms %ORifNotInReformulas% function (bars, fr, drop.unused.level
   ll
 }
 
-makeOp <- makeOp %ORifNotInReformulas% function(x, y, op=NULL)
+makeOp <- function(x, y, op=NULL)
 {
   if (is.null(op) || missing(y)) {
     if (is.null(op)) {
@@ -557,7 +533,7 @@ makeOp <- makeOp %ORifNotInReformulas% function(x, y, op=NULL)
   } else substitute(OP(X,Y), list(X=x,OP=op,Y=y))
 }
 
-expandDoubleVert <- expandDoubleVert %ORifNotInReformulas% function(term) {
+expandDoubleVert <- function(term) {
   frml <- formula(substitute(~x,list(x=term[[2]])))
   tt <- terms(frml)
   newtrms <- lapply(attr(tt, "term.labels"),
@@ -577,11 +553,11 @@ expandDoubleVert <- expandDoubleVert %ORifNotInReformulas% function(term) {
   return(res)
 }
 
-sumTerms <- sumTerms %ORifNotInReformulas% function(termList) {
+sumTerms <- function(termList) {
     Reduce(function(x,y) makeOp(x,y,op=quote(`+`)),termList)
 }
 
-anySpecial <- anySpecial %ORifNotInReformulas% function(term, specials=findReTrmClasses(), fast = FALSE)
+anySpecial <- function(term, specials=findReTrmClasses(), fast = FALSE)
 {
   if (fast) return(any(specials %in% all.names(term)))
   has_s <- FALSE
@@ -600,14 +576,14 @@ anySpecial <- anySpecial %ORifNotInReformulas% function(term, specials=findReTrm
   return(has_s)
 }
 
-inForm <- inForm%ORifNotInReformulas% function(form, value) {
+inForm <- function(form, value) {
     if (any(sapply(form,identical,value))) return(TRUE)
     if (all(sapply(form,length)==1)) return(FALSE)
     return(any(vapply(form,inForm,value,FUN.VALUE=logical(1))))
 }
 
 
-esfun <- esfun %ORifNotInReformulas% function(x) {
+esfun <- function(x) {
   if (length(x)==1 || !anySpecial(x, "|")) return(x)
   if (length(x)==2) {
     return(lapply(esfun(x[[2]]),  makeOp, y=x[[1]]))
@@ -622,7 +598,7 @@ esfun <- esfun %ORifNotInReformulas% function(x) {
   }
 }
 
-.valid_covstruct <- .valid_covstruct %ORifNotInReformulas% c(
+.valid_covstruct <- c(
   diag = 0,
   us   = 1,
   cs   = 2,
@@ -636,13 +612,13 @@ esfun <- esfun %ORifNotInReformulas% function(x) {
   homdiag = 10
 )
 
-findReTrmClasses <- findReTrmClasses %ORifNotInReformulas% function() {
+findReTrmClasses <- function() {
     c(names(.valid_covstruct), "s")
 }
 
-toLang <- toLang %ORifNotInReformulas% function(x) parse(text=x)[[1]]
+toLang <- function(x) parse(text=x)[[1]]
 
-expandGrpVar <- expandGrpVar %ORifNotInReformulas% function(f) {
+expandGrpVar <- function(f) {
   form <- as.formula(makeOp(f,quote(`~`)))
   mm <- terms(form)
   tl <- attr(mm,"term.labels")
@@ -656,7 +632,7 @@ expandGrpVar <- expandGrpVar %ORifNotInReformulas% function(f) {
 }
 
 
-expandAllGrpVar <- expandAllGrpVar %ORifNotInReformulas% function(bb) {
+expandAllGrpVar <- function(bb) {
   if (!is.list(bb))
     expandAllGrpVar(list(bb))
   else {
@@ -666,7 +642,7 @@ expandAllGrpVar <- expandAllGrpVar %ORifNotInReformulas% function(bb) {
   }
 }
 
-findbars_x <- findbars_x %ORifNotInReformulas% function(term,
+findbars_x <- function(term,
                 debug=FALSE,
                 specials=character(0),
                 default.special="us",
@@ -733,14 +709,14 @@ findbars_x <- findbars_x %ORifNotInReformulas% function(term,
   expandAllGrpVar(fbx_term)
 }
 
-findbars <- findbars %ORifNotInReformulas% function (term) 
+findbars <- function (term) 
 {
   findbars_x(term,
              default.special=NULL,
              expand_doublevert_method = "split")
 }
 
-RHSForm <- RHSForm %ORifNotInLme4% function (form, as.form = FALSE) 
+RHSForm <- function (form, as.form = FALSE) 
 {
   if (!as.form) return(form[[length(form)]])
   if (length(form)==2) return(form)
@@ -757,11 +733,11 @@ RHSForm <- RHSForm %ORifNotInLme4% function (form, as.form = FALSE)
   return(form)
 }
 
-makeFac <- makeFac %ORifNotInReformulas% function(x,char.only=FALSE) {
+makeFac <- function(x,char.only=FALSE) {
     if (!is.factor(x) && (!char.only || is.character(x))) factor(x) else x
 }
 
-factorize <- factorize %ORifNotInReformulas% function (x, frloc, char.only = FALSE) 
+factorize <- function (x, frloc, char.only = FALSE) 
 {
   for (i in all.vars(RHSForm(x))) {
     if (!is.null(curf <- frloc[[i]]))
@@ -770,7 +746,7 @@ factorize <- factorize %ORifNotInReformulas% function (x, frloc, char.only = FAL
   return(frloc)
 }
 
-checkNlevels <- checkNLevels %ORifNotInLme4% function (flist, n, ctrl, allow.n = FALSE) 
+checkNlevels <- function (flist, n, ctrl, allow.n = FALSE) 
 {
   stopifnot(is.list(ctrl), is.numeric(n))
   nlevelVec <- vapply(flist, function(x) nlevels(factor(x, exclude=NA)), 1)
@@ -812,7 +788,7 @@ checkNlevels <- checkNLevels %ORifNotInLme4% function (flist, n, ctrl, allow.n =
   c(wstr, wst2, wst3)
 }
 
-checkZdims <- checkZdims %ORifNotInLme4% function (Ztlist, n, ctrl, allow.n = FALSE) 
+checkZdims <- function (Ztlist, n, ctrl, allow.n = FALSE) 
 {
   stopifnot(is.list(Ztlist), is.numeric(n))
   cstr <- "check.nobs.vs.nRE"
@@ -837,7 +813,7 @@ checkZdims <- checkZdims %ORifNotInLme4% function (Ztlist, n, ctrl, allow.n = FA
   } else character()
 }
 
-checkZrank <- checkZrank %ORifNotInLme4% function(Zt, n, ctrl, nonSmall = 1e6, allow.n=FALSE)
+checkZrank <- function(Zt, n, ctrl, nonSmall = 1e6, allow.n=FALSE)
 {
   stopifnot(is.list(ctrl), is.numeric(n), is.numeric(nonSmall))
   cstr <- "check.nobs.vs.rankZ"
@@ -883,7 +859,7 @@ subbart <- function(term)
   term
 }
 
-sub_specials <- sub_specials %ORifNotInReformulas% function (term,
+sub_specials <- function (term,
                           specials = c("|", "||", "s"),
                         keep_args = c(2L, 2L, NA_integer_)) {
   if (is.name(term) || !is.language(term)) 
@@ -908,10 +884,10 @@ sub_specials <- sub_specials %ORifNotInReformulas% function (term,
   term
 }
 
-subbars <- subbars %ORifNotInReformulas% function (term) 
+subbars <- function (term) 
   sub_specials(term, specials = c("|", "||"), keep_args = c(2L, 2L))
 
-chkRank.drop.cols <- chkRank.drop.cols %ORifNotInLme4% function(X, kind, tol = 1e-7, method = "qr")
+chkRank.drop.cols <- function(X, kind, tol = 1e-7, method = "qr")
 {
   stopifnot(is.matrix(X))
   kinds <- eval(formals(lmerControl)[["check.rankX"]])
@@ -955,7 +931,7 @@ chkRank.drop.cols <- chkRank.drop.cols %ORifNotInLme4% function(X, kind, tol = 1
   }
   X
 }
-checkScaleX <- checkScaleX %ORifNotInLme4% function(X,  kind="warning", tol=1e3) {
+checkScaleX <- function(X,  kind="warning", tol=1e3) {
   kinds <- eval(formals(lmerControl)[["check.scaleX"]])
   if (!kind %in% kinds) stop(gettextf("unknown check-scale option: %s",kind))
   if (is.null(kind) || kind == "ignore") return(X)
@@ -991,10 +967,10 @@ if (getRversion() < "4.0.0") {
 }
 
 
-barnames <- barnames %ORifNotInLme4% function (bars) 
+barnames <- function (bars) 
   vapply(bars, function(x) deparse1(x[[3]]), "")
 
-mkBlist <- mkBlist %ORifNotInReformulas% function(x,frloc, drop.unused.levels=TRUE,
+mkBlist <- function(x,frloc, drop.unused.levels=TRUE,
                     reorder.vars=FALSE, sparse = NULL)
 {
   frloc <- factorize(x,frloc)
@@ -1034,7 +1010,7 @@ mkBlist <- mkBlist %ORifNotInReformulas% function(x,frloc, drop.unused.levels=TR
   list(ff = ff, sm = sm, nl = nl, cnms = colnames(mm))
 }
 
-`%i%` <- `%i%` %ORifNotInReformulas% function(f1, f2, fix.order = TRUE) {
+`%i%` <- function(f1, f2, fix.order = TRUE) {
   if (!is.factor(f1) || !is.factor(f2)) stop("both inputs must be factors")
   f12 <- paste(f1, f2, sep = ":")
   u <- which(!duplicated(f12))
@@ -1043,7 +1019,7 @@ mkBlist <- mkBlist %ORifNotInReformulas% function(x,frloc, drop.unused.levels=TR
   return(factor(f12, levels = (f12[u])[order(levs_rank)]))
 }
 
-replaceTerm <- replaceTerm %ORifNotInReformulas% function(term,target,repl) {
+replaceTerm <- function(term,target,repl) {
   if (identical(term,target)) return(repl)
   if (!inForm(term,target)) return(term)
   if (length(term) == 2) {
@@ -1055,12 +1031,12 @@ replaceTerm <- replaceTerm %ORifNotInReformulas% function(term,target,repl) {
                                  y=replaceTerm(term[[3]],target,repl))))
 }
 
-doCheck <- doCheck %ORifNotInLme4% function (x) 
+doCheck <- function (x) 
 {
   is.character(x) && !any(x == "ignore")
 }
 
-nobars_ <- nobars_ %ORifNotInReformulas% function (term) 
+nobars_ <- function (term) 
 {
   if (!anyBars(term)) return(term)
   if (isBar(term)) return(NULL)
@@ -1081,7 +1057,7 @@ nobars_ <- nobars_ %ORifNotInReformulas% function (term)
 }
 
 
-nobars <- nobars %ORifNotInReformulas% function (term) 
+nobars <- function (term) 
 {
   e <- environment(term)
   nb <- nobars_(term)
@@ -1095,12 +1071,12 @@ nobars <- nobars %ORifNotInReformulas% function (term)
   nb
 }
 
-anyBars <- anyBars  %ORifNotInLme4% function (term) 
+anyBars <- function (term) 
 {
   any(c("|", "||") %in% all.names(term))
 }
 
-isBar <- isBar %ORifNotInLme4% function(term)
+isBar <- function(term)
 {
   if (is.call(term)) {
     if ((term[[1]] == as.name("|")) || (term[[1]] == as.name("||"))) {
@@ -1185,7 +1161,7 @@ allbart <- function(term)
   ab
 }
 
-`RHSForm<-` <- `RHSForm<-` %ORifNotInReformulas% function (formula, value) 
+`RHSForm<-` <- function (formula, value) 
 {
     formula[[length(formula)]] <- value
     formula
@@ -1201,7 +1177,7 @@ reOnly <- function (f, response = FALSE)
       f[[2]])
 }
 
-mkVarCorr <- mkVarCorr %ORifNotInLme4% function (sc, cnms, nc, theta, nms) 
+mkVarCorr <- function (sc, cnms, nc, theta, nms) 
 {
   ncseq <- seq_along(nc)
   thl <- split(theta, rep.int(ncseq, (nc * (nc + 1))/2))
@@ -1228,7 +1204,7 @@ mkVarCorr <- mkVarCorr %ORifNotInLme4% function (sc, cnms, nc, theta, nms)
     
 }
 
-wmsg <- wmsg %ORifNotInLme4% function (n, cmp.val, allow.n, msg1 = "", msg2 = "", msg3 = "") 
+wmsg <- function (n, cmp.val, allow.n, msg1 = "", msg2 = "", msg3 = "") 
 {
   if (allow.n) {
     unident <- n < cmp.val
@@ -1245,7 +1221,7 @@ wmsg <- wmsg %ORifNotInLme4% function (n, cmp.val, allow.n, msg1 = "", msg2 = ""
   list(unident = unident, wstr = wstr)
 }
 
-.makeCC <- .makeCC %ORifNotInLme4% function (action, tol, relTol, ...) 
+.makeCC <- function (action, tol, relTol, ...) 
 {
     stopifnot(is.character(action), length(action) == 1)
     if (!is.numeric(tol)) 
@@ -1260,21 +1236,21 @@ wmsg <- wmsg %ORifNotInLme4% function (n, cmp.val, allow.n, msg1 = "", msg2 = ""
         list(...))
 }
 
-getSingTol <- getSingTol %ORifNotInLme4% function() {
+getSingTol <- function() {
   getOption("lme4.singular.tolerance", 1e-4)
 }
 
-isSingular <- isSingular %ORifNotInLme4% function (x, tol = getSingTol()) 
+isSingular <- function (x, tol = getSingTol()) 
 {
     lwr <- getME(x, "lower")
     theta <- getME(x, "theta")
     any(theta[lwr == 0] < tol)
 }
 
-.get.checkingOpts <- .get.checkingOpts %ORifNotInLme4% function (nms) 
+.get.checkingOpts <- function (nms) 
   nms[grepl("^check\\.(?!conv|rankX|scaleX)", nms, perl = TRUE)]
 
-chk.cconv <- chk.cconv %ORifNotInLme4% function (copt, callingFn) 
+chk.cconv <- function (copt, callingFn) 
 {
     cnm <- deparse(substitute(copt))
     if (is.character(copt)) {
@@ -1285,7 +1261,7 @@ chk.cconv <- chk.cconv %ORifNotInLme4% function (copt, callingFn)
     else chk.convOpt(copt)
 }
 
-namedList <- namedList %ORifNotInLme4% function (...) 
+namedList <- function (...) 
 {
     L <- list(...)
     snm <- sapply(substitute(list(...)), deparse)[-1]
@@ -1296,7 +1272,7 @@ namedList <- namedList %ORifNotInLme4% function (...)
     setNames(L, nm)
 }
 
-colSort <- colSort %ORifNotInLme4% function (x) 
+colSort <- function (x) 
 {
     termlev <- vapply(strsplit(x, ":"), length, integer(1))
     iterms <- split(x, termlev)
@@ -1308,7 +1284,7 @@ colSort <- colSort %ORifNotInLme4% function (x)
     unlist(iterms)
 }
 
-isAnyArgBar <- isAnyArgBar %ORifNotInReformulas% function (term) 
+isAnyArgBar <- function (term) 
 {
     if ((term[[1]] != as.name("~")) && (term[[1]] != as.name("("))) {
         for (i in seq_along(term)) {
@@ -1319,7 +1295,7 @@ isAnyArgBar <- isAnyArgBar %ORifNotInReformulas% function (term)
     FALSE
 }
 
-chk.convOpt <- chk.convOpt %ORifNotInLme4% function (opt) 
+chk.convOpt <- function (opt) 
 {
     cnm <- deparse(nm <- substitute(opt))[[1]]
     if (!is.list(opt)) 
@@ -1336,7 +1312,7 @@ chk.convOpt <- chk.convOpt %ORifNotInLme4% function (opt)
     invisible()
 }
 
-getME <- getME %ORifNotInLme4% function (object, name, ...) 
+getME <- function (object, name, ...) 
 UseMethod("getME")
 
 levelfun <- function (x, nl.n, sample_new_levels, Sigma) 
@@ -1495,11 +1471,6 @@ model.frame.stan4bartFit <- function(formula, ...)
 
   frame
 }
-
-rm(`%ORifNotInReformulas%`)
-if (exists("reformulasns")) rm(list = "reformulasns")
-rm(`%ORifNotInLme4%`)
-if (exists("lme4ns")) rm(list = "lme4ns")
 
 make_glmerControl <- function(..., ignore_lhs = FALSE, ignore_x_scale = FALSE) {
   glmerControl(check.nlev.gtreq.5 = "ignore",

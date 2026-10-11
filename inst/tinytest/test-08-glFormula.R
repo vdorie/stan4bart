@@ -109,3 +109,26 @@ local({
 # response
 expect_identical(stan4bart:::init_fixed_formula(quote(y ~ bart(x) + (1 | g))), quote(y ~ 1))
 expect_identical(stan4bart:::init_fixed_formula(quote(y ~ bart(x) + z + (1 | g))), quote(y ~ z))
+
+# lme4 is a suggested package: every formula helper is this package's own
+# copy, so a build made beside lme4 or reformulas holds none of their
+# functions and runs where they are not installed
+local({
+  ns <- asNamespace("stan4bart")
+  home <- vapply(ls(ns, all.names = TRUE), function(name) {
+    f <- get(name, envir = ns)
+    if (is.function(f) && !is.primitive(f)) environmentName(environment(f)) else ""
+  }, "")
+  expect_identical(unname(home[c("glFormula", "mkReTrms", "findbars", "subbars")]),
+                   rep("stan4bart", 4L))
+  expect_identical(names(home)[home %in% c("lme4", "reformulas")], character())
+})
+
+# lme4 does the mixed-model fits when it is installed and not turned off
+local({
+  old <- options(stan4bart.lme4 = NULL)
+  on.exit(options(old))
+  expect_identical(stan4bart:::lme4_is_used(), requireNamespace("lme4", quietly = TRUE))
+  options(stan4bart.lme4 = FALSE)
+  expect_false(stan4bart:::lme4_is_used())
+})
