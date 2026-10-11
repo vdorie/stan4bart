@@ -81,11 +81,18 @@ if (at_home()) {
   Sigma.g1 <- extract(fit.big, "Sigma", combine_chains = FALSE)[["g.1"]][,,1L,1L]
   ranef.new <- extract(fit.big, "indiv.ranef", sample = "test", sample_new_levels = TRUE,
                        combine_chains = FALSE)[,1L,1L]
+  # a test row's random part also holds the fitted intercept of its g.2
+  # level, which the fit saw: that part alone is what the row reports with no
+  # new level sampled, and it comes off before the variance is taken
+  ranef.seen <- extract(fit.big, "indiv.ranef", sample = "test", sample_new_levels = FALSE,
+                        combine_chains = FALSE)[,1L,1L]
 
-  empirical.var <- var(ranef.new)
+  empirical.var <- var(ranef.new - ranef.seen)
   target.var <- Sigma.g1["(Intercept)", "(Intercept)"]
-  # loose tolerance: this is a Monte Carlo check with n.big draws, not a
-  # bitwise one, but should be well within a factor of 2 of the target
+  # a Monte Carlo check, not a bitwise one: n.big independent draws under the
+  # one kept draw's Sigma, so the ratio is a chi-squared on n.big - 1 degrees
+  # of freedom over them, standard deviation 0.07. Over seeds 21 to 55 it ran
+  # from 0.885 to 1.211.
   r <- empirical.var / target.var
-  expect_true(r > 0.5 && r < 2)
+  expect_true(r > 0.75 && r < 1.35)
 }
