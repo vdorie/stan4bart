@@ -86,6 +86,11 @@ items
     1e-10. It predates the one response range per fit.
   ranef-double-bar: extract(type = "ranef") stops ("subscript out of
     bounds") on a fit with a || term.
+  ppd-zero-weight: extract(type = "ppd") of a continuous fit with a
+    weight of zero gives NaN on those rows with R's bare "NAs produced"
+    warning: the draw's sd is sigma over the root of the weight. It
+    predates the one response range per fit. Decide what such a row
+    reports (a draw at weight 1, NA with no warning, or a named one).
   one-parameter-binary: a binary fit whose parametric part has one
     parameter, as y ~ x + bart(...), stops when its chains are packaged
     ("'dimnames' applied to non-array").
