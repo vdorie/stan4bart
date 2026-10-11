@@ -111,14 +111,13 @@ fit_kept <- function(df) {
 }
 
 # a continuous fit's kept trees replay to its stored fits after a reload, each
-# chain through a sampler of its own at the response mapping it ended warmup on
+# chain through a sampler of its own at the one response range the fit fixed
 local({
   fit <- fit_kept(df)
 
-  # PRECONDITION: no two chains ended warmup on the same mapping, so no one
-  # sampler's mapping reads every chain's trees
+  # every chain ended warmup on the range the fit records
   mappings <- vapply(fit$state.bart$state, function(state) state[[1L]]$fit.scale, double(2L))
-  expect_identical(anyDuplicated(mappings, MARGIN = 2L), 0L)
+  expect_identical(mappings, matrix(fit$range.bart, 2L, 3L))
 
   stored <- extract(fit, "indiv.bart", combine_chains = FALSE)
   expect_equal(predict(fit, df, type = "indiv.bart", combine_chains = FALSE), stored,
@@ -132,12 +131,12 @@ local({
   expect_identical(length(stan4bart:::getBartSampler(fit2)), 3L)
   expect_identical(extract(fit2, "trees"), extract(fit, "trees"))
 
-  # each restored sampler reports the mapping its chain recorded, as the
-  # width and the midpoint dbarts's getLeafPrior reads off the sampler
+  # each restored sampler reports that range, as the width and the midpoint
+  # dbarts's getLeafPrior reads off the sampler
   for (restored in list(fit, fit2)) for (i in seq_len(3L)) {
     leafPrior <- stan4bart:::getBartSampler(restored)[[i]]$getLeafPrior()
-    expect_identical(leafPrior$response.scale, mappings[2L, i] - mappings[1L, i])
-    expect_equal(leafPrior$response.shift, mean(mappings[, i]), tolerance = 1e-12)
+    expect_identical(leafPrior$response.scale, diff(fit$range.bart))
+    expect_equal(leafPrior$response.shift, mean(fit$range.bart), tolerance = 1e-12)
   }
 
   # the re-anchor lands on the recorded mapping only with no offset in force
@@ -148,14 +147,58 @@ local({
                "carrying an offset", fixed = TRUE)
 
   # the reloaded trees are tied to the fits the run stored: a leaf's value is
-  # its share of the fit on its chain's mapping, so over a draw's leaves the
-  # values weighted by their row counts sum to that draw's stored fits
+  # its share of the fit in the one unit every chain shares, so over a draw's
+  # leaves the values weighted by their row counts, times the range's width
+  # and plus its middle on every row, sum to that draw's stored fits
   trees <- extract(fit2, "trees")
   leaves <- trees[trees$var == -1L, ]
   leafSums <- tapply(leaves$n * leaves$value, list(leaves$sample, leaves$chain), sum)
-  storedSums <- sweep(sweep(leafSums, 2L, mappings[2L, ] - mappings[1L, ], "*"), 2L,
-                      nrow(df) * colMeans(mappings), "+")
+  storedSums <- leafSums * diff(fit$range.bart) + nrow(df) * mean(fit$range.bart)
   expect_equal(storedSums, apply(stored, c(2L, 3L), sum), tolerance = 1e-10, check.attributes = FALSE)
+})
+
+# rows of weight zero: a fit with zero weights on every second row, saved and
+# read back, predicts its stored fits
+local({
+  w <- rep_len(c(1.5, 0), nrow(df))
+  fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+                   weights = w, cores = 1L, verbose = -1L, chains = 2L, warmup = 7L, iter = 13L,
+                   seed = 5L, bart_args = list(n.trees = 10L, keepTrees = TRUE))
+  stored <- extract(fit, "indiv.bart", combine_chains = FALSE)
+  fit2 <- reload(fit)
+  expect_false(stan4bart:::bart_pointer_is_live(fit2$sampler.bart))
+  expect_equal(predict(fit2, df, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
+  # the range read the rows of positive weight alone
+  expect_true(diff(fit$range.bart) <= diff(range(df$y[w > 0])))
+})
+
+# a fit saved before there was one range has no range.bart: each chain's
+# sampler is restored at the range its own state records
+local({
+  one_chain <- function(pair)
+    stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
+              bart_range = pair, cores = 1L, verbose = -1L, chains = 1L, warmup = 7L, iter = 13L,
+              seed = 5L, bart_args = list(n.trees = 10L, keepTrees = TRUE))
+  pairs <- list(range(df$y), range(df$y) + c(-3, 7))
+  fits <- lapply(pairs, one_chain)
+  old <- fits[[1L]]
+  old$state.bart$state <- c(fits[[1L]]$state.bart$state, fits[[2L]]$state.bart$state)
+  old$bart_train <- array(c(fits[[1L]]$bart_train, fits[[2L]]$bart_train),
+                          c(dim(old$bart_train)[1:2], 2L))
+  old$range.bart <- old$range.route <- old$range.info <- NULL
+  old <- reload(old)
+
+  # PRECONDITION: the two chains' states record different ranges
+  mappings <- vapply(old$state.bart$state, function(state) state[[1L]]$fit.scale, double(2L))
+  expect_identical(mappings, matrix(unlist(pairs), 2L, 2L))
+  expect_equal(predict(old, df, type = "indiv.bart", combine_chains = FALSE), old$bart_train,
+               tolerance = 1e-10, check.attributes = FALSE)
+  for (i in 1:2)
+    expect_identical(stan4bart:::getBartSampler(old)[[i]]$getLeafPrior()$response.scale,
+                     diff(pairs[[i]]))
+  expect_false(any(grepl("BART response range", suppressMessages(capture.output(print(summary(old)))))))
+  expect_true(any(grepl("BART response range", suppressMessages(capture.output(print(summary(fits[[1L]])))))))
 })
 
 # a binary fit's mapping is fixed, and its kept trees replay to its stored fits

@@ -224,7 +224,9 @@ extern "C" {
       }
     }
     
-    dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, true);
+    // The response range is fixed before creation, on the R side, and shared
+    // by every chain: no offset set here or in a sweep re-derives it.
+    dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, false);
     if (!sampler.responseIsBinary)
       dbarts_sampler_setSigma(sampler.bartSampler, sigma_init);
 
@@ -558,12 +560,7 @@ extern "C" {
           sampler.paramSampler->sample_writer.increment();
         
         // Rprintf("setting bart offset\n");
-        // this will adjusting the scale every iteration during the first 1/8 of warmup, 
-        // ever other iteration during the second 1/8, every fourth iteration during the
-        // third, and so forth
-        int update_scale_mod = 1 << (8 * iter / numIter);
-        dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup && iter % update_scale_mod == 0);
-        // dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, isWarmup);
+        dbarts_sampler_setOffset(sampler.bartSampler, sampler.bartOffset, false);
       }
       
       if (resultsType == RESULTS_BOTH || resultsType == RESULTS_BART) {

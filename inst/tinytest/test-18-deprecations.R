@@ -15,10 +15,12 @@ rm(generateFriedmanData)
 df <- with(testData, data.frame(x, g.1, g.2, y))
 rm(testData)
 
+# bart_range = "lm": the silence asserted below is of the deprecated arguments,
+# and a model with random terms warns of its own where lme4 is not installed
 fit_call <- function(...) {
   stan4bart(y ~ bart(. - g.1 - g.2 - X4) + X4 + (1 + X4 | g.1) + (1 | g.2), df,
            cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
-           bart_args = list(n.trees = 3), ...)
+           bart_args = list(n.trees = 3), bart_range = "lm", ...)
 }
 
 # shrinkage-family coefficient priors are refused with an informative error

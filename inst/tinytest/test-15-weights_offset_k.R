@@ -13,6 +13,7 @@ rm(testData)
 
 set.seed(7)
 w <- runif(nrow(df), 0.5, 2)
+w[c(2L, 11L)] <- 0
 
 fit.w <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                    weights = w,
@@ -79,7 +80,7 @@ off <- rnorm(nrow(df))
 # values "fixed"/"random")
 for (ot in c("bart", "fixef", "ranef", "parametric", "default")) {
   fit.o <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
-                     offset = off, offset_type = ot,
+                     weights = w, offset = off, offset_type = ot,
                      cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
                      bart_args = list(n.trees = 3))
 

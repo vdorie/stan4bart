@@ -59,6 +59,10 @@ stan4bart_fit_worker <- function(chain.num, seed, control.bart, data.bart, model
   # object's own external pointer. The object has to outlive the handle, which
   # C_stan4bart_create pins in its own pointer's protection slot.
   sampler.bart <- new("dbartsSampler", control.bart, model.bart, data.bart)
+  # the one response range every chain shares goes on before the C++ takes
+  # the sampler, which holds it from then on
+  if (!is.null(control.common$range_bart))
+    install_bart_range(sampler.bart, control.common$range_bart)
   # updateState = FALSE explicitly: dbarts's setters default to following
   # control@updateState, and a user's bart_args updateState = TRUE must not
   # populate $state on a sampler that has not run yet.
@@ -161,6 +165,7 @@ stan4bart_fit <-
            family,
            bart_offset_init,
            sigma_init,
+           range_bart,
            verbose,
            iter,
            warmup,
@@ -694,7 +699,7 @@ stan4bart_fit <-
 
   control.common <- nlist(iter, warmup, verbose, refresh, is_binary = is_bernoulli,
                           offset, offset_type,
-                          bart_offset_init, sigma_init,
+                          bart_offset_init, sigma_init, range_bart,
                           keep_fits, save_warmup, callback, callbackEnv)
   
   chainResults <- vector("list", chains)
@@ -790,7 +795,7 @@ stan4bart_fit <-
     control.bart@n.samples <- as.integer(iter - warmup)
     attr(chainResults, "sampler.bart") <-
       restoreBartSampler(control.bart, model.bart, data.bart, all_state, active.bart,
-                         is_continuous)
+                         is_continuous, range_bart)
 
     # Retain the SERIALIZABLE inputs so the stored-tree external pointer can be
     # rebuilt lazily after saveRDS/readRDS (the live pointer dies on reload).

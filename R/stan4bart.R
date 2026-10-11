@@ -23,10 +23,12 @@ stan4bart <-
            store = c("fits", "trees"),
            callback = NULL,
            stan_args = NULL,
-           bart_args = NULL)
+           bart_args = NULL,
+           bart_range = c("mixed", "lm", "response"))
 {
   call <- match.call(expand.dots = TRUE)
   store <- match.arg(store)
+  bart_range <- resolve_bart_range(bart_range)
   mc <- match.call(expand.dots = FALSE)
   if (!is.null(data)) {
     data <- as.data.frame(data)
@@ -75,7 +77,8 @@ stan4bart <-
   }
   
   is_bernoulli <- family$family == "binomial"
-  
+  if (is_bernoulli && !identical(bart_range, "mixed"))
+    warning("'bart_range' is not used for a binary response", call. = FALSE)
 
   offset <- model.offset(glmod$fr)[rows_kept] %ORifNULL% double(0)
   weights <- validate_weights(as.vector(model.weights(glmod$fr))[rows_kept])
@@ -132,8 +135,20 @@ stan4bart <-
   
   bart_offset_init <- NULL
   sigma_init <- 1.0
+  range_bart <- NULL
   
-  if (lme4_is_used()) {
+  if (!is_bernoulli) {
+    # one range for the forest, fixed here and shared by every chain, with the
+    # values the first sweep starts from
+    route <- bart_range_route(result, bart_range, verbose)
+    bart_offset_init <- route$own
+    sigma_init <- route$sigma
+    range_bart <- route$range
+    result$range.bart <- range_bart
+    result$range.route <- route$route
+    result$range.fallback <- route$fallback
+    result$range.info <- route$info
+  } else if (lme4_is_used()) {
     if (family$family == "gaussian") {
       init_call[[1L]] <- quote(lme4::lmer)
     } else {
@@ -261,6 +276,7 @@ stan4bart <-
                                  family,
                                  bart_offset_init,
                                  sigma_init,
+                                 range_bart,
                                  verbose,
                                  iter,
                                  warmup,

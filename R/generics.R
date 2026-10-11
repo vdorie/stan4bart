@@ -199,14 +199,14 @@ get_samples <- function(expr, include_warmup, only_warmup)
 # (control, model, data) triple and handed its chain's saved forests through
 # the object's own setState. 'state' holds one single-chain state per chain, in
 # chain order. dbarts installs a state as stored, read against the receiving
-# sampler's response mapping, and a continuous response's chains each re-derive
-# that mapping through their own warmup: the chains cannot share a sampler, and
-# each chain's own is put at the mapping its state records before the install.
-# The mapping is the range of the response less the offset, so 'reanchor'
-# re-derives it from a response spanning the recorded range and then returns
-# the fit's response with the mapping locked. That lands on the recorded range
-# only while the sampler holds no offset, so data carrying one is refused. A
-# binary response's mapping is fixed, and takes reanchor = FALSE. The state is
+# sampler's response range, so under 'reanchor' each sampler is put on the
+# range its chain drew under before the install: 'range', the one range a
+# continuous fit fixes for every chain, or, for a fit saved before there was
+# one, the range each chain's state records. The range goes on through
+# install_bart_range, which needs a sampler holding no offset, so data carrying
+# one is refused. A state recording a range of no width is that of a constant
+# response, which the sampler's creation maps the same way. A binary
+# response's range is fixed, and takes reanchor = FALSE. The state is
 # dropped from each object afterwards because this fit retains its own
 # serializable copy (state.bart) and must not write a second one into saveRDS;
 # the dead-pointer rebuild after a reload is getBartSampler's below, not
@@ -214,21 +214,21 @@ get_samples <- function(expr, include_warmup, only_warmup)
 # 'active' is the probit/ordinal active-row mask a binary fit's 0/1 weights
 # resolved to (see dbarts::dbartsSpec); like the state, it does not ride the
 # sampler's saved state and has to be reinstalled on every re-creation.
-restoreBartSampler <- function(control, model, data, state, active = NULL, reanchor = FALSE) {
+restoreBartSampler <- function(control, model, data, state, active = NULL, reanchor = FALSE,
+                               range = NULL) {
   if (reanchor && !is.null(data@offset))
     stop("internal error: cannot restore the BART samplers of a continuous fit from data carrying an offset")
   lapply(state, function(state.chain) {
     sampler <- new("dbartsSampler", control, model, data)
-    # updateState = FALSE explicitly: dbarts's setters default to following
-    # control@updateState, and a user's bart_args updateState = TRUE would
-    # otherwise populate $state ahead of the install or after the reset below.
     if (reanchor) {
-      sampler$setResponse(rep_len(state.chain[[1L]]$fit.scale, length(data@y)),
-                          updateScale = TRUE, updateState = FALSE)
-      sampler$setResponse(data@y, updateScale = FALSE, updateState = FALSE)
+      pair <- if (!is.null(range)) range else state.chain[[1L]]$fit.scale
+      if (pair[2L] > pair[1L]) install_bart_range(sampler, pair)
     }
     sampler$setState(state.chain, forceUpdate = TRUE)
     sampler$state <- NULL
+    # updateState = FALSE explicitly: dbarts's setters default to following
+    # control@updateState, and a user's bart_args updateState = TRUE would
+    # otherwise populate $state after the reset above.
     if (!is.null(active)) sampler$setActiveRows(active, updateState = FALSE)
     sampler
   })
@@ -269,7 +269,7 @@ getBartSampler <- function(object) {
   data.bart@x.test <- object$bartData@x.test
   ptr <- restoreBartSampler(restore$control, restore$model, data.bart,
                             restore$state, restore$active,
-                            object$family$family != "binomial")
+                            object$family$family != "binomial", object$range.bart)
   if (!is.null(env)) env$ptr <- ptr
   ptr
 }
@@ -1169,7 +1169,9 @@ summary.stan4bartFit <- function(object, ...)
                  dim = if (!is.null(object$stan)) dim(object$stan)[2L:3L] else NULL,
                  adaptation = object$adaptation[intersect(
                    c("step_size", "mean_leapfrog", "mean_leapfrog_warmup"),
-                   names(object$adaptation))])
+                   names(object$adaptation))],
+                 range.bart = object$range.bart, range.route = object$range.route,
+                 range.fallback = object$range.fallback)
   class(result) <- "summary.stan4bartFit"
   result
 }
@@ -1181,6 +1183,11 @@ print.summary.stan4bartFit <- function(x, ...)
   cat("family:  ", x$family, "\n", sep = "")
   if (!is.null(x$dim))
     cat(x$dim[2L], " chains, ", x$dim[1L], " samples per chain\n", sep = "")
+  if (!is.null(x$range.bart))
+    cat("BART response range: ", paste(format_range(x$range.bart), collapse = " to "), " (",
+        x$range.route,
+        if (!is.null(x$range.fallback)) paste0("; the response's own: ", x$range.fallback),
+        ")\n", sep = "")
   if (!is.null(x$adaptation$mean_leapfrog)) {
     cat("\nmean leapfrog steps per transition, by chain:\n")
     cat("  warmup:   ", paste(round(x$adaptation$mean_leapfrog_warmup, 1), collapse = ", "), "\n", sep = "")

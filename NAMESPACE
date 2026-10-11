@@ -31,5 +31,6 @@ importFrom(stats, model.frame, model.frame.default, model.matrix,
            delete.response)
 importFrom(stats, fitted, uniroot, sigma, sd, na.pass, var, setNames)
 importFrom(stats, rWishart)
+importFrom(stats, lm.wfit)
 
 importFrom(methods, as, new)
