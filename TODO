@@ -80,21 +80,21 @@ items
     n.chains on this route and never sets cores, so the fit silently
     runs 10 chains at this package's own iter/warmup defaults - 5x the
     work asked for, and the single largest factor. Report that upward.
-  per-chain-leaf-prior-anchor: each chain's BART sampler re-anchors its
-    response transform on its own offsets through warmup, so under a
-    k-named leaf prior the chains end warmup with different priors in
-    response units: anchors 2.82 and 2.50, centres 2.28 and 2.75, in a
-    two-chain fit measured at dbarts 2ca15722. dbarts does not check
-    that samplers whose chains are combined share a prior (VD
-    2026-10-02: the enforcement is stan4bart's business). Kept-tree
-    prediction restores one sampler per chain, each at its chain's
-    transform, so each reports the prior its chain drew under and
-    extract(type = "trees") reports each chain's leaf values in that
-    chain's own internal units.
-    To settle: whether the chains should share one anchor (fixed before
-    warmup, or agreed at its end), and whether 0.0-13 against dbarts
-    0.9-x behaved the same, which has not been checked. VD 2026-10-02:
-    look at it later.
+  gp-leaves-reload: a reload of a keepTrees fit with gp leaves
+    (bart_args leaf.prior = gp(columns = )) replays its kept trees about
+    0.01 off its stored fits, where every other leaf prior replays to
+    1e-10. It predates the one response range per fit.
+  ranef-double-bar: extract(type = "ranef") stops ("subscript out of
+    bounds") on a fit with a || term.
+  one-parameter-binary: a binary fit whose parametric part has one
+    parameter, as y ~ x + bart(...), stops when its chains are packaged
+    ("'dimnames' applied to non-array").
+  na-exclude-rows: under na.exclude, residuals() subtracts fits on the
+    frame's rows from the response on the kept rows, and extract of "ev"
+    stops where only some components dropped a row ("dims do not match
+    the length of object").
+  ppd-zero-weight: extract(type = "ppd") gives NaN, with rnorm's
+    warning, on a continuous fit's rows of weight zero.
   ranef-shared-level: the shared level of the group intercepts does not
     mix - lag-1 0.97-0.99 and ESS 1.5-19 per 1000 on every design at
     every skip in benchmarks/baselines/re-scale-BASELINE.csv. It is

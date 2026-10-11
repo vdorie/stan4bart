@@ -44,7 +44,8 @@ stan4bart(formula,
           store = c("fits", "trees"),
           callback = NULL,
           stan_args = NULL,
-          bart_args = NULL)
+          bart_args = NULL,
+          bart_range = c("mixed", "lm", "response"))
 }
 \arguments{
   \item{formula}{a \code{\link{formula}} object, or one that can be coerced to
@@ -77,7 +78,11 @@ stan4bart(formula,
   \item{verbose}{a logical or integer. If \code{FALSE} or non-positive, runs
   quietly. Additional levels of information may be displayed for increasingly
   positive numbers, however a large number of diagnostics are suppressed when
-  running multi-threaded. If negative, all diagnostic information is ignored.}
+  running multi-threaded. If negative, all diagnostic information is ignored.
+  For a continuous response a positive value also prints, before the chains
+  start, a line saying how the BART response range is being estimated and,
+  where that range is instead the response's own, a line saying so; see
+  \code{bart_range}.}
   \item{iter}{positive integer indicating the number of posterior samples to
   draw and return. Includes warmup samples.}
   \item{warmup}{non-negative integer indicating number of posterior samples to
@@ -163,6 +168,43 @@ stan4bart(formula,
   parametric (gradient-sampled) component. See details below.}
   \item{bart_args}{optional list, specifying further arguments to BART. See
   details below.}
+  \item{bart_range}{for a continuous response, the range of values the BART
+  component is calibrated to: a pair of numbers \code{c(lower, upper)}, or
+  the name of an estimate, one of \code{"mixed"}, \code{"lm"}, or
+  \code{"response"}. BART states its prior between the two numbers: the prior
+  on the sum-of-trees function at any point has its mean at the middle of the
+  range and, at the default \code{k = 2}, a standard deviation of a quarter of
+  its width. The range is fixed before sampling and is the same for every
+  chain.
+  \itemize{
+    \item \code{"mixed"}, the default - a linear mixed model is fitted first
+    to the observations of positive weight: the model's fixed and random terms
+    as written, with the BART predictors added as linear terms (an unordered
+    factor as indicators of its levels). The range is the smallest and largest
+    value of the response, less any offset, less the fixed and random part of
+    that fit that belongs to the model as written; the part that belongs to
+    the BART predictors is left in. The mixed model is fitted by \pkg{lme4};
+    see the subsection on the initial fit below. A model with no random term
+    is fitted as a linear model.
+    \item \code{"lm"} - the same fit without the random terms. It is the
+    choice for large crossed grouping factors, where the mixed model can take
+    longer than the sampler itself; in small samples it gives a wider range
+    than \code{"mixed"} and a less accurate fit.
+    \item \code{"response"} - the range of the response less any offset.
+    Nothing is fitted.
+  }
+  An estimated range is never wider than the response's own: where the fit
+  would give a wider one, and where the fit cannot be computed, the response's
+  own range is used and the \code{range.fallback} component of the result
+  says why. A pair is used as it is given, whatever the data, and is the way
+  to ask for any other range, for example \code{range(y)}.
+
+  Too narrow a range leaves group-level signal in the random effects that
+  belongs to BART, and too wide a one costs accuracy and mixing in small
+  samples. The linear terms that stand in for BART in the initial fit cannot
+  follow a strongly curved group-level effect, which is a case for giving a
+  pair. A binary response has no range, and a value other than the default is
+  ignored with a warning.}
 }
 \details{
   Fits a Bayesian \dQuote{mixed effect} model with a non-parametric Bayesian
@@ -355,6 +397,22 @@ stan4bart(formula,
     follows the fitted data, and the remaining \code{dbarts} families are not
     wired into the two-block sampler.
   }
+  \subsection{The initial fit and lme4}{
+    Before sampling, the model is fitted once without its BART component: for
+    a continuous response to fix the range BART is calibrated to (see
+    \code{bart_range}), and for either family to give the first sweep the
+    values it starts from. Where the model has random terms this is a mixed
+    model, fitted by \pkg{lme4} when it is installed: that of
+    \code{\link[lme4]{lmer}} for a continuous response and of
+    \code{\link[lme4]{glmer}} for a binary one.
+
+    lme4 is a suggested package. Without it, a continuous model with random
+    terms takes the response's own range and a binary one starts from a probit
+    regression on its fixed effects alone, each with a warning. The fit is then
+    not the one obtained with lme4 installed, including under a fixed seed;
+    results can also differ between versions of lme4. A model with no random
+    term never uses lme4.
+  }
   \subsection{Random effect scale mixing}{
     The random effect covariance is sampled in its non-centered form: a scale
     and a block of standardized effects whose product is the effect itself.
@@ -473,6 +531,24 @@ stan4bart(formula,
   thinned warmup trace of the monitored scalars: the parametric \code{stan}
   rows and the BART \code{sigma}) for a qualitative where-did-it-stabilize
   plot}
+  \item{\code{range.bart}}{for a continuous response, the pair
+  \code{c(lower, upper)} the BART component is calibrated to, the same for
+  every chain; \code{NULL} for a binary response}
+  \item{\code{range.route}}{how that range was asked for: \code{"mixed"},
+  \code{"lm"}, \code{"response"}, or \code{"supplied"} for a pair}
+  \item{\code{range.fallback}}{present only where the range is the response's
+  own although another was asked for: \code{"lme4"}, it is not installed;
+  \code{"undefined"}, the initial fit is not defined on these data;
+  \code{"failed"}, the initial fit raised an error; or \code{"wider"}, the
+  fitted range was wider than the response's own}
+  \item{\code{range.info}}{a list describing the initial fit behind the range:
+  the number of observations \code{n} and of fixed columns \code{p} it used;
+  \code{fit}, one of \code{"lme4"}, \code{"linear"}, or \code{"none"}; the
+  names of the BART columns \code{added}, of the columns \code{dropped} as
+  linear combinations of earlier ones, and of the BART factors \code{left.out}
+  because they are nested in a grouping factor; and the fit's variance
+  parameters \code{theta} and \code{sigma} with the optimizer's
+  \code{message}}
   \item{\code{sampler.bart}}{present when \code{keepTrees} is \code{TRUE}: a
   list of one BART sampler per chain, each holding its chain's kept trees. Read
   by \code{\link[=stan4bart-generics]{predict}}, by \code{extract} and

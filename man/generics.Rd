@@ -112,10 +112,12 @@
       on extracted trees in \code{\link[dbarts]{bart}} and note that stan4bart variable
       names can be found in the \code{bartData@x} element of a fitted stan4bart
       model. The \code{chain} column is present only for a fit with more than
-      one chain. For a continuous response, each chain's BART sampler fixes
-      its own internal scale during warmup, and a leaf's \code{value} is on
-      the internal scale of its chain: leaf values are neither in units of the
-      response nor comparable across chains
+      one chain. For a continuous response a leaf's \code{value} is in the
+      one internal unit every chain shares, set by the fit's
+      \code{range.bart}: at an observation, the values of the leaves it falls
+      in, summed over a draw's trees, times the width of that range, plus its
+      middle, are that draw's BART fit. A fit saved by a version that fixed no
+      range has none, and its leaf values are in each chain's own unit
       \item \code{"callback"} - if a callback function was provided while
       fitting, the results of that for each sample
     }

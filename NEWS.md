@@ -185,6 +185,35 @@
 
 ## Breaking changes
 
+* A continuous fit's BART component is calibrated to one response range, fixed
+  before sampling and shared by every chain, where each chain used to settle
+  its own during warmup. The new `bart_range` argument sets it: `"mixed"`, the
+  default, estimates it from an initial mixed model that holds the BART
+  predictors as linear terms; `"lm"` from that fit without the random terms;
+  `"response"` takes the response's own range; and a pair `c(lower, upper)`
+  is used as given. An estimated range is never wider than the response's own.
+  The fit records it as `range.bart`, with `range.route`, `range.fallback` and
+  `range.info`, and `summary()` prints it. Results for a continuous response
+  differ from earlier versions, including under a fixed seed.
+  `extract(type = "trees")` now reports leaf values in one unit for every
+  chain.
+
+* The initial mixed model is fitted by lme4, which stays a suggested package.
+  Where it is not installed, a continuous model with random terms takes the
+  response's own range and a binary one starts from a probit regression on its
+  fixed effects, each with a warning; the results are not those obtained with
+  lme4 installed.
+
+* A binary fit starts from its initial fit's linear predictor, where it used
+  to start from the fitted probabilities, so its draws under a fixed seed
+  differ from earlier versions.
+
+* `bart =` no longer abbreviates `bart_args`: with `bart_range` in the
+  argument list R reports the abbreviation as ambiguous.
+
+* With an `offset` and a row dropped for a missing value, the offset is now
+  aligned with the rows the model keeps; such a fit's results change.
+
 * Factor variables in the `bart()` part of the formula are now encoded with
   `dbarts`'s categorical splits (`factors = "categorical"`) instead of one
   indicator column per level (`factors = "indicators"`, the previous, port-era
@@ -211,6 +240,18 @@
   families.
 
 ## Bug fixes
+
+* `weights` beside a row dropped for a missing value no longer stop the fit
+  ("weights must be of length equal to ..."): the weights and the offset are
+  cut to the rows the model keeps, and `extract()` reports them on those rows.
+
+* A package built where lme4 is installed now runs where it is not. It used
+  to hold lme4's and reformulas's own functions and stop at the first call
+  without them; reformulas is no longer a suggested package.
+
+* A formula held in a variable now fits. The initial fit used to evaluate the
+  call again, which stopped on such a formula after running a BART fit of its
+  own.
 
 * Fixed `bart_args` silently dropping any name that did not match a
   `dbarts::dbartsControl`/`dbarts::dbartsSpec` formal, rather than erroring:
