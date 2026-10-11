@@ -193,6 +193,22 @@ local({
                    list(added = character(), dropped = "xcopy"))
   expect_identical(observe(route_of(alone0, "mixed", verbose = 0L))$printed, character())
 })
+if (has_lme4) local({
+  alone0 <- stan4bart(y ~ x + (1 | g) + bart(xcopy), d, weights = w, offset = o, iter = 0L)
+  seen <- observe(route_of(alone0, "mixed", verbose = 1L))
+  expect_identical(seen$printed[2L], paste0("no BART predictor enters the initial fit, so the ",
+                                            "range is that of the model's own terms; see 'bart_range'"))
+  oracle <- lme4::lmer(y ~ x + (1 | g), d[rows_in, ], weights = w, offset = o,
+                       control = lme4::lmerControl(check.conv.grad = "ignore",
+                                                   check.conv.singular = "ignore",
+                                                   check.conv.hess = "ignore"))
+  effects <- lme4::ranef(oracle)$g
+  effects <- effects[match(as.character(d$g), rownames(effects)), 1L]
+  effects[is.na(effects)] <- 0
+  pair <- range((d$y - d$o - (d$x - mean(d$x)) * lme4::fixef(oracle)[["x"]] - effects)[rows_in])
+  expect_true(all(abs(seen$value$range - pair) < 1e-6 * diff(pair)))
+  expect_null(seen$value$fallback)
+})
 
 # the routes --------------------------------------------------------------
 
