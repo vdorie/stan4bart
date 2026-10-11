@@ -1,7 +1,8 @@
-# The response range of the BART component: the two numbers dbarts maps onto
-# [-0.5, 0.5] and states its leaf prior between. A continuous fit has one,
-# fixed before sampling and shared by every chain; a binary fit has none, and
-# takes from its initial fit only the values its first sweep starts from.
+# The initial fit, made before sampling from what stan4bart() has parsed. A
+# continuous fit takes from it the response range of its BART component - the
+# two numbers dbarts maps onto [-0.5, 0.5] and states its leaf prior between,
+# one pair shared by every chain - and the values its first sweep starts from.
+# A binary fit has no range and takes the starting values alone.
 
 # 'bart_range' as stan4bart() takes it: the name of an estimate, or a pair of
 # numbers that is used as given and never reordered.
@@ -49,21 +50,23 @@ initial_fit_own <- function(object, columns, fit, offset_type)
   fixed <- if (length(columns$own) == 0L) 0 else
     drop(sweep(object$X[, columns$own_cols, drop = FALSE], 2L,
                object$X_means[columns$own_cols]) %*% fit$beta[columns$own])
-  random <- if (is.null(fit[["b"]])) 0 else as.vector(Matrix::crossprod(object$reTrms$Zt, fit[["b"]]))
+  random <- if (is.null(fit[["b"]])) 0 else
+    as.vector(Matrix::crossprod(object$reTrms$Zt, fit[["b"]]))
   numeric(length(object$y)) + switch(offset_type, fixef = random, ranef = fixed, fixed + random)
 }
 
 # The fixed columns of the initial fit on the rows in: an intercept, the
-# model's own columns and, with 'forest', the forest's, in that order. A numeric or ordered
-# forest column enters as the value the forest splits on. An unordered factor
-# enters as indicators of its levels present among the rows in, less the
-# first, unless each of those levels lies within one level of a grouping
-# factor of the model: its indicators would take over that random effect, so
-# it is left out. A pivoted QR at lm's tolerance, of the block as the fit
-# weights it, then keeps the first of any dependent set, which puts the
-# model's own columns ahead of the forest's; lme4 stops on a dependent column
-# and so is never left to choose. 'own' indexes the kept columns that are the
-# model's and 'own_cols' the columns of the model's design they are.
+# model's own columns and, with 'forest', the forest's, in that order. A
+# numeric or ordered forest column enters as the value the forest splits on.
+# An unordered factor enters as indicators of its levels present among the
+# rows in, less the first, unless each of those levels lies within one level
+# of a grouping factor of the model: its indicators would take over that
+# random effect, so it is left out. A pivoted QR at lm's tolerance, of the
+# block as the fit weights it, then keeps the first of any dependent set,
+# which puts the model's own columns ahead of the forest's; lme4 stops on a
+# dependent column and so is never left to choose. 'own' indexes the kept
+# columns that are the model's and 'own_cols' the columns of the model's
+# design they are.
 range_fixed_block <- function(object, rows_in, w, forest = TRUE)
 {
   x_bart <- as.matrix(object$bartData@x)
