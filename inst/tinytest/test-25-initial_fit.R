@@ -721,6 +721,22 @@ local({
   expect_error(stan4bart:::install_bart_range(
     stand_in(real$getLeafPrior()$response.scale, real$getLeafPrior()$response.shift), pair),
     words, fixed = TRUE)
+
+  # the room for rounding is that of the pair's larger end: a pair with one
+  # end near zero has its middle, a unit in the last place off, accepted
+  pair <- c(1e-6, 54321.5)
+  width <- pair[2L] - pair[1L]
+  ulp <- 2^(floor(log2(mean(pair))) - 52)
+  expect_silent(stan4bart:::install_bart_range(stand_in(width, mean(pair) + ulp), pair))
+  expect_silent(stan4bart:::install_bart_range(stand_in(width, mean(pair) - ulp), pair))
+  expect_error(stan4bart:::install_bart_range(stand_in(width, mean(pair) + 16 * ulp), pair), words,
+               fixed = TRUE)
+  # a pair whose ends sum past the largest double is read back as any other
+  pair <- c(1e308, 1.5e308)
+  width <- pair[2L] - pair[1L]
+  expect_false(is.finite(pair[1L] + pair[2L]))
+  expect_silent(stan4bart:::install_bart_range(stand_in(width, width * 0.5 + pair[1L]), pair))
+  expect_error(stan4bart:::install_bart_range(stand_in(width, pair[1L]), pair), words, fixed = TRUE)
 })
 
 # the binary start --------------------------------------------------------
@@ -1092,6 +1108,20 @@ local({
   # PRECONDITION: the state tells both starting values
   expect_false(identical(by_cpp$forests, created(FALSE, first_offset = d$o)$forests))
   expect_false(identical(by_cpp$forests, created(FALSE, first_sigma = 1)$forests))
+
+  # A C++ exception let out at an entry point is an R error, and R goes on:
+  # the parametric model refuses, at creation, a coefficient prior it does
+  # not hold, which stan4bart() itself never hands it.
+  refused <- captured$data.stan
+  # PRECONDITION: the creation above took a prior it holds
+  expect_true(refused$prior_dist %in% 0:2)
+  refused$prior_dist <- 3L
+  control.stan <- captured$control.stan
+  control.stan$seed <- 99L
+  sampler <- new("dbartsSampler", captured$control.bart, captured$model.bart, captured$data.bart)
+  expect_error(.Call(stan4bart:::C_stan4bart_create, sampler$getPointer(), captured$control.bart,
+                     refused, control.stan, captured$control.common),
+               "unsupported beta prior_dist", fixed = TRUE)
 })
 
 # a constant response -------------------------------------------------------
@@ -1134,6 +1164,7 @@ local({
     fit <- seen$value
     expect_null(fit$range.bart)
     expect_identical(fit$range.route, "mixed")
+    expect_identical(fit$range.fallback, "undefined")
     expect_identical(state_pairs(fit), matrix(5, 2L, 2L))
     replays(fit)
   }
@@ -1147,11 +1178,19 @@ local({
     fit <- seen$value
     expect_null(fit$range.bart)
     expect_identical(fit$range.route, "mixed")
+    expect_identical(fit$range.fallback, "undefined")
     pairs <- state_pairs(fit)
     expect_identical(pairs[, 1L], pairs[, 2L])
     expect_true(pairs[2L, 1L] > pairs[1L, 1L])
     replays(fit)
   }
+  # a fit whose own part rounding leaves a width to is not "wider" than a
+  # response of no width: the fitted range has none
+  barely <- function(z, w, X, reTrms = NULL) list(beta = c(5, 1e-13, 0), sigma = 1)
+  route <- route_of(stan4bart(part ~ x + bart(u), flat, weights = w, iter = 0L), "mixed",
+                    fitter = barely)
+  expect_true(diff(range((flat$part - 1e-13 * (flat$x - mean(flat$x)))[flat$w > 0])) > 0)
+  expect_identical(route[c("range", "fallback")], list(range = NULL, fallback = "undefined"))
 })
 
 # a pair the parametric sampler cannot start from stops the call, and R goes on
