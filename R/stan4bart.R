@@ -62,8 +62,11 @@ stan4bart <-
     y <- as.vector(y)
   }
   y <- as.double(y)
-  if (!is.null(attr(glmod$fr, "na.action.all")))
-    y <- y[setdiff(seq_len(nrow(glmod$fr)), attr(glmod$fr, "na.action.all"))]
+  # The rows the model keeps: the frame's, less those dropped for a missing
+  # value in any component. The response, the designs and the forest's data
+  # hold these rows, so the weights and the offset are cut to them as well.
+  rows_kept <- setdiff(seq_len(nrow(glmod$fr)), attr(glmod$fr, "na.action.all"))
+  y <- y[rows_kept]
   if (length(y) > 0L) {
     u.y <- unique(y)
     family <- if (length(u.y) == 2L && all(sort(u.y) == c(0, 1))) binomial(link = "probit") else gaussian()
@@ -74,8 +77,8 @@ stan4bart <-
   is_bernoulli <- family$family == "binomial"
   
 
-  offset <- model.offset(glmod$fr) %ORifNULL% double(0)
-  weights <- validate_weights(as.vector(model.weights(glmod$fr)))
+  offset <- model.offset(glmod$fr)[rows_kept] %ORifNULL% double(0)
+  weights <- validate_weights(as.vector(model.weights(glmod$fr))[rows_kept])
   offset_type <- match.arg(offset_type)
   
   result <- nlist(y, weights, offset, offset_type = offset_type,

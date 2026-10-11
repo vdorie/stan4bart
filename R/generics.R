@@ -335,6 +335,20 @@ recompute_bart_block <- function(object, sample, rows = NULL) {
   result
 }
 
+# A per-row quantity the fit holds on the rows the model keeps, on the rows
+# extract() reports for the training sample: the same under na.omit, and the
+# frame's under na.exclude, where the dropped rows take 'fill'. A fit saved
+# before the weights and offset were cut to the kept rows holds them on the
+# frame's rows already.
+pad_kept_rows <- function(object, x, fill) {
+  dropped <- attr(object$frame, "na.action.all")
+  if (length(x) == 0L || !inherits(dropped, "exclude") || length(x) == nrow(object$frame))
+    return(x)
+  result <- rep_len(fill, nrow(object$frame))
+  result[-dropped] <- x
+  result
+}
+
 extract.stan4bartFit <-
   function(object,
            type = c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef",
@@ -520,7 +534,7 @@ extract.stan4bartFit <-
     n_all <- nrow(object$frame)
         
     if (!is.null(object$offset) && length(object$offset) > 0L)
-      offset <- object$offset
+      offset <- pad_kept_rows(object, object$offset, NA_real_)
     
     if (n_fixef > 0L) {
       if (!inherits(na.action.fixed, "exclude")) {
@@ -674,7 +688,8 @@ extract.stan4bartFit <-
   if (type %in% c("ev", "ppd") && is_bernoulli)
     result <- pnorm(result)
   if (type %in% "ppd") {
-    weights <- if (sample == "test") object$test$frame[["(weights)"]] else object$frame[["(weights)"]]
+    # a dropped row's draws are NA whatever its weight
+    weights <- if (sample == "test") object$test$frame[["(weights)"]] else pad_kept_rows(object, object$weights, 1)
     if (is.null(weights) || length(weights) == 0L) {
       if (is_bernoulli) {
         # array(x, dim, dimnames) always copies x even when its length already

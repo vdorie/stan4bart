@@ -135,3 +135,85 @@ fit.subset <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.
                         cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
                         bart_args = list(n.trees = 3))
 expect_equal(nrow(fit.subset$frame), sum(df$X1 > median(df$X1)))
+
+# rows dropped for a missing value ---------------------------------------
+
+# the weights and the offset are cut to the rows the model keeps, as the
+# response and the designs are
+local({
+  set.seed(3)
+  n <- 60L
+  d <- data.frame(g = factor(sample(6L, n, TRUE)), x = rnorm(n), u = runif(n), v = runif(n),
+                  w = runif(n, 0.5, 2), o = rnorm(n))
+  d$y <- d$x + 3 * d$u + rnorm(6L)[d$g] + rnorm(n)
+  d$u[c(4L, 17L)] <- NA # the forest's
+  d$x[9L] <- NA         # a fixed column's
+  d$y[30L] <- NA        # the response's
+  d$w[2L] <- 0
+  d$s <- !(seq_len(n) %in% c(5L, 11L, 23L, 41L, 55L))
+  dropped <- c(4L, 9L, 17L, 30L)
+
+  fit_rows <- function(use_subset, na.action, ...) {
+    if (use_subset)
+      stan4bart(y ~ x + bart(u + v) + (1 | g), d, weights = w, offset = o, subset = s,
+                na.action = na.action, ...)
+    else
+      stan4bart(y ~ x + bart(u + v) + (1 | g), d, weights = w, offset = o,
+                na.action = na.action, ...)
+  }
+
+  for (use_subset in c(FALSE, TRUE)) {
+    rows <- if (use_subset) which(d$s) else seq_len(n)
+    kept <- setdiff(rows, dropped)
+    info <- paste("subset:", use_subset)
+
+    fit <- fit_rows(use_subset, na.omit, iter = 0L)
+    expect_identical(c(length(fit$weights), length(fit$offset), nrow(fit$X), ncol(fit$reTrms$Zt),
+                       nrow(fit$bartData@x), length(fit$bartData@y)),
+                     rep(length(kept), 6L), info = info)
+    expect_identical(fit$y, d$y[kept], info = info)
+    expect_identical(as.vector(fit$weights), d$w[kept], info = info)
+    expect_identical(as.vector(fit$offset), d$o[kept], info = info)
+
+    # the fit runs, and what it reports is on the kept rows: the expected value
+    # holds each row's own offset, and the predictive draws each row's own weight
+    fit <- fit_rows(use_subset, na.omit, cores = 1L, verbose = -1L, chains = 1L, warmup = 3L,
+                    iter = 7L, bart_args = list(n.trees = 5L))
+    ev <- extract(fit, "ev")
+    parts <- extract(fit, "indiv.fixef") + extract(fit, "indiv.ranef") + extract(fit, "indiv.bart")
+    expect_equal(ev - parts, matrix(d$o[kept], length(kept), ncol(ev)), check.attributes = FALSE,
+                 info = info)
+    sigma <- extract(fit, "sigma")
+    warned <- character()
+    set.seed(11)
+    ppd <- withCallingHandlers(extract(fit, "ppd"), warning = function(w) {
+      warned <<- c(warned, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
+    set.seed(11)
+    noise <- suppressWarnings(rnorm(length(kept) * length(sigma), 0,
+                                    rep(sigma, length(kept)) * rep(sqrt(1 / d$w[kept]), each = length(sigma))))
+    # a row of weight zero has no predictive draw: its one warning is rnorm's
+    expect_identical(warned, "NAs produced", info = info)
+    expect_equal(ppd - ev, t(matrix(noise, length(sigma))), check.attributes = FALSE, info = info)
+
+    # under na.exclude the dropped rows are reported as missing and the kept
+    # ones as above
+    fit <- fit_rows(use_subset, na.exclude, cores = 1L, verbose = -1L, chains = 1L, warmup = 3L,
+                    iter = 7L, bart_args = list(n.trees = 5L))
+    ev <- extract(fit, "ev")
+    parts <- suppressWarnings(extract(fit, "indiv.fixef") + extract(fit, "indiv.ranef") +
+                              extract(fit, "indiv.bart"))
+    expect_identical(which(is.na(ev[, 1L])), match(intersect(dropped, rows), rows), info = info)
+    expect_equal((ev - parts)[match(kept, rows), ], matrix(d$o[kept], length(kept), ncol(ev)),
+                 check.attributes = FALSE, info = info)
+    warned <- character()
+    ppd <- withCallingHandlers(extract(fit, "ppd"), warning = function(w) {
+      warned <<- c(warned, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    })
+    expect_identical(warned, "NAs produced", info = info)
+    expect_identical(which(is.na(ppd[, 1L])),
+                     sort(match(c(2L, intersect(dropped, rows)), rows)), info = info)
+  }
+})
