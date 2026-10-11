@@ -927,7 +927,37 @@ static SEXP finalize(void)
   return R_NilValue;
 }
 
-#define DEF_FUNC(_N_, _F_, _A_) { _N_, std::bit_cast<DL_FUNC>(&_F_), _A_ }
+} // extern "C"
+
+namespace {
+  /// The .Call boundary of one entry point: calls it and turns a C++ exception
+  /// it lets out into an R error. Nothing else catches one - R's own frames
+  /// lie between an entry point and any C++ caller - so without this an
+  /// exception thrown anywhere below, the parametric model's refusal of a
+  /// non-finite log density among them, ends the R process. The message is
+  /// copied out and the handler left before the error is raised: Rf_error
+  /// leaves by a long jump, which must not cross a live exception.
+  template <auto function> struct Guarded;
+  template <typename... Arguments, SEXP (*function)(Arguments...)>
+  struct Guarded<function> {
+    static SEXP call(Arguments... arguments) {
+      static char message[1024];
+      try {
+        return function(arguments...);
+      } catch (const std::exception& e) {
+        snprintf(message, sizeof message, "%s", e.what());
+      } catch (...) {
+        snprintf(message, sizeof message, "%s", "a C++ exception of unknown type");
+      }
+      Rf_error("%s", message);
+      return R_NilValue; // not reached
+    }
+  };
+}
+
+extern "C" {
+
+#define DEF_FUNC(_N_, _F_, _A_) { _N_, std::bit_cast<DL_FUNC>(&Guarded<&_F_>::call), _A_ }
 
 static R_CallMethodDef R_callMethods[] = {
   DEF_FUNC("stan4bart_create", createSampler, 5),

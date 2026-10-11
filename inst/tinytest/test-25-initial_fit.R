@@ -735,3 +735,70 @@ local({
     expect_identical(length(seen$warned), if (has_lme4) 0L else 1L)
   }
 })
+
+# a constant response -------------------------------------------------------
+
+local({
+  set.seed(30L)
+  n <- 60L
+  flat <- data.frame(x = rnorm(n), u = runif(n), y = 5, w = rep_len(c(1, 1, 0), n))
+  flat$part <- ifelse(flat$w > 0, 5, 5 + flat$x)
+  reload <- function(fit) {
+    file <- tempfile(fileext = ".rds")
+    on.exit(unlink(file))
+    saveRDS(fit, file)
+    readRDS(file)
+  }
+  replays <- function(fit) {
+    stored <- extract(fit, "indiv.bart", combine_chains = FALSE)
+    saved <- reload(fit)
+    expect_silent(stan4bart:::getBartSampler(saved))
+    expect_equal(predict(saved, flat, type = "indiv.bart", combine_chains = FALSE), stored,
+                 tolerance = 1e-10, check.attributes = FALSE)
+    expect_false(any(grepl("BART response range",
+                           suppressMessages(capture.output(print(summary(fit)))))))
+  }
+
+  # the default prior on the residual standard deviation is scaled by the
+  # response's, which is zero: the call stops, in words, and R goes on
+  seen <- observe(tryCatch(fit_short(y ~ x + bart(u), flat), error = conditionMessage))
+  expect_identical(seen$value, paste0("the response is constant: the prior on the residual ",
+                                      "standard deviation is scaled by the response's standard ",
+                                      "deviation, which is zero"))
+
+  # under a prior of a stated scale it fits: BART's own warning for a constant
+  # response stands, no range is installed, and a restore installs none
+  seen <- observe(tryCatch(fit_short(y ~ x + bart(u), flat, stan_args = list(
+    prior_aux = stan4bart:::exponential(1, autoscale = FALSE))), error = conditionMessage))
+  expect_inherits(seen$value, "stan4bartFit")
+  expect_true(any(startsWith(seen$warned, "response values are indistinguishable")))
+  if (inherits(seen$value, "stan4bartFit")) {
+    fit <- seen$value
+    expect_null(fit$range.bart)
+    expect_identical(fit$range.route, "mixed")
+    expect_identical(state_pairs(fit), matrix(5, 2L, 2L))
+    replays(fit)
+  }
+
+  # constant on the rows in alone: the fit runs under the defaults, every
+  # chain on the range dbarts gave its sampler
+  seen <- observe(tryCatch(fit_short(part ~ x + bart(u), flat, weights = w),
+                           error = conditionMessage))
+  expect_inherits(seen$value, "stan4bartFit")
+  if (inherits(seen$value, "stan4bartFit")) {
+    fit <- seen$value
+    expect_null(fit$range.bart)
+    expect_identical(fit$range.route, "mixed")
+    pairs <- state_pairs(fit)
+    expect_identical(pairs[, 1L], pairs[, 2L])
+    expect_true(pairs[2L, 1L] > pairs[1L, 1L])
+    replays(fit)
+  }
+})
+
+# a pair the parametric sampler cannot start from stops the call, and R goes on
+if (at_home()) local({
+  seen <- observe(tryCatch(fit_short(plain, d, bart_range = c(-1e300, 1e300)),
+                           error = function(e) "stopped"))
+  expect_identical(seen$value, "stopped")
+})

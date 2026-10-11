@@ -319,6 +319,13 @@ stan4bart_fit <-
   
   if (is_gaussian) {
     ss <- sd(y)
+    # A constant response fits with BART's own warning under a residual prior
+    # of a stated scale. Scaled by the response's standard deviation that
+    # prior has no scale, and the parametric sampler cannot start: the call
+    # stops here, before a sampler exists.
+    if (stan_args$prior_dist_for_aux > 0L && stan_args$prior_autoscale_for_aux && !isTRUE(ss > 0))
+      stop("the response is constant: the prior on the residual standard deviation is scaled ",
+           "by the response's standard deviation, which is zero", call. = FALSE)
     if (stan_args$prior_dist > 0L && stan_args$prior_autoscale) 
       stan_args$prior_scale <- ss * stan_args$prior_scale
     if (stan_args$prior_dist_for_intercept > 0L && stan_args$prior_autoscale_for_intercept) 
