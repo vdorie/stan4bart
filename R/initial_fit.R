@@ -217,8 +217,7 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
         fit <- tryCatch(suppressMessages(suppressWarnings(
           if (mixed) fitter(target[rows_in], rows$w, columns$X, range_cut_reTrms(reTrms, rows_in))
           else fitter(target[rows_in], rows$w, columns$X))), error = function(e) e)
-        if (!inherits(fit, "error") && !all(is.finite(c(fit$beta, fit[["b"]]))))
-          fit <- simpleError("an estimate is not finite")
+        fit <- checked_initial_fit(fit, p, if (mixed) nrow(reTrms$Zt) else 0L)
         if (inherits(fit, "error")) {
           fallback <- "failed"
           if (!supplied)
@@ -290,26 +289,43 @@ binary_fit <- function(y, offset, X, reTrms = NULL)
                                 check.conv.singular = "ignore",
                                 check.conv.hess     = "ignore")
   frame <- model.frame(y ~ 1, data.frame(y = y), offset = offset)
-  # glmer's criterion finds lme4's own functions through the frame its builder
-  # is called from, which inside glmer is one of lme4's: the builder is called
-  # here from a frame that lme4's namespace encloses
-  criterion <- do.call(lme4::mkGlmerDevfun,
-                       list(frame, X, reTrms, family = family, control = control),
-                       envir = new.env(parent = asNamespace("lme4")))
+  # lme4's modular sequence as its help gives it (?lme4::modular), with the
+  # stage of each optimization named as glmer names it: an lme4 before 2.0
+  # takes an unnamed stage as the first and returns no coefficients. The
+  # criterion's enclosure is the frame its builder is called from, this one,
+  # and its first stage calls lme4's exported GHrule by name, so the name is
+  # bound here.
+  GHrule <- lme4::GHrule
+  criterion <- lme4::mkGlmerDevfun(frame, X, reTrms, family = family, control = control)
   lme4::optimizeGlmer(criterion, optimizer = control$optimizer[[1L]], restart_edge = FALSE,
-                      boundary.tol = 0, control = control$optCtrl, nAGQ = 0L,
+                      boundary.tol = 0, control = control$optCtrl, nAGQ = 0L, stage = 1,
                       calc.derivs = FALSE)
   criterion <- lme4::updateGlmerDevfun(criterion, reTrms, nAGQ = 1L)
   optimum <- lme4::optimizeGlmer(criterion, optimizer = control$optimizer[[2L]],
                                  restart_edge = control$restart_edge,
                                  boundary.tol = control$boundary.tol,
-                                 control = control$optCtrl, nAGQ = 1L, calc.derivs = FALSE,
+                                 control = control$optCtrl, nAGQ = 1L, stage = 2,
+                                 calc.derivs = FALSE,
                                  use.last.params = control$use.last.params)
   criterion(optimum$par)
   state <- environment(criterion)
   # the second stage optimizes over the covariance parameters and then the
   # coefficients, which the criterion carries in the offset
   list(beta = optimum$par[-state$dpars], b = as.vector(state$pp$b(1)), usable = TRUE)
+}
+
+# An initial fit's estimates, or the error that stands for a failed fit: one
+# the fitter raised, estimates that are not a coefficient for every fixed
+# column and a predicted effect for every column of the random design, or one
+# that is not finite. A failed fit is never a start.
+checked_initial_fit <- function(fit, n_fixed, n_random)
+{
+  if (inherits(fit, "error")) return(fit)
+  if (length(fit$beta) != n_fixed || length(fit[["b"]]) != n_random)
+    return(simpleError("its estimates are not of the model's size"))
+  if (!all(is.finite(c(fit$beta, fit[["b"]]))))
+    return(simpleError("an estimate is not finite"))
+  fit
 }
 
 # The values a binary fit's first sweep starts from: the model's own part of a
@@ -335,8 +351,7 @@ binary_start <- function(object, verbose = 0L, fitter = binary_fit)
   fit <- tryCatch(suppressMessages(suppressWarnings(
     if (mixed) fitter(object$y[rows_in], offset, columns$X, range_cut_reTrms(reTrms, rows_in))
     else fitter(object$y[rows_in], offset, columns$X))), error = function(e) e)
-  if (!inherits(fit, "error") && !all(is.finite(c(fit$beta, fit[["b"]]))))
-    fit <- simpleError("an estimate is not finite")
+  fit <- checked_initial_fit(fit, ncol(columns$X), if (mixed) nrow(reTrms$Zt) else 0L)
   if (inherits(fit, "error")) {
     warning("the initial fit for the binary response failed (", conditionMessage(fit),
             "); the fit starts from zero", call. = FALSE)

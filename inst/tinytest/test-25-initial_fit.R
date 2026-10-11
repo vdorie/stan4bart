@@ -379,6 +379,19 @@ local({
   expect_identical(seen$warned, paste0("the initial fit for the BART response range failed ",
                                        "(no optimum); the response's own range is used; ",
                                        "see 'bart_range'"))
+  # estimates that are not one for every column are a failed fit, never a start
+  for (fitter in list(function(z, w, X, reTrms = NULL) list(beta = numeric()),
+                      function(z, w, X, reTrms = NULL) list(beta = numeric(ncol(X) - 1L)),
+                      function(z, w, X, reTrms = NULL) list(beta = numeric(ncol(X)), b = 0))) {
+    seen <- observe(tryCatch(route_of(plain0, "lm", fitter = fitter), error = function(e) NULL))
+    expect_false(is.null(seen$value))
+    expect_identical(seen$value$range, own_range)
+    expect_identical(seen$value$fallback, "failed")
+    expect_identical(seen$value$own, numeric(n))
+    expect_identical(seen$warned, paste0("the initial fit for the BART response range failed ",
+                                         "(its estimates are not of the model's size); the ",
+                                         "response's own range is used; see 'bart_range'"))
+  }
   # a pair whose start fails is still the pair, and says nothing
   seen <- observe(route_of(plain0, c(0, 100), fitter = function(...) stop("no optimum")))
   expect_identical(seen$value$range, c(0, 100))
@@ -715,12 +728,13 @@ if (has_lme4) local({
   own <- (d$x - mean(d$x)) * fixed[["x"]] + (d$s - mean(d$s)) * fixed[["s"]] + effects
 
   seen <- observe(start_of(binary0, verbose = 1L))
-  expect_true(max(abs(seen$value - own)) < 1e-4)
+  # both run lme4's two stages on the same pieces
+  expect_true(max(abs(seen$value - own)) < 1e-8)
   expect_identical(c(seen$warned, seen$printed), character())
   # glmer's linear predictor less the offset and the intercept terms
   intercept <- fixed[[1L]] + mean(d$x) * fixed[["x"]] + mean(d$s) * fixed[["s"]]
   expect_true(max(abs(seen$value[rows_b] -
-                      (predict(oracle, type = "link") - d$o[rows_b] - intercept))) < 1e-4)
+                      (predict(oracle, type = "link") - d$o[rows_b] - intercept))) < 1e-8)
   # PRECONDITION: no start on the scale of a probability reaches these
   expect_true(min(seen$value) < -0.5 && max(seen$value) > 1.5)
   # lme4 is given copies of what it writes into
@@ -884,4 +898,41 @@ if (at_home()) local({
   seen <- observe(tryCatch(fit_short(plain, d, bart_range = c(-1e300, 1e300)),
                            error = function(e) "stopped"))
   expect_identical(seen$value, "stopped")
+})
+
+# the binary start, once more -------------------------------------------------
+
+# a second model against glmer: an intercept and an uncorrelated slope, 0/1
+# weights and an offset
+if (has_lme4) local({
+  crossed <- yb ~ x + s + (1 + s || g) + bart(u + v)
+  crossed0 <- stan4bart(crossed, d, weights = a, offset = o, iter = 0L)
+  oracle <- lme4::glmer(yb ~ x + s + (1 + s || g), d[rows_b, ],
+                        family = binomial("probit"), offset = o,
+                        control = lme4::glmerControl(check.conv.grad = "ignore",
+                                                     check.conv.singular = "ignore",
+                                                     check.conv.hess = "ignore"))
+  fixed <- lme4::fixef(oracle)
+  effects_g <- as.matrix(lme4::ranef(oracle)$g)
+  effects_g <- effects_g[match(as.character(d$g), rownames(effects_g)), ]
+  effects_g[is.na(effects_g)] <- 0
+  own <- (d$x - mean(d$x)) * fixed[["x"]] + (d$s - mean(d$s)) * fixed[["s"]] +
+    effects_g[, "(Intercept)"] + d$s * effects_g[, "s"]
+  seen <- observe(start_of(crossed0, verbose = 1L))
+  expect_true(max(abs(seen$value - own)) < 1e-8)
+  expect_identical(c(seen$warned, seen$printed), character())
+
+  # estimates that are not one for every column and every effect are a failed
+  # fit, never a start: an lme4 before 2.0 returned no coefficients where the
+  # second stage was not named
+  short <- function(y, offset, X, reTrms = NULL) {
+    fit <- stan4bart:::binary_fit(y, offset, X, reTrms)
+    fit$beta <- numeric()
+    fit
+  }
+  seen <- observe(start_of(crossed0, fitter = short))
+  expect_identical(seen$value, numeric(n))
+  expect_identical(seen$warned, paste0("the initial fit for the binary response failed (its ",
+                                       "estimates are not of the model's size); the fit starts ",
+                                       "from zero"))
 })
