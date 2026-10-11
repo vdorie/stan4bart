@@ -50,8 +50,16 @@ jobs:
       UBSAN_OPTIONS: print_stacktrace=1
       NOT_CRAN: true
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      # the container's OpenBLAS 0.3.20 solves triangular systems wrongly on
+      # the CPUs it sends to its Cooper Lake kernels, so base R's backsolve()
+      # is wrong there; the Haswell kernels are right and every runner has
+      # AVX2
+      OPENBLAS_CORETYPE: HASWELL
     steps:
       - uses: actions/checkout@v7
+
+      - name: Record the runner's CPU
+        run: grep -m1 'model name' /proc/cpuinfo
 
       - name: Install dependencies
         shell: Rscript {0}
