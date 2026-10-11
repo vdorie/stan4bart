@@ -611,6 +611,44 @@ local({
   }
 })
 
+# fewer than two rows of positive weight: the install holds the range with the
+# weights unchanged afterwards and raises no warning
+local({
+  n <- 40L
+  pair <- c(-3.25, 17.5)
+  set.seed(27L)
+  x <- matrix(runif(n * 2L), n)
+  y <- 10 * x[, 1L] + rnorm(n)
+  for (positive in list(9L, integer())) {
+    w <- replace(numeric(n), positive, 2)
+    data <- dbarts::dbartsData(y ~ x)
+    data@sigma <- 1
+    data@weights <- w
+    control <- dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L, n.thin = 1L,
+                                     n.threads = 1L, updateState = FALSE)
+    # creation itself warns on the slice's dbarts of rows in holding one value
+    spec <- suppressWarnings(dbarts::dbartsSpec(data = data, control = control,
+                                                family = gaussian(sigma = fixed(1))))
+    sampler <- suppressWarnings(new("dbartsSampler", spec$control, spec$model, spec$data))
+    warned <- 0L
+    withCallingHandlers(stan4bart:::install_bart_range(sampler, pair),
+                        warning = function(w) { warned <<- warned + 1L; invokeRestart("muffleWarning") })
+    leaf_prior <- sampler$getLeafPrior()
+    expect_identical(leaf_prior$response.scale, pair[2L] - pair[1L], info = length(positive))
+    expect_true(abs(leaf_prior$response.shift - mean(pair)) <= 4 * .Machine$double.eps * 17.5,
+                info = length(positive))
+    expect_identical(sampler$data@weights, w, info = length(positive))
+    expect_identical(sampler$data@y, y, info = length(positive))
+    expect_identical(warned, 0L, info = length(positive))
+  }
+  # and a whole fit with a supplied pair
+  set.seed(28L)
+  fd <- data.frame(x = rnorm(n), u = runif(n), v = runif(n), y = rnorm(n))
+  fw <- replace(numeric(n), 5L, 1)
+  fit <- suppressWarnings(fit_short(y ~ x + bart(u + v), fd, weights = fw, bart_range = pair))
+  expect_identical(fit$range.bart, pair)
+})
+
 # every chain is put on the one range and holds it through warmup
 local({
   held <- function(fit, pair, chains = 2L) {

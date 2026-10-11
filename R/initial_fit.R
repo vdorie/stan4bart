@@ -405,9 +405,16 @@ install_bart_range <- function(sampler, pair)
   # updateState = FALSE explicitly: dbarts's setters default to following
   # control@updateState, and a user's bart_args updateState = TRUE must not
   # populate $state on a sampler that has not run or is about to be restored.
-  sampler$setResponse(bart_range_vector(pair, sampler$data@weights, length(y)),
+  # dbarts reads the range over the rows of positive weight and keeps the one
+  # in force where those hold fewer than two values, so with fewer than two
+  # such rows every row goes in for the two calls and the weights come back
+  weights <- sampler$data@weights
+  all_in <- length(weights) > 0L && sum(weights > 0) < 2L
+  if (all_in) sampler$setWeights(rep_len(1, length(y)), updateState = FALSE)
+  sampler$setResponse(bart_range_vector(pair, if (!all_in) weights, length(y)),
                       updateScale = TRUE, updateState = FALSE)
   sampler$setResponse(y, updateScale = FALSE, updateState = FALSE)
+  if (all_in) sampler$setWeights(weights, updateState = FALSE)
   leaf_prior <- sampler$getLeafPrior()
   width <- pair[2L] - pair[1L]
   tolerance <- 4 * .Machine$double.eps * max(abs(pair))
