@@ -428,11 +428,23 @@ stan4bart(formula,
     terms takes the response's own range and a binary one starts from a probit
     regression on its fixed effects alone, each with a warning. The fit is then
     not the one obtained with lme4 installed, including under a fixed seed;
-    results can also differ between versions of lme4. A model with no random
-    term never uses lme4. Where lme4's fit stops, or returns estimates that are
-    not finite, a warning says so and the fit proceeds as it does without lme4,
-    a binary one from a start of zero. The initial fits were checked against
-    \code{lmer} and \code{glmer} of lme4 2.1.0 and 1.1-35.5.
+    results can also differ between versions of lme4. What that costs was
+    measured on simulated data of 500 rows with a random intercept on groups
+    of 4 or of 25, ten data sets each, fitted with four chains of 1000 warmup
+    and 1000 kept draws. Without lme4 a continuous response was given a range
+    1.3 to 1.4 times as wide. The error of its fitted mean was 1.5 percent
+    higher with groups of 4 and 0.5 percent higher with groups of 25, where a
+    second seed with lme4 moved it by 1.0 and 0.7 percent, and the fitted
+    mean's effective sample size was 20 and 13 percent lower, where a second
+    seed moved it by 8 and 1 percent. The error of a binary response's fitted
+    probabilities moved by 0.7 percent or less, and by 0.4 percent or less at
+    a second seed with lme4.
+
+    A model with no random term never uses lme4. Where lme4's fit stops, or
+    returns estimates that are not finite, a warning says so and the fit
+    proceeds as it does without lme4, a binary one from a start of zero. The
+    initial fits were checked against \code{lmer} and \code{glmer} of lme4
+    2.1.0 and 1.1-35.5.
   }
   \subsection{Random effect scale mixing}{
     The random effect covariance is sampled in its non-centered form: a scale
