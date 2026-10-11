@@ -80,8 +80,10 @@ stan4bart <-
   if (is_bernoulli && !identical(bart_range, "mixed"))
     warning("'bart_range' is not used for a binary response", call. = FALSE)
 
-  offset <- model.offset(glmod$fr)[rows_kept] %ORifNULL% double(0)
-  weights <- validate_weights(as.vector(model.weights(glmod$fr))[rows_kept])
+  # Doubles from here on, whatever type they were given in: the initial fit,
+  # the parametric sampler and the forest then read the same numbers.
+  offset <- as.double(model.offset(glmod$fr)[rows_kept] %ORifNULL% double(0))
+  weights <- as.double(validate_weights(as.vector(model.weights(glmod$fr))[rows_kept]))
   offset_type <- match.arg(offset_type)
   
   result <- nlist(y, weights, offset, offset_type = offset_type,

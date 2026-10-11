@@ -222,8 +222,16 @@ stan4bart_fit <-
   offset      <- object$offset
   offset_type <- object$offset_type
   group       <- object$reTrms
-  
-  
+
+  # The C++ sizes its arrays by the forest's rows and reads every other piece
+  # to that length, so a piece on other rows is refused here, where it is
+  # still an R error.
+  n_rows <- c(nrow(x), nrow(data.bart@x), if (length(group) > 0L) ncol(group$Zt),
+              if (length(weights) > 0L) length(weights), if (length(offset) > 0L) length(offset),
+              length(bart_offset_init))
+  if (any(n_rows != length(y)))
+    stop("internal error: the response, the designs, the weights and the offset are not on the same rows")
+
   x_stuff <- center_x(x, FALSE)
   xtemp <- xbar <- has_intercept <- NULL # R CMD check
   for (i in names(x_stuff)) # xtemp, xbar, has_intercept

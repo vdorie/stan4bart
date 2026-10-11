@@ -119,35 +119,29 @@ glFormula <- function(formula, data = NULL, subset, weights,
     attr(attr(fr, "terms"), "varnames.random") <- getVariableNames(ranterms)
     attr(fr, "na.action.random") <- attr(ranfr, "na.action")
     
-    # We create a total frame with all of the data, and then subset the individual frames
-    # based on the total na situation
+    # The total frame holds every row, and each component's frame is cut to
+    # the rows the model keeps: those no component dropped for a missing
+    # value. A component that dropped none of its own is cut as well, by the
+    # rows the others dropped, so the response and every design sit on the
+    # same rows.
     na.action.all <- c(attr(fixedfr, "na.action"), attr(bartfr, "na.action"), attr(ranfr, "na.action"))
     if (length(na.action.all) > 0L) {
       na.action.all <- sort(na.action.all[!duplicated(na.action.all)])
-      if (!is.null(class(attr(fr, "na.action.fixed"))))
-        class(na.action.all) <- class(attr(fr, "na.action.fixed"))
-      else if (!is.null(class(attr(fr, "na.action.bart"))))
-        class(na.action.all) <- class(attr(fr, "na.action.bart"))
-      else
-        class(na.action.all) <- class(attr(fr, "na.action.random"))
+      # "omit" or "exclude", as the components that dropped a row record it
+      class(na.action.all) <- class(Find(Negate(is.null), list(
+        attr(fr, "na.action.fixed"), attr(fr, "na.action.bart"), attr(fr, "na.action.random"))))
       
       attr(fr, "na.action.all") <- na.action.all
       
       all_rows <- seq_len(nrow(fr)) %not_in% na.action.all
+      # a component frame's rows are the total frame's less its own dropped
+      # ones; of those it keeps the rows no component dropped
+      cut_to_kept <- function(frame)
+        frame[all_rows[seq_len(nrow(fr)) %not_in% attr(frame, "na.action")], , drop = FALSE]
       
-      if (!is.null(attr(fixedfr, "na.action"))) {
-        fixed_rows <- seq_len(nrow(fr)) %not_in% attr(fixedfr, "na.action")
-        fixedfr <- fixedfr[all_rows[fixed_rows],,drop = FALSE]
-      }
-      
-      if (!is.null(attr(bartfr, "na.action"))) {
-        bart_rows <- seq_len(nrow(fr)) %not_in% attr(bartfr, "na.action")
-        bartfr <- bartfr[all_rows[bart_rows],,drop = FALSE]
-      }
-      if (!is.null(attr(ranfr, "na.action"))) {
-        random_rows <- seq_len(nrow(fr)) %not_in% attr(ranfr, "na.action")
-        ranfr <- ranfr[all_rows[random_rows],,drop = FALSE]
-      }
+      fixedfr <- cut_to_kept(fixedfr)
+      bartfr <- cut_to_kept(bartfr)
+      ranfr <- cut_to_kept(ranfr)
     }
     
     if (length(attr(ranterms, "term.labels")) > 0L) {

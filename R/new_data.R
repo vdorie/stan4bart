@@ -95,12 +95,9 @@ getTestDataFrames <- function(object, newdata, na.action = na.pass, weights = NU
   na.action.all <- c(result$na.action.fixed, result$na.action.random, result$na.action.bart)
   if (length(na.action.all) > 0L) {
     na.action.all <- sort(na.action.all[!duplicated(na.action.all)])
-    if (!is.null(class(result$na.action.fixed)))
-      class(na.action.all) <- class(result$na.action.fixed)
-    else if (!is.null(class(result$na.action.bart)))
-      class(na.action.all) <- class(result$na.action.bart)
-    else
-      class(na.action.all) <- class(result$na.action.random)
+    # "omit" or "exclude", as the components that dropped a row record it
+    class(na.action.all) <- class(Find(Negate(is.null), list(
+      result$na.action.fixed, result$na.action.bart, result$na.action.random)))
     
     result$na.action.all <- na.action.all
     

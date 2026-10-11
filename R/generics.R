@@ -524,7 +524,10 @@ extract.stan4bartFit <-
   #
   # However, with na.action == na.exclude, it is reasonable to
   # return predictions for sub-components of the model when they
-  # have additional data.
+  # have additional data: each parametric component is reported on the
+  # frame's rows, less those it has a missing value on itself. That holds
+  # for a component with no missing value of its own as well, whose design
+  # in the fit is cut to the rows the model keeps.
   
   if (sample == "train") {
     na.action.fixed  <- attr(object$frame, "na.action.fixed")
@@ -532,35 +535,38 @@ extract.stan4bartFit <-
     na.action.random <- attr(object$frame, "na.action.random")
     na.action.all    <- attr(object$frame, "na.action.all")
     n_all <- nrow(object$frame)
+    excluded <- inherits(na.action.all, "exclude")
+    # a component's frame on the rows it has no missing value on
+    component_frame <- function(type, dropped) {
+      frame <- model.frame(object, type = type)
+      if (length(dropped) > 0L) frame <- frame[-dropped,,drop = FALSE]
+      attr(frame, "na.action") <- na.pass
+      frame
+    }
         
     if (!is.null(object$offset) && length(object$offset) > 0L)
       offset <- pad_kept_rows(object, object$offset, NA_real_)
     
     if (n_fixef > 0L) {
-      if (!inherits(na.action.fixed, "exclude")) {
+      if (!excluded) {
         X <- object$X
       } else {
-        frame <- model.frame(object, type = "fixed")[-na.action.fixed,,drop = FALSE]
-        attr(frame, "na.action") <- na.pass
-        X <- model.matrix(formula(object, type = "fixed"), frame)
-        intercept_col <- match("(Intercept)", colnames(X))
-        if (!is.na(intercept_col))
-          X <- X[, -intercept_col, drop = FALSE]
+        X <- model.matrix(formula(object, type = "fixed"), component_frame("fixed", na.action.fixed))
+        # the fit's columns: no intercept, and none it dropped as dependent
+        X <- X[, colnames(object$X), drop = FALSE]
       }
     }
     if (n_ranef_levels > 0L) {
-      if (!inherits(na.action.random, "exclude")) {
+      if (!excluded) {
         reTrms <- object$reTrms
       } else {
-        frame <- model.frame(object, type = "random")[-na.action.random,,drop = FALSE]
-        attr(frame, "na.action") <- na.pass
-        reTrms <- mkReTrms(findbars(RHSForm(formula(object))), frame)
+        reTrms <- mkReTrms(findbars(RHSForm(formula(object))),
+                           component_frame("random", na.action.random))
       }
     }
-    if (inherits(na.action.bart, "exclude")) {
-      frame <- model.frame(object, type = "bart")[-na.action.bart,,drop = FALSE]
+    if (excluded) {
       n_obs_bart <- if (!is.null(object$bart_train)) dim(object$bart_train)[1L] else nrow(object$bartData@x)
-      if (n_obs_bart != nrow(frame) && type == "indiv.bart")
+      if (n_obs_bart != n_all - length(na.action.bart) && type == "indiv.bart")
         warning("cannot obtain training predictions for rows where BART component has no NAs but other components do; add to test data instead")
       # The bart training result will always be of size N - na.action.all, even if
       # the bart training frame can have more rows.
@@ -843,7 +849,9 @@ fitted_bart_streamed <- function(object, type, sample, sample_new_levels) {
   is_bernoulli <- object$family$family == "binomial"
   offset_type  <- object$offset_type
 
-  na_bart <- if (sample == "train") attr(object$frame, "na.action.bart") else object$test$na.action.bart
+  # the rows any component dropped, for the training sample: under na.exclude
+  # extract() reports them as missing
+  na_bart <- if (sample == "train") attr(object$frame, "na.action.all") else object$test$na.action.bart
   offset  <- if (sample == "train") object$offset else object$test$offset
 
   has_fixef_par <- any(grepl("^beta|gamma", dimnames(object$stan)[[1L]]))
@@ -1000,11 +1008,12 @@ fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
 }
 
 # response residuals, as lm's and dbarts's own: the observed response less the
-# posterior mean of its expected value, on the rows fitted() reports
+# posterior mean of its expected value, on the rows fitted() reports, which
+# under na.exclude are the frame's with the dropped rows missing
 residuals.stan4bartFit <- function(object, ...)
 {
   if (length(list(...)) > 0) warning("unused arguments ignored")
-  object$y - fitted(object, type = "ev", sample = "train")
+  pad_kept_rows(object, object$y, NA_real_) - fitted(object, type = "ev", sample = "train")
 }
 
 predict.stan4bartFit <-

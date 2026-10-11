@@ -218,3 +218,64 @@ local({
                      sort(match(c(2L, intersect(dropped, rows)), rows)), info = info)
   }
 })
+
+# weights and an offset given as integers ----------------------------------
+
+# they are the numbers they hold: the fit is that of the same values as
+# doubles, for the range, the parametric sampler and the forest alike
+local({
+  set.seed(4)
+  n <- 80L
+  d <- data.frame(g = factor(sample(8L, n, TRUE)), x = rnorm(n), u = runif(n), v = runif(n))
+  d$oi <- sample(-3:3, n, TRUE)
+  d$od <- as.double(d$oi)
+  d$wi <- sample(0:3, n, TRUE)
+  d$wd <- as.double(d$wi)
+  d$y <- 2 * d$x + 3 * d$u + rnorm(8L)[d$g] + d$od + rnorm(n)
+  d$yb <- as.double(d$y > median(d$y))
+  d$ai <- as.integer(seq_len(n) %% 4L != 0L)
+  d$ad <- as.double(d$ai)
+  # the call is evaluated where it is written, so that 'weights' and 'offset'
+  # name columns of the data
+  short <- function(...) {
+    call <- match.call()
+    call[[1L]] <- quote(stan4bart)
+    call[c("cores", "verbose", "chains", "warmup", "iter", "seed", "bart_range")] <-
+      list(1L, -1L, 2L, 5L, 10L, 3L, "lm")
+    call$bart_args <- quote(list(n.trees = 5L))
+    eval(call, parent.frame())
+  }
+  same <- function(a, b, info) {
+    expect_inherits(a, "stan4bartFit", info = info)
+    if (!inherits(a, "stan4bartFit")) return(invisible(NULL))
+    expect_identical(typeof(a$offset), "double", info = info)
+    expect_identical(typeof(a$weights), "double", info = info)
+    expect_identical(a$offset, b$offset, info = info)
+    expect_identical(a$weights, b$weights, info = info)
+    expect_identical(a$range.bart, b$range.bart, info = info)
+    expect_identical(a$stan, b$stan, info = info)
+    expect_identical(a$bart_train, b$bart_train, info = info)
+  }
+  formula <- y ~ x + (1 | g) + bart(u + v)
+  as_double <- short(formula, d, weights = wd, offset = od)
+  same(tryCatch(short(formula, d, weights = wi, offset = oi), error = conditionMessage),
+       as_double, "both")
+  same(short(formula, d, weights = wd, offset = oi), as_double, "offset")
+  same(tryCatch(short(formula, d, weights = wi, offset = od), error = conditionMessage),
+       as_double, "weights")
+  # PRECONDITION: the offset and the weights reach the draws
+  expect_false(identical(as_double$stan, short(formula, d, weights = wd)$stan))
+  expect_false(identical(as_double$stan, short(formula, d, offset = od)$stan))
+  # the expected value holds the offset
+  ev <- extract(short(formula, d, offset = oi), "ev")
+  parts <- extract(short(formula, d, offset = oi), "indiv.fixef") +
+    extract(short(formula, d, offset = oi), "indiv.ranef") +
+    extract(short(formula, d, offset = oi), "indiv.bart")
+  expect_equal(ev - parts, matrix(d$od, n, ncol(ev)), check.attributes = FALSE)
+
+  # a binary response: 0/1 weights and an offset as integers
+  binary <- yb ~ x + (1 | g) + bart(u + v)
+  same(tryCatch(suppressWarnings(short(binary, d, weights = ai, offset = oi)),
+                error = conditionMessage),
+       suppressWarnings(short(binary, d, weights = ad, offset = od)), "binary")
+})
