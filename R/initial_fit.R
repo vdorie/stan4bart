@@ -363,7 +363,12 @@ bart_range_vector <- function(pair, weights, n)
 # Puts a sampler that holds no offset on the pair: dbarts derives the range
 # from a response that spans it and is then given back its own response with
 # the range held. The sampler must report the pair afterwards, its width
-# exactly, or the chains would not share one prior.
+# exactly, or the chains would not share one prior. Its middle is compared
+# relative to the pair's larger end: dbarts forms it as lower + width / 2 and
+# this as (lower + upper) / 2, each the exact middle with roundings behind it
+# that sum to at most one unit in that end's last place for dbarts and half a
+# unit here, so the two are within 1.5 units of each other. 4 leaves room and
+# passes no other pair's middle.
 install_bart_range <- function(sampler, pair)
 {
   y <- sampler$data@y
@@ -374,8 +379,9 @@ install_bart_range <- function(sampler, pair)
                       updateScale = TRUE, updateState = FALSE)
   sampler$setResponse(y, updateScale = FALSE, updateState = FALSE)
   leaf_prior <- sampler$getLeafPrior()
+  tolerance <- 4 * .Machine$double.eps * max(abs(pair))
   if (!identical(leaf_prior$response.scale, pair[2L] - pair[1L]) ||
-      !isTRUE(abs(leaf_prior$response.shift - (pair[1L] + pair[2L]) / 2) <= 1e-12))
+      !isTRUE(abs(leaf_prior$response.shift - (pair[1L] + pair[2L]) / 2) <= tolerance))
     stop("internal error: the BART response range was not installed")
   invisible(sampler)
 }

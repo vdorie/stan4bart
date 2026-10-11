@@ -602,6 +602,89 @@ local({
   }
 })
 
+# a response in the tens of thousands whose range spans more than a factor of
+# two: the difference of the pair's ends is then not exact, and the middle
+# dbarts forms from it sits a unit in the last place from (lower + upper) / 2
+local({
+  set.seed(664L)
+  n <- 80L
+  big <- data.frame(g = factor(sample(8L, n, TRUE)), x = rnorm(n), u = runif(n), v = runif(n))
+  big$y <- 40000 + 3000 * (4 * big$x + 8 * sin(pi * big$u * big$v) + rnorm(8L)[big$g] + rnorm(n))
+  expect_true(min(big$y) > 1e4 && max(big$y) > 2 * min(big$y))
+  big0 <- stan4bart(y ~ x + (1 | g) + bart(u + v), big, iter = 0L)
+  reload <- function(fit) {
+    file <- tempfile(fileext = ".rds")
+    on.exit(unlink(file))
+    saveRDS(fit, file)
+    readRDS(file)
+  }
+  for (bart_range in c(if (has_lme4) "mixed", "lm", "response")) {
+    pair <- route_of(big0, bart_range)$range
+    expect_true(pair[1L] > 1e4 && pair[2L] > 2 * pair[1L], info = bart_range)
+    fit <- tryCatch(fit_short(y ~ x + (1 | g) + bart(u + v), big, bart_range = bart_range),
+                    error = conditionMessage)
+    expect_inherits(fit, "stan4bartFit", info = bart_range)
+    if (!inherits(fit, "stan4bartFit")) next
+    expect_identical(fit$range.bart, pair, info = bart_range)
+    expect_identical(state_pairs(fit), matrix(pair, 2L, 2L), info = bart_range)
+    stored <- extract(fit, "indiv.bart", combine_chains = FALSE)
+    # the restore of the saved fit, and of one saved before there was a
+    # range.bart, whose chains take the pair their states record
+    old <- fit
+    old$range.bart <- old$range.route <- old$range.info <- NULL
+    for (saved in list(reload(fit), reload(old))) {
+      for (sampler in stan4bart:::getBartSampler(saved)) {
+        leaf_prior <- sampler$getLeafPrior()
+        expect_identical(leaf_prior$response.scale, pair[2L] - pair[1L], info = bart_range)
+        # PRECONDITION: the sampler's middle is not within 1e-12 of the
+        # pair's, and is within rounding of it
+        expect_true(abs(leaf_prior$response.shift - mean(pair)) > 1e-12, info = bart_range)
+        expect_true(abs(leaf_prior$response.shift - mean(pair)) <=
+                      2 * .Machine$double.eps * pair[2L], info = bart_range)
+      }
+      expect_equal(predict(saved, big, type = "indiv.bart", combine_chains = FALSE), stored,
+                   tolerance = 1e-10, check.attributes = FALSE, info = bart_range)
+    }
+  }
+})
+
+# the read-back refuses a sampler that is not on the pair: its width not the
+# pair's exactly, or its middle further off than rounding puts it
+local({
+  n <- 40L
+  set.seed(26L)
+  x <- matrix(runif(n * 2L), n)
+  y <- 10 * x[, 1L] + rnorm(n)
+  data <- dbarts::dbartsData(y ~ x)
+  data@sigma <- 1
+  control <- dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L, n.thin = 1L,
+                                   n.threads = 1L, updateState = FALSE)
+  spec <- dbarts::dbartsSpec(data = data, control = control, family = gaussian(sigma = fixed(1)))
+  real <- new("dbartsSampler", spec$control, spec$model, spec$data)
+  # a stand-in that takes the calls and reports what it is told to
+  stand_in <- function(scale, shift)
+    list(data = real$data, setResponse = function(...) invisible(NULL),
+         getLeafPrior = function() list(response.scale = scale, response.shift = shift))
+  pair <- c(12345.678, 98765.4321)
+  width <- pair[2L] - pair[1L]
+  ulp <- 2^(floor(log2(mean(pair))) - 52)
+  words <- "internal error: the BART response range was not installed"
+  expect_silent(stan4bart:::install_bart_range(stand_in(width, mean(pair)), pair))
+  expect_silent(stan4bart:::install_bart_range(stand_in(width, mean(pair) + ulp), pair))
+  expect_silent(stan4bart:::install_bart_range(stand_in(width, mean(pair) - ulp), pair))
+  expect_error(stan4bart:::install_bart_range(stand_in(width, mean(pair) + 16 * ulp), pair), words,
+               fixed = TRUE)
+  expect_error(stan4bart:::install_bart_range(stand_in(width, mean(pair) - 16 * ulp), pair), words,
+               fixed = TRUE)
+  expect_error(stan4bart:::install_bart_range(stand_in(width * (1 + 2^-52), mean(pair)), pair),
+               words, fixed = TRUE)
+  expect_error(stan4bart:::install_bart_range(stand_in(width, NA_real_), pair), words, fixed = TRUE)
+  # and a real sampler left where its creation put it is refused
+  expect_error(stan4bart:::install_bart_range(
+    stand_in(real$getLeafPrior()$response.scale, real$getLeafPrior()$response.shift), pair),
+    words, fixed = TRUE)
+})
+
 # the binary start --------------------------------------------------------
 
 start_of <- function(...) stan4bart:::binary_start(...)
