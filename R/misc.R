@@ -83,18 +83,6 @@ delete.weights <- function(termobj, weights)
   termobj
 }
 
-# The fixed-effects-only formula for the last-resort init fit. nobars on an
-# unevaluated call whose right-hand side is only random effects returns the
-# bare response, not an intercept-only formula.
-init_fixed_formula <- function(formula)
-{
-  result <- nobars(nobart(formula))
-  if (!is.call(result) || !identical(result[[1L]], quote(`~`)))
-    result <- call("~", result, 1)
-  
-  result
-}
-
 # Whether lme4 does the mixed-model fits: it is installed, and the option
 # 'stan4bart.lme4' is not FALSE. The option is how a test reaches the paths
 # that run without lme4 on a machine that has it.

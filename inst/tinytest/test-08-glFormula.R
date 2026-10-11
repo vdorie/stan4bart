@@ -104,12 +104,6 @@ local({
   expect_equal(names(glResult$reTrms$Ztlist), "1 | g.1")
 })
 
-# the last-resort init fit drops the bart and random-effect terms; with
-# nothing else on the right-hand side it is intercept-only, not the bare
-# response
-expect_identical(stan4bart:::init_fixed_formula(quote(y ~ bart(x) + (1 | g))), quote(y ~ 1))
-expect_identical(stan4bart:::init_fixed_formula(quote(y ~ bart(x) + z + (1 | g))), quote(y ~ z))
-
 # lme4 is a suggested package: every formula helper is this package's own
 # copy, so a build made beside lme4 or reformulas holds none of their
 # functions and runs where they are not installed

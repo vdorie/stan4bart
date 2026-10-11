@@ -1,5 +1,7 @@
-# the response range of the BART component: one pair, fixed before sampling
-# from an initial fit that holds the forest's columns, shared by every chain
+# the initial fit: for a continuous response the range of the BART component,
+# one pair fixed before sampling from a fit that holds the forest's columns
+# and shared by every chain, with the values the first sweep starts from; for
+# a binary response those values alone
 
 has_lme4 <- requireNamespace("lme4", quietly = TRUE)
 
@@ -244,6 +246,16 @@ if (has_lme4) local({
   for (bart_range in list("lm", "response", c(0, 100))) route_of(mixed0, bart_range)
   route_of(plain0, "mixed")
   expect_identical(calls, 1L)
+})
+
+# a model with random terms alone: the linear fit has no column of the model's
+local({
+  alone0 <- stan4bart(y ~ (1 | g) + bart(u + v), d, weights = w, offset = o, iter = 0L)
+  route <- route_of(alone0, "lm")
+  expect_identical(route$info[c("p", "fit", "added")], list(p = 3L, fit = "linear", added = c("u", "v")))
+  expect_identical(route$own, numeric(n))
+  expect_identical(route$range, own_range)
+  expect_null(route$fallback)
 })
 
 # when the range is the response's own though another was asked -----------------
@@ -569,5 +581,139 @@ local({
     if (has_lme4)
       held(fit_short(mixed, d, weights = w, offset = o, chains = 3L, cores = 2L),
            route_of(mixed0, "mixed")$range, 3L)
+  }
+})
+
+# the binary start --------------------------------------------------------
+
+start_of <- function(...) stan4bart:::binary_start(...)
+set.seed(27L)
+d$yb <- as.double(2 * d$x - 0.5 * d$s + effects[d$g, 1L] / 2 + d$o + rnorm(n) > 0)
+# 0/1 weights name the rows in
+d$a <- as.double(seq_len(n) %% 5L != 0L)
+d$a[d$g == "4"] <- 0
+rows_b <- d$a > 0
+binary <- yb ~ x + s + (1 | g) + bart(u + v)
+binary0 <- stan4bart(binary, d, weights = a, offset = o, iter = 0L)
+binary_plain0 <- stan4bart(yb ~ x + s + bart(u + v), d, weights = a, offset = o, iter = 0L)
+lme4_words <- paste0("lme4 is not installed, so the binary fit starts from a probit regression ",
+                     "on the fixed effects alone; install lme4 to start from the mixed model")
+
+# with lme4 the start is the model's own part of glmer's fit over the rows in,
+# on the scale of the linear predictor
+if (has_lme4) local({
+  control <- lme4::glmerControl(check.conv.grad = "ignore", check.conv.singular = "ignore",
+                                check.conv.hess = "ignore")
+  oracle <- lme4::glmer(yb ~ x + s + (1 | g), d[rows_b, ], family = binomial("probit"),
+                        offset = o, control = control)
+  fixed <- lme4::fixef(oracle)
+  effects <- lme4::ranef(oracle)$g
+  effects <- effects[match(as.character(d$g), rownames(effects)), 1L]
+  expect_true(anyNA(effects))
+  effects[is.na(effects)] <- 0
+  own <- (d$x - mean(d$x)) * fixed[["x"]] + (d$s - mean(d$s)) * fixed[["s"]] + effects
+
+  seen <- observe(start_of(binary0, verbose = 1L))
+  expect_true(max(abs(seen$value - own)) < 1e-4)
+  expect_identical(c(seen$warned, seen$printed), character())
+  # glmer's linear predictor less the offset and the intercept terms
+  intercept <- fixed[[1L]] + mean(d$x) * fixed[["x"]] + mean(d$s) * fixed[["s"]]
+  expect_true(max(abs(seen$value[rows_b] -
+                      (predict(oracle, type = "link") - d$o[rows_b] - intercept))) < 1e-4)
+  # PRECONDITION: no start on the scale of a probability reaches these
+  expect_true(min(seen$value) < -0.5 && max(seen$value) > 1.5)
+  # lme4 is given copies of what it writes into
+  expect_identical(binary0$reTrms$theta, 1)
+  expect_identical(start_of(binary0), seen$value)
+
+  # a mixed model that fails: a warning, and a start of zero
+  seen <- observe(start_of(binary0, fitter = function(...) stop("no optimum")))
+  expect_identical(seen$value, numeric(n))
+  expect_identical(seen$warned, paste0("the initial fit for the binary response failed ",
+                                       "(no optimum); the fit starts from zero"))
+})
+
+# without lme4 it is the probit regression on the fixed columns, with a
+# warning where the model has random terms
+local({
+  fit <- suppressWarnings(glm.fit(cbind(1, d$x, d$s)[rows_b, ], d$yb[rows_b],
+                                  offset = d$o[rows_b], family = binomial("probit")))
+  own <- (d$x - mean(d$x)) * fit$coefficients[[2L]] + (d$s - mean(d$s)) * fit$coefficients[[3L]]
+  # PRECONDITION: the regression is one to start from
+  expect_true(fit$converged && max(abs(fit$coefficients)) < 5)
+
+  seen <- without_lme4(observe(start_of(binary0, verbose = 1L)))
+  expect_true(max(abs(seen$value - own)) < 1e-10)
+  expect_identical(seen$warned, lme4_words)
+  expect_identical(seen$printed, character())
+  expect_true(min(seen$value) < -0.5 && max(seen$value) > 1.5)
+
+  # a model with no random term never uses lme4
+  for (expr in list(quote(start_of(binary_plain0)), quote(without_lme4(start_of(binary_plain0))))) {
+    seen <- observe(eval(expr))
+    expect_true(max(abs(seen$value - own)) < 1e-10)
+    expect_identical(seen$warned, character())
+  }
+
+  # the rows the weights leave out are not read
+  flipped <- binary_plain0
+  flipped$y[!rows_b] <- 1 - flipped$y[!rows_b]
+  expect_identical(start_of(flipped), start_of(binary_plain0))
+
+  # random terms alone: the regression has the intercept alone, which is not
+  # part of the start
+  alone0 <- stan4bart(yb ~ (1 | g) + bart(u + v), d, weights = a, offset = o, iter = 0L)
+  seen <- without_lme4(observe(start_of(alone0)))
+  expect_identical(seen$value, numeric(n))
+  expect_identical(seen$warned, lme4_words)
+
+  # an offset that stands for the whole parametric part: nothing is fitted
+  parametric0 <- stan4bart(binary, d, weights = a, offset = o, offset_type = "parametric",
+                           iter = 0L)
+  seen <- observe(start_of(parametric0, fitter = function(...) stop("fitted")))
+  expect_identical(seen$value, numeric(n))
+  expect_identical(seen$warned, character())
+})
+
+# a separated response: glm.fit reports fitted probabilities of 0 or 1, and
+# the start is zero
+local({
+  separated <- d
+  separated$yb <- as.double(separated$x > 0)
+  separated0 <- stan4bart(yb ~ x + s + bart(u + v), separated, iter = 0L)
+  fit <- suppressWarnings(glm.fit(cbind(1, separated$x, separated$s), separated$yb,
+                                  family = binomial("probit")))
+  # PRECONDITION: the regression's own coefficients are not a start
+  expect_true(abs(fit$coefficients[[2L]]) > 20)
+  seen <- observe(start_of(separated0, verbose = 1L))
+  expect_identical(seen$value, numeric(n))
+  expect_identical(seen$warned, character())
+  expect_identical(seen$printed, paste0("the initial probit regression did not converge or fits a ",
+                                        "probability of 0 or 1, so the fit starts from zero"))
+  expect_identical(observe(start_of(separated0, verbose = 0L))$printed, character())
+})
+
+# what stan4bart() hands the chains is that start
+local({
+  start <- start_of(binary_plain0)
+  direct <- stan4bart:::stan4bart_fit(binary_plain0, binary_plain0$family, start, 1, NULL,
+                                      -1L, 20L, 10L, 1L, 2L, 1L, 2L, 5L, TRUE, FALSE, NULL, NULL,
+                                      NULL, list(n.trees = 5L))
+  fit <- stan4bart(yb ~ x + s + bart(u + v), d, weights = a, offset = o, cores = 1L,
+                   verbose = -1L, chains = 2L, warmup = 10L, iter = 20L, seed = 5L,
+                   bart_args = list(n.trees = 5L))
+  for (i in 1:2)
+    expect_identical(unname(fit$stan[, , i]), unname(direct[[i]]$sample$stan))
+})
+
+# a formula held in a variable fits, for both families, and the initial fit
+# prints nothing
+local({
+  for (formula in list(mixed, binary)) {
+    seen <- observe(stan4bart(formula, d, cores = 1L, verbose = -1L, chains = 1L, warmup = 5L,
+                              iter = 10L, bart_args = list(n.trees = 5L)))
+    expect_inherits(seen$value, "stan4bartFit")
+    expect_identical(seen$printed, character())
+    expect_identical(length(seen$warned), if (has_lme4) 0L else 1L)
   }
 })

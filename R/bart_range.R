@@ -1,6 +1,7 @@
 # The response range of the BART component: the two numbers dbarts maps onto
 # [-0.5, 0.5] and states its leaf prior between. A continuous fit has one,
-# fixed before sampling and shared by every chain; a binary fit has none.
+# fixed before sampling and shared by every chain; a binary fit has none, and
+# takes from its initial fit only the values its first sweep starts from.
 
 # 'bart_range' as stan4bart() takes it: the name of an estimate, or a pair of
 # numbers that is used as given and never reordered.
@@ -18,8 +19,42 @@ resolve_bart_range <- function(bart_range)
 
 format_range <- function(x) vapply(x, format, "", digits = 6L)
 
+# The rows an initial fit reads, the kept rows of positive weight, with their
+# weights, and what the user's offset stands for: under an 'offset_type' other
+# than "default" it replaces a part of the model, and with no offset the type
+# does nothing. 'target' is what the forest is fitted to before the model's
+# own part comes off: the response less the offset, or the response alone
+# where the offset stands for the forest.
+initial_fit_rows <- function(object)
+{
+  weights <- object$weights
+  rows_in <- if (length(weights) > 0L) which(weights > 0) else seq_along(object$y)
+  has_offset <- length(object$offset) > 0L && any(object$offset != 0)
+  offset_type <- if (has_offset) object$offset_type else "default"
+  offset <- if (has_offset && offset_type != "bart") as.vector(object$offset) else NULL
+  list(rows_in = rows_in,
+       w = if (length(weights) > 0L) as.double(weights[rows_in]) else rep_len(1, length(rows_in)),
+       offset_type = offset_type, offset = offset,
+       target = if (is.null(offset)) object$y else object$y - offset)
+}
+
+# The model's own part of an initial fit on every kept row: the fixed columns
+# centered where the parametric sampler centers them times their coefficients,
+# plus the predicted random effects through the whole design, and neither the
+# intercept nor the forest's columns' part. Under an 'offset_type' other than
+# "default" it holds what the forest's offset holds in the sweeps: the random
+# part alone under "fixef", the fixed part alone under "ranef".
+initial_fit_own <- function(object, columns, fit, offset_type)
+{
+  fixed <- if (length(columns$own) == 0L) 0 else
+    drop(sweep(object$X[, columns$own_cols, drop = FALSE], 2L,
+               object$X_means[columns$own_cols]) %*% fit$beta[columns$own])
+  random <- if (is.null(fit[["b"]])) 0 else as.vector(Matrix::crossprod(object$reTrms$Zt, fit[["b"]]))
+  numeric(length(object$y)) + switch(offset_type, fixef = random, ranef = fixed, fixed + random)
+}
+
 # The fixed columns of the initial fit on the rows in: an intercept, the
-# model's own columns and the forest's, in that order. A numeric or ordered
+# model's own columns and, with 'forest', the forest's, in that order. A numeric or ordered
 # forest column enters as the value the forest splits on. An unordered factor
 # enters as indicators of its levels present among the rows in, less the
 # first, unless each of those levels lies within one level of a grouping
@@ -29,7 +64,7 @@ format_range <- function(x) vapply(x, format, "", digits = 6L)
 # model's own columns ahead of the forest's; lme4 stops on a dependent column
 # and so is never left to choose. 'own' indexes the kept columns that are the
 # model's and 'own_cols' the columns of the model's design they are.
-range_fixed_block <- function(object, rows_in, w)
+range_fixed_block <- function(object, rows_in, w, forest = TRUE)
 {
   x_bart <- as.matrix(object$bartData@x)
   # dbarts marks an unordered factor's column with 1
@@ -37,7 +72,7 @@ range_fixed_block <- function(object, rows_in, w)
   factor_levels <- attr(object$bartData@x, "factor.levels")
   added <- list()
   left_out <- character()
-  for (j in seq_len(ncol(x_bart))) {
+  for (j in seq_len(if (forest) ncol(x_bart) else 0L)) {
     name <- colnames(x_bart)[j]
     value <- x_bart[rows_in, j]
     if (!is_factor[j]) {
@@ -113,6 +148,7 @@ range_fit <- function(z, w, X, reTrms = NULL)
 range_cut_reTrms <- function(reTrms, rows_in)
 {
   reTrms$Zt <- reTrms$Zt[, rows_in, drop = FALSE]
+  reTrms$flist[] <- lapply(reTrms$flist, function(group) group[rows_in])
   reTrms$Ztlist <- NULL
   reTrms$theta <- reTrms$theta + 0
   reTrms$Lambdat@x <- reTrms$Lambdat@x + 0
@@ -120,56 +156,43 @@ range_cut_reTrms <- function(reTrms, rows_in)
 }
 
 # The range of a continuous fit and the values its first sweep starts from,
-# from what stan4bart() has parsed. The rows in are the kept rows of positive
-# weight; the fit and the range read no other row. The range is that of what
-# the forest is fitted to: the response, less the offset, less the model's own
-# part of the initial fit, which holds the forest's columns as linear terms.
-# That own part - the fixed columns centered where the parametric sampler
-# centers them times their coefficients, plus the predicted random effects,
-# and neither the intercept nor the forest's columns' part - is the forest's
-# first offset, on every kept row, and the spread of what is left on the rows
-# in is the first residual standard deviation. An estimated range is never
-# wider than the response's own, and where the fit cannot be computed the
-# response's own range stands in with the start that goes with it: an own
-# part of zero.
-#
-# Under an 'offset_type' other than "default" the own part holds what the
-# forest's offset holds in the sweeps: the random part alone under "fixef",
-# the fixed part alone under "ranef", both under "bart", where the offset is
-# not taken off the response, and nothing under "parametric", where no fit is
+# from what stan4bart() has parsed. The fit and the range read the rows in and
+# no other. The range is that of what the forest is fitted to: the response,
+# less the offset, less the model's own part of the initial fit, which holds
+# the forest's columns as linear terms. That own part is the forest's first
+# offset, on every kept row, and the spread of what is left on the rows in is
+# the first residual standard deviation. An estimated range is never wider
+# than the response's own, and where the fit cannot be computed the response's
+# own range stands in with the start that goes with it: an own part of zero.
+# Under an 'offset_type' of "parametric" the own part is zero and no fit is
 # made.
 bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fit)
 {
   verbose <- isTRUE(as.integer(verbose) > 0L)
-  y <- object$y
-  weights <- object$weights
-  rows_in <- if (length(weights) > 0L) which(weights > 0) else seq_along(y)
+  rows <- initial_fit_rows(object)
+  rows_in <- rows$rows_in
+  target <- rows$target
   n <- length(rows_in)
-  w <- if (length(weights) > 0L) as.double(weights[rows_in]) else rep_len(1, n)
-
-  has_offset <- length(object$offset) > 0L && any(object$offset != 0)
-  offset_type <- if (has_offset) object$offset_type else "default"
-  target <- if (has_offset && offset_type != "bart") y - as.vector(object$offset) else y
 
   supplied <- is.numeric(bart_range)
   route <- if (supplied) "supplied" else bart_range
   reTrms <- object$reTrms
   mixed <- route == "mixed" && length(reTrms) > 0L
 
-  own <- numeric(length(y))
+  own <- numeric(length(target))
   coefficients <- NULL
   fallback <- NULL
   info <- list(n = n, p = NA_integer_, fit = "none", added = character(),
                dropped = character(), left.out = character(), theta = NULL,
                sigma = NULL, message = NULL)
 
-  if (route != "response" && offset_type != "parametric") {
+  if (route != "response" && rows$offset_type != "parametric") {
     if (mixed && !lme4_is_used()) {
       fallback <- "lme4"
       warning("lme4 is not installed, so the BART response range is the response's own, ",
               "not the mixed model's; install lme4, or set 'bart_range'", call. = FALSE)
     } else {
-      columns <- range_fixed_block(object, rows_in, w)
+      columns <- range_fixed_block(object, rows_in, rows$w)
       p <- ncol(columns$X)
       info$p <- p
       info[c("added", "dropped", "left.out")] <- columns[c("added", "dropped", "left.out")]
@@ -189,9 +212,9 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
                 "model's own terms; see 'bart_range'\n", sep = "")
         }
         fit <- tryCatch(suppressMessages(suppressWarnings(
-          if (mixed) fitter(target[rows_in], w, columns$X, range_cut_reTrms(reTrms, rows_in))
-          else fitter(target[rows_in], w, columns$X))), error = function(e) e)
-        if (!inherits(fit, "error") && !all(is.finite(c(fit$beta, fit$b))))
+          if (mixed) fitter(target[rows_in], rows$w, columns$X, range_cut_reTrms(reTrms, rows_in))
+          else fitter(target[rows_in], rows$w, columns$X))), error = function(e) e)
+        if (!inherits(fit, "error") && !all(is.finite(c(fit$beta, fit[["b"]]))))
           fit <- simpleError("an estimate is not finite")
         if (inherits(fit, "error")) {
           fallback <- "failed"
@@ -203,11 +226,7 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
           info$fit <- if (mixed) "lme4" else "linear"
           info[c("theta", "sigma", "message")] <- fit[c("theta", "sigma", "message")]
           coefficients <- setNames(fit$beta, colnames(columns$X))
-          fixed <- if (length(columns$own) == 0L) 0 else
-            drop(sweep(object$X[, columns$own_cols, drop = FALSE], 2L,
-                       object$X_means[columns$own_cols]) %*% fit$beta[columns$own])
-          random <- if (mixed) as.vector(Matrix::crossprod(reTrms$Zt, fit$b)) else 0
-          own <- own + switch(offset_type, fixef = random, ranef = fixed, fixed + random)
+          own <- initial_fit_own(object, columns, fit, rows$offset_type)
         }
       }
     }
@@ -220,7 +239,7 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
     else if (width > diff(range_own)) fallback <- "wider"
   }
   # a fallback takes the response's own range whole, starting values included
-  if (!is.null(fallback)) own <- numeric(length(y))
+  if (!is.null(fallback)) own <- numeric(length(target))
 
   range_bart <- if (supplied) bart_range else range((target - own)[rows_in])
   # dbarts's own treatment of a constant response stands
@@ -247,6 +266,85 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
 
   list(range = range_bart, route = route, fallback = fallback, info = info, own = own,
        sigma = sigma, coefficients = coefficients)
+}
+
+# The initial fit of a binary response y on the fixed columns X with an
+# offset, all on the rows in: a probit regression, or with 'reTrms' a probit
+# mixed model by lme4, built from the parsed pieces and optimized in the two
+# stages glmer runs. 'usable' is FALSE where the regression reports, as
+# glm.fit does, that it did not converge or fitted a probability of 0 or 1.
+binary_fit <- function(y, offset, X, reTrms = NULL)
+{
+  family <- binomial(link = "probit")
+  if (is.null(reTrms)) {
+    fit <- glm.fit(X, y, offset = offset, family = family)
+    eps <- 10 * .Machine$double.eps
+    return(list(beta = unname(fit$coefficients),
+                usable = fit$converged &&
+                  !any(fit$fitted.values > 1 - eps | fit$fitted.values < eps)))
+  }
+  control <- lme4::glmerControl(check.conv.grad     = "ignore",
+                                check.conv.singular = "ignore",
+                                check.conv.hess     = "ignore")
+  frame <- model.frame(y ~ 1, data.frame(y = y), offset = offset)
+  # glmer's criterion finds lme4's own functions through the frame its builder
+  # is called from, which inside glmer is one of lme4's: the builder is called
+  # here from a frame that lme4's namespace encloses
+  criterion <- do.call(lme4::mkGlmerDevfun,
+                       list(frame, X, reTrms, family = family, control = control),
+                       envir = new.env(parent = asNamespace("lme4")))
+  lme4::optimizeGlmer(criterion, optimizer = control$optimizer[[1L]], restart_edge = FALSE,
+                      boundary.tol = 0, control = control$optCtrl, nAGQ = 0L,
+                      calc.derivs = FALSE)
+  criterion <- lme4::updateGlmerDevfun(criterion, reTrms, nAGQ = 1L)
+  optimum <- lme4::optimizeGlmer(criterion, optimizer = control$optimizer[[2L]],
+                                 restart_edge = control$restart_edge,
+                                 boundary.tol = control$boundary.tol,
+                                 control = control$optCtrl, nAGQ = 1L, calc.derivs = FALSE,
+                                 use.last.params = control$use.last.params)
+  criterion(optimum$par)
+  state <- environment(criterion)
+  # the second stage optimizes over the covariance parameters and then the
+  # coefficients, which the criterion carries in the offset
+  list(beta = optimum$par[-state$dpars], b = as.vector(state$pp$b(1)), usable = TRUE)
+}
+
+# The values a binary fit's first sweep starts from: the model's own part of a
+# probit fit of the response on the model's own columns, on the scale of the
+# linear predictor. The fit reads the rows the 0/1 weights select. It is a
+# mixed model where the model has random terms and lme4 is used, and else a
+# regression on the fixed columns. Where no fit is to be had the start is zero.
+binary_start <- function(object, verbose = 0L, fitter = binary_fit)
+{
+  rows <- initial_fit_rows(object)
+  rows_in <- rows$rows_in
+  own <- numeric(length(object$y))
+  if (rows$offset_type == "parametric") return(own)
+
+  reTrms <- object$reTrms
+  mixed <- length(reTrms) > 0L && lme4_is_used()
+  if (length(reTrms) > 0L && !mixed)
+    warning("lme4 is not installed, so the binary fit starts from a probit regression on ",
+            "the fixed effects alone; install lme4 to start from the mixed model",
+            call. = FALSE)
+  columns <- range_fixed_block(object, rows_in, rows$w, forest = FALSE)
+  offset <- rows$offset[rows_in]
+  fit <- tryCatch(suppressMessages(suppressWarnings(
+    if (mixed) fitter(object$y[rows_in], offset, columns$X, range_cut_reTrms(reTrms, rows_in))
+    else fitter(object$y[rows_in], offset, columns$X))), error = function(e) e)
+  if (!inherits(fit, "error") && !all(is.finite(c(fit$beta, fit[["b"]]))))
+    fit <- simpleError("an estimate is not finite")
+  if (inherits(fit, "error")) {
+    warning("the initial fit for the binary response failed (", conditionMessage(fit),
+            "); the fit starts from zero", call. = FALSE)
+  } else if (!isTRUE(fit$usable)) {
+    if (isTRUE(as.integer(verbose) > 0L))
+      cat("the initial probit regression did not converge or fits a probability of 0 or 1, ",
+          "so the fit starts from zero\n", sep = "")
+  } else {
+    own <- initial_fit_own(object, columns, fit, rows$offset_type)
+  }
+  own
 }
 
 # A response whose range, as dbarts derives it, is the pair exactly: the lower
