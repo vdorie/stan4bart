@@ -89,10 +89,24 @@ items
   one-parameter-binary: a binary fit whose parametric part has one
     parameter, as y ~ x + bart(...), stops when its chains are packaged
     ("'dimnames' applied to non-array").
-  na-exclude-rows: under na.exclude, residuals() subtracts fits on the
-    frame's rows from the response on the kept rows, and extract of "ev"
-    stops where only some components dropped a row ("dims do not match
-    the length of object").
+  test-oracle-old-lme4: the at-home block of
+    inst/tinytest/test-02-binary.R calls lme4::glmer itself for its
+    deviance comparison. On lme4 1.1-35.5 that call stopped ("Downdated
+    VtV is not positive definite") in 4 of 38 one-process runs of the
+    suite on one build and fitted in the other 34, on the same data;
+    it has not stopped on lme4 2.1.0. The package's own start takes its
+    warning and a start of zero when lme4 stops.
+  near-constant-target: a response that less its offset is constant up
+    to rounding (y = 7 + offset) is given a range a few units in the
+    last place wide, and fits with the forest pinned there; a width of
+    exactly zero installs no range. No rule says where "no width" ends.
+  huge-range-message: a pair, or a response, so large that the
+    parametric sampler cannot start (c(1e100, 2e100), a response of the
+    order 1e300) stops with the sampler's own words ("inv_mass must be
+    in (0, inf).", "non-finite log density or gradient"), not with ones
+    that name the range.
+  exclude-contrasts: under na.exclude the fixed design is rebuilt on the
+    frame's rows without the 'contrasts' argument the fit was given.
   ppd-zero-weight: extract(type = "ppd") gives NaN, with rnorm's
     warning, on a continuous fit's rows of weight zero.
   ranef-shared-level: the shared level of the group intercepts does not

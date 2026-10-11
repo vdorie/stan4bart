@@ -59,7 +59,14 @@ stan4bart(formula,
   \item{subset, weights, na.action, offset, contrasts}{optional components
   adjusting the constructed model matrices and otherwise changing the linear
   predictor. \code{na.action} cannot be \code{"na.pass"}. See
-  \code{\link{lm}} and \code{\link{model.matrix.default}}. For a binary
+  \code{\link{lm}} and \code{\link{model.matrix.default}}. A row with a
+  missing value in any part of the model - the response, a fixed effect, a
+  variable of a random term, a BART predictor, the weights or the offset - is
+  dropped from every part, so the model is fitted to the rows that are
+  complete; under \code{na.exclude} the dropped rows are missing in what
+  \code{extract}, \code{fitted} and \code{residuals} report. \code{weights} and
+  \code{offset} are used as double precision numbers whatever type they are
+  given in. For a binary
   response, \code{weights} follow \code{\link[dbarts]{dbarts}}'s probit rule:
   weights identically 1 are treated as absent, weights that are all 0 and 1
   name the rows in the data set and install as the BART component's
@@ -79,10 +86,16 @@ stan4bart(formula,
   quietly. Additional levels of information may be displayed for increasingly
   positive numbers, however a large number of diagnostics are suppressed when
   running multi-threaded. If negative, all diagnostic information is ignored.
-  For a continuous response a positive value also prints, before the chains
-  start, a line saying how the BART response range is being estimated and,
-  where that range is instead the response's own, a line saying so; see
-  \code{bart_range}.}
+  A positive value also prints, before the chains start, lines about the
+  initial fit. For a continuous response: one saying how the BART response
+  range is being estimated, one where no BART predictor enters that estimate,
+  and one where the range is the response's own because the initial fit is
+  not defined on the data, because the fitted range has no width, or because
+  it was wider than the response's own; see \code{bart_range}. For a binary
+  response: one where the initial probit regression did not converge, or
+  fits a probability of 0 or 1, and the fit starts from zero. That
+  \pkg{lme4} is not installed, and that an initial fit failed, are warnings
+  and do not depend on \code{verbose}.}
   \item{iter}{positive integer indicating the number of posterior samples to
   draw and return. Includes warmup samples.}
   \item{warmup}{non-negative integer indicating number of posterior samples to
@@ -197,7 +210,12 @@ stan4bart(formula,
   would give a wider one, and where the fit cannot be computed, the response's
   own range is used and the \code{range.fallback} component of the result
   says why. A pair is used as it is given, whatever the data, and is the way
-  to ask for any other range, for example \code{range(y)}.
+  to ask for any other range, for example \code{range(y)}. Where the response
+  less any offset takes one value on the observations of positive weight
+  there is no range to fix: none is recorded, and BART's own treatment of
+  such a response stands. A response that is constant altogether stops the
+  fit under the default prior on the residual standard deviation, which is
+  scaled by the response's.
 
   Too narrow a range leaves group-level signal in the random effects that
   belongs to BART, and too wide a one costs accuracy and mixing in small
@@ -411,7 +429,10 @@ stan4bart(formula,
     regression on its fixed effects alone, each with a warning. The fit is then
     not the one obtained with lme4 installed, including under a fixed seed;
     results can also differ between versions of lme4. A model with no random
-    term never uses lme4.
+    term never uses lme4. Where lme4's fit stops, or returns estimates that are
+    not finite, a warning says so and the fit proceeds as it does without lme4,
+    a binary one from a start of zero. The initial fits were checked against
+    \code{lmer} and \code{glmer} of lme4 2.1.0 and 1.1-35.5.
   }
   \subsection{Random effect scale mixing}{
     The random effect covariance is sampled in its non-centered form: a scale
@@ -533,12 +554,14 @@ stan4bart(formula,
   plot}
   \item{\code{range.bart}}{for a continuous response, the pair
   \code{c(lower, upper)} the BART component is calibrated to, the same for
-  every chain; \code{NULL} for a binary response}
+  every chain; \code{NULL} for a binary response, and for a response that,
+  less any offset, takes one value on the observations of positive weight}
   \item{\code{range.route}}{how that range was asked for: \code{"mixed"},
   \code{"lm"}, \code{"response"}, or \code{"supplied"} for a pair}
   \item{\code{range.fallback}}{present only where the range is the response's
   own although another was asked for: \code{"lme4"}, it is not installed;
-  \code{"undefined"}, the initial fit is not defined on these data;
+  \code{"undefined"}, the initial fit is not defined on these data or its
+  range has no width;
   \code{"failed"}, the initial fit raised an error; or \code{"wider"}, the
   fitted range was wider than the response's own}
   \item{\code{range.info}}{a list describing the initial fit behind the range:

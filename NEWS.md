@@ -202,7 +202,8 @@
   Where it is not installed, a continuous model with random terms takes the
   response's own range and a binary one starts from a probit regression on its
   fixed effects, each with a warning; the results are not those obtained with
-  lme4 installed.
+  lme4 installed. The initial fits were checked against lme4 2.1.0 and
+  1.1-35.5.
 
 * A binary fit starts from its initial fit's linear predictor, where it used
   to start from the fitted probabilities, so its draws under a fixed seed
@@ -211,8 +212,14 @@
 * `bart =` no longer abbreviates `bart_args`: with `bart_range` in the
   argument list R reports the abbreviation as ambiguous.
 
-* With an `offset` and a row dropped for a missing value, the offset is now
-  aligned with the rows the model keeps; such a fit's results change.
+* A row with a missing value in one part of the model alone - a BART
+  predictor, a fixed effect, or a variable of a random term - is now dropped
+  from every part. It used to be dropped from that part only, which left the
+  response, the fixed and random designs and the BART predictors on different
+  rows: the fit ran on misaligned data, or stopped. The weights and the offset
+  are cut to the same rows. Results for data with such a row change, and are
+  now those of the complete rows. `test` data under `na.omit` are cut the same
+  way.
 
 * Factor variables in the `bart()` part of the formula are now encoded with
   `dbarts`'s categorical splits (`factors = "categorical"`) instead of one
@@ -242,8 +249,17 @@
 ## Bug fixes
 
 * `weights` beside a row dropped for a missing value no longer stop the fit
-  ("weights must be of length equal to ..."): the weights and the offset are
-  cut to the rows the model keeps, and `extract()` reports them on those rows.
+  ("weights must be of length equal to ..."). Under `na.exclude`, `extract()`,
+  `fitted()` and `residuals()` report the dropped rows as missing whichever
+  part of the model held the missing value; `extract(type = "ev")` used to
+  stop, and `residuals()` to misalign, where only some parts did.
+
+* An `offset` given as integers is no longer ignored by the sampler, and
+  `weights` given as integers no longer stop the fit ("weights must be of type
+  real"): both are used as the numbers they hold.
+
+* A constant response stops with a message that says so, where it used to
+  stop with "sigma estimate must be greater than 0".
 
 * A package built where lme4 is installed now runs where it is not. It used
   to hold lme4's and reformulas's own functions and stop at the first call
