@@ -198,16 +198,104 @@ local({
                  info = info)
   }
 
-  # pieces on different rows never reach the sampler
+  # pieces on different rows never reach the sampler: a fixed design, weights
+  # or an offset a row short, a random design a row long
   fit0 <- fit_rows(d, TRUE, iter = 0L)
-  for (piece in c("X", "weights", "offset")) {
+  for (piece in c("X", "weights", "offset", "Zt")) {
     torn <- fit0
-    torn[[piece]] <- if (piece == "X") fit0$X[-1L, , drop = FALSE] else fit0[[piece]][-1L]
+    if (piece == "Zt") torn$reTrms$Zt <- cbind(fit0$reTrms$Zt, fit0$reTrms$Zt[, 1L, drop = FALSE])
+    else torn[[piece]] <- if (piece == "X") fit0$X[-1L, , drop = FALSE] else fit0[[piece]][-1L]
     expect_error(stan4bart:::stan4bart_fit(torn, torn$family, numeric(n), 1, range(d$y), -1L, 7L,
                                            3L, 1L, 1L, 1L, 2L, 9L, TRUE, FALSE, NULL, NULL, NULL,
                                            list(n.trees = 5L)),
                  "are not on the same rows", fixed = TRUE, info = piece)
   }
+})
+
+# an offset() term, transformed terms and 'contrasts' under na.exclude -------
+
+# The designs of the rows another part dropped are built from the fit's frame,
+# where a term's column sits under the term's own name and is not evaluated
+# again, and with the contrasts the fit was given.
+local({
+  set.seed(33L)
+  n <- 80L
+  d <- data.frame(g = factor(sample(8L, n, TRUE)), x = rnorm(n), s = runif(n), u = runif(n),
+                  v = runif(n), o = rnorm(n), f = factor(sample(c("a", "b", "c"), n, TRUE)))
+  d$y <- 2 * d$x + sqrt(d$s) + c(0, 1, -1)[d$f] + 3 * d$u +
+    (rnorm(8L) + log(d$s) * rnorm(8L))[d$g] + d$o + rnorm(n)
+  dropped <- c(5L, 6L)
+  kept <- setdiff(seq_len(n), dropped)
+  short <- function(data, na.action, ...)
+    stan4bart(y ~ x + sqrt(s) + f + offset(o) + (1 + log(s) | g) + bart(u + v), data,
+              na.action = na.action, contrasts = list(f = "contr.sum"), cores = 1L,
+              verbose = -1L, chains = 1L, warmup = 3L, iter = 7L, seed = 9L,
+              bart_args = list(n.trees = 5L, keepTrees = TRUE), ...)
+  padded <- function(x) replace(rep_len(NA_real_, n), kept, x)
+
+  # the missing value in a forest column, a fixed column, the offset itself
+  for (column in c("u", "x", "o")) {
+    holed <- d
+    holed[[column]][dropped] <- NA
+    # a level only rows the fixed part itself drops hold is none of its design's
+    if (column == "x") {
+      levels(holed$f) <- c(levels(d$f), "z")
+      holed$f[dropped] <- "z"
+    }
+    reference <- short(holed[kept, ], na.omit)
+    expect_identical(colnames(reference$X), c("x", "sqrt(s)", "f1", "f2"), info = column)
+    omitted <- short(holed, na.omit)
+    expect_identical(extract(omitted, "ev"), extract(reference, "ev"), info = column)
+    expect_identical(residuals(omitted), residuals(reference), info = column)
+    expect_error(short(holed, na.fail), "missing values in object", info = column)
+
+    excluded <- short(holed, na.exclude)
+    expect_identical(unname(excluded$stan), unname(reference$stan), info = column)
+    # a part is missing where a value of its own is, and the offset() term
+    # is the fixed part's
+    missing_in <- list(ev = dropped, indiv.fixef = if (column != "u") dropped else integer(),
+                       indiv.ranef = integer())
+    for (type in names(missing_in)) {
+      info <- paste(column, type)
+      value <- tryCatch(suppressWarnings(extract(excluded, type)), error = conditionMessage)
+      expect_identical(dim(value), c(n, ncol(extract(reference, type))), info = info)
+      if (!is.matrix(value)) next
+      expect_identical(which(is.na(value[, 1L])), missing_in[[type]], info = info)
+      expect_equal(value[kept, ], extract(reference, type), check.attributes = FALSE, info = info)
+      # on a row the forest alone dropped, a part is what the fit gives the row
+      if (column == "u" && type != "ev")
+        expect_equal(value[dropped, ], predict(reference, d[dropped, ], type = type),
+                     check.attributes = FALSE, info = info)
+    }
+    for (method in list(fitted, residuals))
+      expect_equal(tryCatch(method(excluded), error = conditionMessage), padded(method(reference)),
+                   info = column)
+    # and the fitted values replayed from kept trees are on the frame's rows
+    # whichever part dropped one
+    if (column == "x")
+      expect_equal(tryCatch(fitted(short(holed, na.exclude, store = "trees")),
+                            error = conditionMessage),
+                   padded(fitted(reference)), tolerance = 1e-8)
+  }
+
+  # A dropped row holding a level that no kept row holds, of a fixed factor or
+  # of a grouping factor, is missing in that part: the fit has nothing to give
+  # it, and no effect is sampled for it.
+  holed <- d
+  holed$u[dropped] <- NA
+  levels(holed$f) <- c(levels(d$f), "z")
+  levels(holed$g) <- c(levels(d$g), "new")
+  holed$f[dropped[1L]] <- "z"
+  holed$g[dropped[2L]] <- "new"
+  excluded <- suppressMessages(short(holed, na.exclude))
+  set.seed(1L)
+  before <- .Random.seed
+  missing_in <- function(type)
+    tryCatch(which(is.na(extract(excluded, type)[, 1L])), error = conditionMessage)
+  expect_identical(missing_in("indiv.fixef"), dropped[1L])
+  expect_identical(missing_in("indiv.ranef"), dropped[2L])
+  expect_identical(.Random.seed, before)
+  expect_identical(missing_in("ev"), dropped)
 })
 
 # the test sample is cut the same way: a missing value in one component of

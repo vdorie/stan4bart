@@ -105,8 +105,19 @@ items
     order 1e300) stops with the sampler's own words ("inv_mass must be
     in (0, inf).", "non-finite log density or gradient"), not with ones
     that name the range.
-  exclude-contrasts: under na.exclude the fixed design is rebuilt on the
-    frame's rows without the 'contrasts' argument the fit was given.
+  lost-factor-level: a level of a fixed factor that only rows dropped
+    for another part's missing value hold stays a level of the fixed
+    design. Where it is the factor's first level, or under contrasts
+    such as contr.sum, the design keeps a column more than the complete
+    rows' and the draws are not theirs: with f on levels a to d, level a
+    on row 5 alone and a missing BART predictor on row 5,
+    y ~ x + f + (1 | g) + bart(u + v) fits columns fb, fc, fd where the
+    data less row 5 fit fc, fd. Under treatment contrasts a lost level
+    that is not the first costs lme4's rank message and nothing else.
+    Dropping unused levels after the cut in glFormula repairs the fit;
+    predict() on new data then has to take its levels from the kept
+    rows, where get.orig.levs reads the whole frame, and a new row
+    holding the lost level stops as lm's does.
   ppd-zero-weight: extract(type = "ppd") gives NaN, with rnorm's
     warning, on a continuous fit's rows of weight zero.
   ranef-shared-level: the shared level of the group intercepts does not

@@ -527,7 +527,11 @@ extract.stan4bartFit <-
   # have additional data: each parametric component is reported on the
   # frame's rows, less those it has a missing value on itself. That holds
   # for a component with no missing value of its own as well, whose design
-  # in the fit is cut to the rows the model keeps.
+  # in the fit is cut to the rows the model keeps. A row another component
+  # dropped is missing in a component all the same where it holds a level,
+  # of a fixed factor or of a grouping factor, that no kept row holds: the
+  # fit has nothing to give it.
+  unseen_random <- FALSE
   
   if (sample == "train") {
     na.action.fixed  <- attr(object$frame, "na.action.fixed")
@@ -536,11 +540,17 @@ extract.stan4bartFit <-
     na.action.all    <- attr(object$frame, "na.action.all")
     n_all <- nrow(object$frame)
     excluded <- inherits(na.action.all, "exclude")
-    # a component's frame on the rows it has no missing value on
-    component_frame <- function(type, dropped) {
-      frame <- model.frame(object, type = type)
+    # The model frame of a component on the rows it has no missing value on:
+    # the frame's rows less 'dropped', its columns under the names the terms
+    # give them, so that a transformed term or an offset() is found and not
+    # evaluated again, and its factors on the levels those rows hold, as the
+    # frame the fit built the component's design from had them.
+    component_frame <- function(dropped) {
+      frame <- object$frame
       if (length(dropped) > 0L) frame <- frame[-dropped,,drop = FALSE]
-      attr(frame, "na.action") <- na.pass
+      for (name in names(frame)[vapply(frame, is.factor, NA)])
+        if (!all(levels(frame[[name]]) %in% frame[[name]]))
+          frame[[name]] <- frame[[name]][, drop = TRUE]
       frame
     }
         
@@ -551,17 +561,23 @@ extract.stan4bartFit <-
       if (!excluded) {
         X <- object$X
       } else {
-        X <- model.matrix(formula(object, type = "fixed"), component_frame("fixed", na.action.fixed))
+        frame <- component_frame(na.action.fixed)
+        X <- model.matrix(formula(object, type = "fixed"), frame, attr(object$X, "contrasts"))
+        kept <- setdiff(seq_len(n_all), na.action.fixed) %not_in% na.action.all
+        unseen_fixed <- Reduce(`|`, lapply(frame[names(attr(X, "contrasts"))], function(x)
+          x %not_in% x[kept]), FALSE)
         # the fit's columns: no intercept, and none it dropped as dependent
         X <- X[, colnames(object$X), drop = FALSE]
+        X[unseen_fixed, ] <- NA_real_
       }
     }
     if (n_ranef_levels > 0L) {
       if (!excluded) {
         reTrms <- object$reTrms
       } else {
-        reTrms <- mkReTrms(findbars(RHSForm(formula(object))),
-                           component_frame("random", na.action.random))
+        reTrms <- mkReTrms(findbars(RHSForm(formula(object))), component_frame(na.action.random))
+        unseen_random <- Reduce(`|`, lapply(names(reTrms$flist), function(name)
+          reTrms$flist[[name]] %not_in% levels(object$reTrms$flist[[name]])), FALSE)
       }
     }
     if (excluded) {
@@ -607,8 +623,12 @@ extract.stan4bartFit <-
       else
         indiv.ranef <- offset
     }
-    else
-      indiv.ranef <- fitted_random(object, reTrms, include_warmup_orig, sample_new_levels)
+    else {
+      # the training sample holds no level to sample an effect for
+      indiv.ranef <- fitted_random(object, reTrms, include_warmup_orig,
+                                   sample_new_levels && sample == "test")
+      if (any(unseen_random)) indiv.ranef[unseen_random,,] <- NA_real_
+    }
     
     if (inherits(na.action.random, "exclude")) {
       indiv.ranef.all <- array(NA_real_, c(n_all, dim(indiv.ranef)[-1L]), dimnames(indiv.ranef))

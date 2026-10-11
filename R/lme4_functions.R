@@ -177,9 +177,10 @@ glFormula <- function(formula, data = NULL, subset, weights,
       stop("no bart component detected in formula; consider using rstanarm package instead")
     
     X <- model.matrix(fixedform, fixedfr, contrasts)
-    # drop intercept, offset
+    # drop intercept, offset; the contrasts each factor was coded by stay on
+    # the design, for a design built later on other rows
     keepcols <- colnames(X) %not_in% c("(Intercept)", "`(offset)`")
-    X <- X[,keepcols,drop=FALSE]
+    X <- structure(X[,keepcols,drop=FALSE], contrasts = attr(X, "contrasts"))
     if (is.null(rankX.chk <- control[["check.rankX"]])) 
       rankX.chk <- eval(formals(lmerControl)[["check.rankX"]])[[1]]
     X <- chkRank.drop.cols(X, kind = rankX.chk, tol = 1e-07)

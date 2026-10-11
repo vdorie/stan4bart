@@ -252,14 +252,21 @@
   ("weights must be of length equal to ..."). Under `na.exclude`, `extract()`,
   `fitted()` and `residuals()` report the dropped rows as missing whichever
   part of the model held the missing value; `extract(type = "ev")` used to
-  stop, and `residuals()` to misalign, where only some parts did.
+  stop where only some parts did. They work for a model with an `offset()`
+  term or a transformed term such as `log(x)`, in its fixed part or in a
+  random term, and a dropped row that holds a level of a fixed factor or of a
+  grouping factor that no fitted row holds is missing in that part.
+
+* A `contrasts` argument is applied to every fixed-effect design built after
+  the fit: `test` data, `predict()` on new data, and the training rows under
+  `na.exclude`.
 
 * An `offset` given as integers is no longer ignored by the sampler, and
   `weights` given as integers no longer stop the fit ("weights must be of type
   real"): both are used as the numbers they hold.
 
-* A constant response stops with a message that says so, where it used to
-  stop with "sigma estimate must be greater than 0".
+* A constant response under the default prior on the residual standard
+  deviation stops with an error that says why.
 
 * A package built where lme4 is installed now runs where it is not. It used
   to hold lme4's and reformulas's own functions and stop at the first call
