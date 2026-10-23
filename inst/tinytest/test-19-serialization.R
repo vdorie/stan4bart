@@ -183,7 +183,7 @@ local({
   expect_false(is.null(slim$bart_env$ptr))
   cachedSize <- length(serialize(slim, NULL))
   slim$bart_env$ptr <- NULL
-  expect_true(length(serialize(slim, NULL)) < cachedSize)
+  expect_true(length(serialize(slim, NULL)) < 0.9 * cachedSize)
   expect_true(length(serialize(slim, NULL)) < length(serialize(fit, NULL)))
   slim3 <- reload(slim)
   expect_equal(predict(slim3, df, type = "indiv.bart", combine_chains = FALSE), stored,
