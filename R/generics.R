@@ -364,8 +364,8 @@ extract.stan4bartFit <-
   type <- match.arg(type)
   
   if (type == "trees") {
-    if (is.null(object$sampler.bart))
-      stop("extracting trees requires stan4bart to be called with `bart.args = list('keepTrees' == TRUE)`")
+    if (is.null(object$state.bart))
+      stop("extracting trees requires stan4bart to be called with `bart_args = list(keepTrees = TRUE)`")
     dotsList <- list(...)
     treeNums <- if ("treeNums" %in% names(dotsList)) as.integer(dotsList[["treeNums"]]) else NULL
     chainNums <- if ("chainNums" %in% names(dotsList)) as.integer(dotsList[["chainNums"]]) else NULL
@@ -1091,7 +1091,7 @@ predict.stan4bartFit <-
     }
   }
   if (type %in% c("ev", "ppd", "indiv.bart")) {
-    if (is.null(object$sampler.bart))
+    if (is.null(object$state.bart))
       stop("predict for bart components requires 'bart_args' to contain 'keepTrees' as 'TRUE'")
     # predictions arrive on the original response scale: each chain's
     # restored sampler sits at its fit transform

@@ -157,6 +157,27 @@ local({
   expect_equal(storedSums, apply(stored, c(2L, 3L), sum), tolerance = 1e-10, check.attributes = FALSE)
 })
 
+# a fit whose samplers were removed saves smaller and rebuilds them from its
+# states, after a reload and in session
+local({
+  fit <- fit_kept(df)
+  stored <- extract(fit, "indiv.bart", combine_chains = FALSE)
+  trees <- extract(fit, "trees")
+
+  slim <- fit
+  slim$sampler.bart <- NULL
+  expect_true(length(serialize(slim, NULL)) < length(serialize(fit, NULL)))
+  slim2 <- reload(slim)
+  expect_equal(predict(slim2, df, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
+  expect_equal(predict(slim2, df, type = "ev"), extract(fit, "ev"), tolerance = 1e-10)
+  expect_identical(extract(slim2, "trees"), trees)
+
+  expect_equal(predict(slim, df, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
+  expect_identical(extract(slim, "trees"), trees)
+})
+
 # rows of weight zero: a fit with zero weights on every second row, saved and
 # read back, predicts its stored fits
 local({

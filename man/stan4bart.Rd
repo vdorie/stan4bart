@@ -588,7 +588,14 @@ stan4bart(formula,
   list of one BART sampler per chain, each holding its chain's kept trees. Read
   by \code{\link[=stan4bart-generics]{predict}}, by \code{extract} and
   \code{fitted} under \code{store = "trees"}, and by
-  \code{extract(type = "trees")}}
+  \code{extract(type = "trees")}. The samplers do not survive a reload; they
+  are rebuilt from \code{state.bart} the first time one is needed, and the
+  same happens when this element is removed. A saved fit holds copies of the
+  training data in each chain's sampler, so \code{fit$sampler.bart <- NULL}
+  just before \code{saveRDS} makes the file smaller at no cost but that
+  rebuild}
+  \item{\code{state.bart}}{present when \code{keepTrees} is \code{TRUE}: each
+  chain's stored sampler state, from which the samplers are rebuilt}
 }
 \author{
   Vincent Dorie: \email{vdorie@gmail.com}.
