@@ -176,6 +176,18 @@ local({
   expect_equal(predict(slim, df, type = "indiv.bart", combine_chains = FALSE), stored,
                tolerance = 1e-10, check.attributes = FALSE)
   expect_identical(extract(slim, "trees"), trees)
+
+  # the rebuild is kept in the environment every copy shares, which saving
+  # writes; clearing it too makes the file smaller again (sizes compared at
+  # one moment, the formula's environment being saved with the fit)
+  expect_false(is.null(slim$bart_env$ptr))
+  cachedSize <- length(serialize(slim, NULL))
+  slim$bart_env$ptr <- NULL
+  expect_true(length(serialize(slim, NULL)) < cachedSize)
+  expect_true(length(serialize(slim, NULL)) < length(serialize(fit, NULL)))
+  slim3 <- reload(slim)
+  expect_equal(predict(slim3, df, type = "indiv.bart", combine_chains = FALSE), stored,
+               tolerance = 1e-10, check.attributes = FALSE)
 })
 
 # rows of weight zero: a fit with zero weights on every second row, saved and

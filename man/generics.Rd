@@ -66,7 +66,7 @@
   \code{extract} is used to obtain raw samples using the training or test data,
   \code{fitted} averages those samples, and \code{predict} operates on data
   not available at the time of fitting. Note: \code{predict} requires that the
-  model be fit with \code{args_bart = list(keepTrees = TRUE)}.
+  model be fit with \code{bart_args = list(keepTrees = TRUE)}.
   
   \subsection{Return type}{
     The type argument accepts:

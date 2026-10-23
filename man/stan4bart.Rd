@@ -589,13 +589,17 @@ stan4bart(formula,
   by \code{\link[=stan4bart-generics]{predict}}, by \code{extract} and
   \code{fitted} under \code{store = "trees"}, and by
   \code{extract(type = "trees")}. The samplers do not survive a reload; they
-  are rebuilt from \code{state.bart} the first time one is needed, and the
-  same happens when this element is removed. A saved fit holds copies of the
-  training data in each chain's sampler, so \code{fit$sampler.bart <- NULL}
-  just before \code{saveRDS} makes the file smaller at no cost but that
-  rebuild}
+  are rebuilt from \code{state.bart} the first time one is needed and kept in
+  \code{bart_env}, and the same happens when this element is removed. A saved
+  fit holds copies of the training data in each sampler, so removing both,
+  \code{fit$sampler.bart <- NULL} and \code{fit$bart_env$ptr <- NULL}, just
+  before \code{saveRDS} makes the file smaller. The cost is the rebuild, which
+  draws from R's random number generator, as after a reload}
   \item{\code{state.bart}}{present when \code{keepTrees} is \code{TRUE}: each
   chain's stored sampler state, from which the samplers are rebuilt}
+  \item{\code{bart_env}}{present when \code{keepTrees} is \code{TRUE}: an
+  environment whose element \code{ptr} holds the rebuilt samplers. It is
+  shared by every copy of the fit and saved with it}
 }
 \author{
   Vincent Dorie: \email{vdorie@gmail.com}.
