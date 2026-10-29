@@ -16,13 +16,13 @@ name: gates
 
 on:
   push:
-    branches: [main, bartcore]
+    branches: [main]
     paths-ignore:
       - 'docs/**'
       - 'TODO'
       - '**.md'
   pull_request:
-    branches: [main, master, bartcore]
+    branches: [main, master]
     paths-ignore:
       - 'docs/**'
       - 'TODO'

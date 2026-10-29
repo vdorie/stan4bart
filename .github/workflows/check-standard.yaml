@@ -6,7 +6,7 @@
 # to catch a real sampling regression.
 on:
   push:
-    branches: [main, master, bartcore]
+    branches: [main, master]
     # documentation- and benchmark-only pushes cannot change what R CMD check
     # builds and tests (benchmarks/ and docs/ are .Rbuildignore'd)
     paths-ignore:
@@ -15,7 +15,7 @@ on:
       - '**.md'
       - 'benchmarks/**'
   pull_request:
-    branches: [main, master, bartcore]
+    branches: [main, master]
   workflow_dispatch:
 
 concurrency:

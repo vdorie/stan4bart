@@ -16,14 +16,14 @@ name: sanitizers
 
 on:
   push:
-    branches: [main, bartcore]
+    branches: [main]
     paths-ignore:
       - 'docs/**'
       - 'TODO'
       - '**.md'
       - 'benchmarks/**'
   pull_request:
-    branches: [main, master, bartcore]
+    branches: [main, master]
     paths-ignore:
       - 'docs/**'
       - 'TODO'
