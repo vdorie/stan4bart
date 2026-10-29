@@ -140,8 +140,6 @@ items
     comparison against the Stan-era baseline did at 43 of 45, with the
     posterior unmoved. Recording that tier at another seed, or gating a
     tier on several seeds, would end it; neither is decided.
-  ppd-zero-weight: extract(type = "ppd") gives NaN, with rnorm's
-    warning, on a continuous fit's rows of weight zero.
   ranef-shared-level: the shared level of the group intercepts does not
     mix - lag-1 0.97-0.99 and ESS 1.5-19 per 1000 on every design at
     every skip in benchmarks/baselines/re-scale-BASELINE.csv. It is
