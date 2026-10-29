@@ -44,6 +44,95 @@ local({
   }
 })
 
+# with 'test' the weights are read from the test data by the same expression,
+# whether or not the formula names them; test data without them warns and
+# carries none
+local({
+  wt.fit <- 1 + seq_len(nrow(df)) %% 2L
+  df.fit <- cbind(df, wt = wt.fit)
+  df.test <- cbind(df, wt = 3 - wt.fit)
+  form <- y ~ bart(X1 + X2 + X3 + X5 + X6 + X7 + X8 + X9 + X10) + X4 + z + (1 | g.1)
+  fit_with_test <- function(weights_arg, test) {
+    caught <- character()
+    fit <- withCallingHandlers(
+      eval(bquote(stan4bart(form, df.fit, weights = .(weights_arg), test = test,
+                            cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
+                            bart_args = list(n.trees = 3)))),
+      warning = function(cond) {
+        caught <<- c(caught, conditionMessage(cond))
+        invokeRestart("muffleWarning")
+      })
+    list(fit = fit, caught = caught)
+  }
+  
+  for (weights_arg in list(quote(wt), quote(wt * 1)))
+  {
+    res <- fit_with_test(weights_arg, df.test)
+    expect_equal(res$caught, character(), info = deparse(weights_arg))
+    expect_equal(res$fit$test$frame[["(weights)"]], df.test$wt, info = deparse(weights_arg))
+  }
+  
+  df.test$wt <- NULL
+  res <- fit_with_test(quote(wt), df.test)
+  expect_equal(res$caught, "weights specified but not found in test data - ignoring")
+  expect_true(is.null(res$fit$test$frame[["(weights)"]]))
+})
+
+# the test sample reports the rows no component dropped under na.omit and every
+# row under na.exclude, and the weights its ppd draws are scaled by are those of
+# the rows it reports; weights alternate 1 and 100 so that a row reading a
+# neighbor's is a factor of ten off in spread
+if (at_home()) local({
+  wt <- ifelse(seq_len(nrow(df)) %% 2L == 1L, 1, 100)
+  w.vec <- wt
+  df.na <- cbind(df, wt = wt)
+  df.na$X1[c(3L, 10L)] <- NA
+  form <- y ~ bart(X1 + X2 + X3 + X5 + X6 + X7 + X8 + X9 + X10) + X4 + z + (1 | g.1)
+  
+  # the sd of each reported row's ppd noise in units of its own weight's: 1 when
+  # the row is scaled by its own weight
+  standardized_spread <- function(fit, w) {
+    set.seed(1)
+    ev <- extract(fit, "ev", sample = "test")
+    ppd <- extract(fit, "ppd", sample = "test")
+    sigma <- as.vector(extract(fit, "sigma"))
+    sqrt(rowMeans(sweep(ppd - ev, 2L, sigma, "/")^2) * w)
+  }
+  check_spread <- function(fit, naa, info) {
+    reported <- if (naa == "na.omit") setdiff(seq_along(wt), c(3L, 10L)) else seq_along(wt)
+    caught <- character()
+    s <- withCallingHandlers(standardized_spread(fit, wt[reported]),
+                             warning = function(cond) {
+                               caught <<- c(caught, conditionMessage(cond))
+                               invokeRestart("muffleWarning")
+                             })
+    expect_equal(caught, character(), info = info)
+    expect_equal(length(s), length(reported), info = info)
+    expect_equal(is.na(s), reported %in% c(3L, 10L), info = info)
+    expect_true(all(s[!is.na(s)] > 0.5 & s[!is.na(s)] < 2), info = info)
+  }
+  fit_args <- list(cores = 1, verbose = -1L, chains = 1, warmup = 20, iter = 60, seed = 3,
+                   bart_args = list(n.trees = 5))
+  
+  for (naa in c("na.omit", "na.exclude"))
+  {
+    for (weights_arg in list(quote(wt), quote(w.vec)))
+    {
+      fit <- do.call(stan4bart, c(list(form, df.na, weights = weights_arg, treatment = quote(z), na.action = naa),
+                                  fit_args))
+      check_spread(fit, naa, paste("treatment", naa, deparse(weights_arg)))
+    }
+    
+    # the test data hold the weights, and the missing values
+    df.fit <- df.na
+    df.fit$X1[c(3L, 10L)] <- df$X1[c(3L, 10L)]
+    df.fit$wt <- 1
+    fit <- do.call(stan4bart, c(list(form, df.fit, weights = quote(wt), test = df.na, na.action = naa),
+                                fit_args))
+    check_spread(fit, naa, paste("test", naa))
+  }
+})
+
 expect_error(stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                        weights = rep(-1, nrow(df)),
                        cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,

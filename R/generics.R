@@ -618,7 +618,7 @@ extract.stan4bartFit <-
     na.action.fixed  <- object$test$na.action.fixed
     na.action.bart   <- object$test$na.action.bart
     na.action.random <- object$test$na.action.random
-    na.action.all <- object$test.na.action.all
+    na.action.all <- object$test$na.action.all
     n_all <- nrow(object$test$frame)
     
     if (n_fixef > 0L)        X <- object$test$X
@@ -741,7 +741,17 @@ extract.stan4bartFit <-
     result <- pnorm(result)
   if (type %in% "ppd") {
     # a dropped row's draws are NA whatever its weight
-    weights <- if (sample == "test") object$test$frame[["(weights)"]] else pad_kept_rows(object, object$weights, 1)
+    weights <- if (sample == "test") {
+      # the test frame holds every row, and under na.omit the sample only the
+      # rows no component dropped
+      test_weights <- object$test$frame[["(weights)"]]
+      if (length(test_weights) > 0L && length(na.action.all) > 0L && !inherits(na.action.all, "exclude"))
+        test_weights[-as.vector(na.action.all)]
+      else
+        test_weights
+    } else {
+      pad_kept_rows(object, object$weights, 1)
+    }
     if (is.null(weights) || length(weights) == 0L) {
       if (is_bernoulli) {
         # array(x, dim, dimnames) always copies x even when its length already

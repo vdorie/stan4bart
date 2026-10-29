@@ -412,7 +412,17 @@
   wrapper forwards, stops saying which `type` is allowed instead of "'arg'
   must be of length 1".
 
-* A fit with `treatment` and `weights` no longer warns "weights specified but
-  not found in test data - ignoring", and the counterfactual rows carry the
-  fit's weights, so that `type = "ppd"` on them is weighted as on the fitted
-  rows.
+* Weights given as a data column, or any weights given with `subset`, now
+  reach the counterfactual rows of a fit with `treatment`, as weights given as
+  a vector already did, instead of the fit warning "weights specified but not
+  found in test data - ignoring" and dropping them. `type = "ppd"` draws on
+  the counterfactual rows of a weighted treatment fit change as a result, each
+  row taking its unit's own weight as the fitted rows do. A fit with `test`
+  data reads the weights from the test data by the same expression as for the
+  fit, so a weights column the formula does not name is no longer dropped.
+
+* `extract(type = "ppd", sample = "test")` on a weighted fit with
+  `na.action = "na.omit"`, the default, gave every row after a row dropped for
+  a missing value the weight of a neighbor when the weights were given as a
+  vector; R's "longer object length is not a multiple" warning was the only
+  sign. Each row now takes its own weight.

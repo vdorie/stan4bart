@@ -91,6 +91,13 @@ items
     warning: the draw's sd is sigma over the root of the weight. It
     predates the one response range per fit. Decide what such a row
     reports (a draw at weight 1, NA with no warning, or a named one).
+    The counterfactual rows of a treatment fit are the same case: a
+    zero-weight unit's counterfactual ppd is now NaN with "NAs produced",
+    as its training row's is.
+  predict-ppd-weights: predict(fit, newdata, type = "ppd") ignores
+    weights, so for a weighted fit its noise scale differs from
+    extract(sample = "test") and depends on the weights' arbitrary
+    scale. Whether newdata's weights should be read is open.
   one-parameter-binary: a binary fit whose parametric part has one
     parameter, as y ~ x + bart(...), stops when its chains are packaged
     ("'dimnames' applied to non-array").
