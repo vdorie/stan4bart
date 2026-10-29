@@ -10,12 +10,12 @@ This package is an implementation of a C++ sampler that uses [BART](https://cran
 ```
 if (length(find.package("remotes", quiet = TRUE)) == 0L)
   install.packages("remotes")
-remotes::install_github("vdorie/dbarts@bartcore")
-remotes::install_github("vdorie/stan4bart@bartcore")
+remotes::install_github("vdorie/dbarts")
+remotes::install_github("vdorie/stan4bart")
 ```
 
 This version requires `dbarts` 1.0-0, which is not yet on CRAN; until it is,
-both packages install from their `bartcore` branches, as above.
+both packages install from GitHub, as above.
 
 ## Use
 

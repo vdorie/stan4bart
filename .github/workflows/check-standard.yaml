@@ -63,14 +63,14 @@ jobs:
       # TEMPORARY, until dbarts 1.0-0 reaches CRAN: this package Depends and
       # LinkingTo dbarts (>= 1.0-0), which CRAN does not yet carry, so the
       # dependency resolver below would install 0.9-x and fail the version
-      # requirement. Install the release branch first; the resolver then sees
+      # requirement. Install dbarts from its main branch first; the resolver then sees
       # a satisfied dependency and leaves it alone. DELETE this step when
       # dbarts 1.0-0 is on CRAN (the releases are lockstep, dbarts first).
-      - name: Install dbarts from the release branch
+      - name: Install dbarts from its main branch
         shell: Rscript {0}
         run: |
           install.packages("remotes", repos = "https://cloud.r-project.org")
-          remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never")
+          remotes::install_github("vdorie/dbarts@main", upgrade = "never")
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
@@ -80,7 +80,7 @@ jobs:
           needs: check
 
       # TEMPORARY, deleted with the install step above. pak's package cache is
-      # keyed by version, not commit, and the pre-release branch never bumps
+      # keyed by version, not commit, and the development version never bumps
       # 1.0-0: a cached dbarts built from an older branch tip counts as "the
       # latest build" and silently replaces the fresh install above. Put the
       # branch build back whenever the shas disagree.
@@ -89,7 +89,7 @@ jobs:
         run: |
           tips <- suppressWarnings(
             system2("git", c("ls-remote", "https://github.com/vdorie/dbarts.git",
-                             "refs/heads/bartcore"), stdout = TRUE))
+                             "refs/heads/main"), stdout = TRUE))
           tip <- if (length(tips) > 0L) sub("\\s.*$", "", tips[1L]) else ""
           installed <- utils::packageDescription("dbarts")$RemoteSha
           if (!nzchar(tip)) {
@@ -98,7 +98,7 @@ jobs:
           } else if (!identical(installed, tip)) {
             cat("installed dbarts", if (is.null(installed)) "<none>" else installed,
                 "is not branch tip", tip, "- reinstalling\n")
-            remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never",
+            remotes::install_github("vdorie/dbarts@main", upgrade = "never",
                                     force = TRUE)
           } else {
             cat("dbarts already at branch tip", tip, "\n")

@@ -16,7 +16,7 @@ name: sanitizers
 
 on:
   push:
-    branches: [bartcore]
+    branches: [main, bartcore]
     paths-ignore:
       - 'docs/**'
       - 'TODO'
@@ -70,7 +70,7 @@ jobs:
           # dbarts is built from source here, so it is instrumented too - which
           # matters, since this package drives its engine through the C API and
           # a finding could land on either side of that boundary
-          remotes::install_github("vdorie/dbarts@bartcore", upgrade = "never")
+          remotes::install_github("vdorie/dbarts@main", upgrade = "never")
 
       - name: Install stan4bart under sanitizers
         run: R CMD INSTALL --preclean .
