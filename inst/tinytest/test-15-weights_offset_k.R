@@ -36,7 +36,10 @@ local({
                             cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
                             bart_args = list(n.trees = 3)))),
       warning = function(cond) {
-        caught <<- c(caught, conditionMessage(cond))
+        # only the weights warnings are under test; a run this short may
+        # draw sampler warnings on some builds
+        if (grepl("weights", conditionMessage(cond), fixed = TRUE))
+          caught <<- c(caught, conditionMessage(cond))
         invokeRestart("muffleWarning")
       })
     expect_equal(caught, character(), info = deparse(weights_arg))
@@ -59,7 +62,10 @@ local({
                             cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
                             bart_args = list(n.trees = 3)))),
       warning = function(cond) {
-        caught <<- c(caught, conditionMessage(cond))
+        # only the weights warnings are under test; a run this short may
+        # draw sampler warnings on some builds
+        if (grepl("weights", conditionMessage(cond), fixed = TRUE))
+          caught <<- c(caught, conditionMessage(cond))
         invokeRestart("muffleWarning")
       })
     list(fit = fit, caught = caught)
