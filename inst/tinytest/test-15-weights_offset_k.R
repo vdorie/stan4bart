@@ -22,6 +22,28 @@ fit.w <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + 
 expect_equal(as.vector(fit.w$weights), w)
 expect_true("(weights)" %in% colnames(fit.w$frame))
 
+# with 'treatment' the test rows are the fit's own, so the weights carry over
+# without a warning, whether they are a column of the data or an expression;
+# the formula does not name the weights, so the fit's frame does not hold them
+local({
+  df.w <- cbind(df, wt = w)
+  for (weights_arg in list(quote(wt), quote(wt * 1)))
+  {
+    caught <- character()
+    fit.wt <- withCallingHandlers(
+      eval(bquote(stan4bart(y ~ bart(X1 + X2 + X3 + X5 + X6 + X7 + X8 + X9 + X10) + X4 + z + (1 | g.1), df.w,
+                            weights = .(weights_arg), treatment = z,
+                            cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,
+                            bart_args = list(n.trees = 3)))),
+      warning = function(cond) {
+        caught <<- c(caught, conditionMessage(cond))
+        invokeRestart("muffleWarning")
+      })
+    expect_equal(caught, character(), info = deparse(weights_arg))
+    expect_equal(fit.wt$test$frame[["(weights)"]], w, info = deparse(weights_arg))
+  }
+})
+
 expect_error(stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                        weights = rep(-1, nrow(df)),
                        cores = 1, verbose = -1L, chains = 1, warmup = 2, iter = 4,

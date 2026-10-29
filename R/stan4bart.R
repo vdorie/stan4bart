@@ -117,7 +117,12 @@ stan4bart <-
     result$test <- testDataFrames
     
     if (!is.null(offset_test)) result$test$offset <- offset_test
-    if (!is.null(weights) && length(weights) > 0L) {
+    if (!is.null(weights) && length(weights) > 0L && !is.null(mc$treatment)) {
+      # the counterfactual rows are the fit's own with the treatment flipped,
+      # so their weights are the fit's: re-evaluating the weights expression
+      # against a frame that holds only the formula's variables cannot find them
+      result$test$frame[["(weights)"]] <- result$frame[["(weights)"]]
+    } else if (!is.null(weights) && length(weights) > 0L) {
       try_result <- tryCatch(result$test$frame[["(weights)"]] <- with(result$test$frame, eval(mc$weights)),
                              error = function(e) e)
       if (inherits(try_result, "error"))

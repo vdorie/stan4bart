@@ -402,3 +402,17 @@
   sampler a binary fit builds, including the one rebuilt after a
   `saveRDS`/`readRDS` round trip; a non-0/1 weight vector on a binary response
   is refused with `dbarts`'s own message, as before.
+
+* The warning that `extract()`, `fitted()`, `predict()` and `residuals()` give
+  for arguments they do not use now names them, and says so when one is
+  `dbarts`' spelling of an argument written with an underscore here:
+  `combineChains` for `combine_chains`.
+
+* `predict()` given a vector for `type` that is not the default, such as one a
+  wrapper forwards, stops saying which `type` is allowed instead of "'arg'
+  must be of length 1".
+
+* A fit with `treatment` and `weights` no longer warns "weights specified but
+  not found in test data - ignoring", and the counterfactual rows carry the
+  fit's weights, so that `type = "ppd"` on them is weighted as on the fitted
+  rows.

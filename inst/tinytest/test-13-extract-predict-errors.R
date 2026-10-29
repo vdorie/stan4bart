@@ -88,3 +88,46 @@ fit.trees <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z, df,
                        bart_args = list(n.trees = 3, keepTrees = TRUE))
 predictions <- predict(fit.trees, df)
 expect_equal(dim(predictions), c(nrow(df), 4L - 2L))
+
+# an ignored argument is named, and a dbarts spelling is said to be one ------
+
+named_warning <- function(expr) {
+  msg <- NULL
+  withCallingHandlers(expr, warning = function(w) {
+    msg <<- c(msg, conditionMessage(w))
+    invokeRestart("muffleWarning")
+  })
+  msg
+}
+
+msg <- named_warning(extract(fit.full, "ev", foo = 1, bar = 2))
+expect_true(length(msg) == 1L && grepl("unused arguments ignored: 'foo', 'bar'", msg, fixed = TRUE))
+expect_false(grepl("spelling", msg, fixed = TRUE))
+
+msg <- named_warning(extract(fit.full, "ev", combineChains = FALSE))
+expect_true(length(msg) == 1L && grepl("'combineChains'", msg, fixed = TRUE))
+expect_true(grepl("'combineChains' is dbarts' spelling of 'combine_chains'", msg, fixed = TRUE))
+
+msg <- named_warning(residuals(fit.full, 1))
+expect_true(grepl("1 unnamed", msg, fixed = TRUE))
+
+msg <- named_warning(predict(fit.trees, df, combineChains = FALSE, foo = 1))
+expect_true(grepl("'combineChains', 'foo'", msg, fixed = TRUE))
+expect_true(grepl("spelling of 'combine_chains'", msg, fixed = TRUE))
+
+expect_true(grepl("'foo'", named_warning(fitted(fit.full, foo = 1)), fixed = TRUE))
+expect_true(grepl("'foo'", named_warning(residuals(fit.full, foo = 1)), fixed = TRUE))
+
+# a vector 'type' names the types that are allowed ---------------------------
+
+predict_types <- c("ev", "ppd", "indiv.fixef", "indiv.ranef", "indiv.bart")
+
+err <- tryCatch(predict(fit.trees, df, type = c("ev", "ppd")), error = function(e) conditionMessage(e))
+expect_true(grepl("'type' must be a single string", err, fixed = TRUE))
+expect_true(all(vapply(predict_types, function(t) grepl(paste0("'", t, "'"), err, fixed = TRUE), TRUE)))
+expect_false(grepl("'arg'", err, fixed = TRUE))
+expect_error(predict(fit.trees, df, type = character(0)), "'type' must be a single string")
+
+# the whole default, as a wrapper forwards it, still means the first type
+expect_equal(predict(fit.trees, df, type = predict_types), predict(fit.trees, df, type = "ev"))
+expect_equal(dim(predict(fit.trees, df, type = "ppd")), dim(predictions))

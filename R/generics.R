@@ -1,3 +1,29 @@
+## The dbarts spellings of arguments this package spells with underscores, so
+## that a call written for a dbarts fit is told its argument was not read
+## rather than that something was.
+dbarts_spellings <- c(combineChains = "combine_chains")
+
+warn_unused_arguments <- function(dots)
+{
+  if (length(dots) == 0L) return(invisible(NULL))
+  
+  argNames <- names(dots)
+  if (is.null(argNames)) argNames <- character(length(dots))
+  named <- nzchar(argNames)
+  
+  msg <- "unused arguments ignored"
+  labels <- c(if (any(named)) paste0("'", argNames[named], "'"),
+              if (any(!named)) paste0(sum(!named), " unnamed"))
+  msg <- paste0(msg, ": ", paste0(labels, collapse = ", "))
+  
+  known <- argNames[named & argNames %in% names(dbarts_spellings)]
+  if (length(known) > 0L)
+    msg <- paste0(msg, "; ",
+                  paste0("'", known, "' is dbarts' spelling of '", dbarts_spellings[known], "'", collapse = ", "))
+  
+  warning(msg, call. = FALSE)
+}
+
 combine_chains_f <- function(x) {
   if (is.array(x) && length(dim(x)) > 2L) {
     d <- dim(x)
@@ -397,7 +423,7 @@ extract.stan4bartFit <-
     row.names(trees) <- as.character(seq_len(nrow(trees)))
     return(trees)
   } else {
-    if (length(list(...)) > 0) warning("unused arguments ignored")
+    warn_unused_arguments(list(...))
   }
 
   sample <- match.arg(sample)
@@ -797,7 +823,7 @@ fitted.stan4bartFit <-
            sample_new_levels = TRUE,
            ...)
 {
-  if (length(list(...)) > 0) warning("unused arguments ignored")
+  warn_unused_arguments(list(...))
 
   type <- match.arg(type)
   sample <- match.arg(sample)
@@ -1032,7 +1058,7 @@ fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
 # under na.exclude are the frame's with the dropped rows missing
 residuals.stan4bartFit <- function(object, ...)
 {
-  if (length(list(...)) > 0) warning("unused arguments ignored")
+  warn_unused_arguments(list(...))
   pad_kept_rows(object, object$y, NA_real_) - fitted(object, type = "ev", sample = "train")
 }
 
@@ -1046,11 +1072,18 @@ predict.stan4bartFit <-
            offset,
            ...)
 {
-  if (length(list(...)) > 0) warning("unused arguments ignored")
-  
+  warn_unused_arguments(list(...))
+
+  ## match.arg's own refusal of a vector says only that 'arg' is not of length
+  ## one, which a caller forwarding a wrapper's default cannot trace to 'type'
+  choices <- eval(formals(sys.function())$type)
+  if (is.character(type) && length(type) != 1L && !identical(type, choices))
+    stop("'type' must be a single string, one of ",
+         paste0("'", choices, "'", collapse = ", "), "; it has length ", length(type),
+         call. = FALSE)
   type <- match.arg(type)
-  
-  if (length(combine_chains) > 1 || !is.logical(combine_chains) || is.na(combine_chains))
+
+  if (length(combine_chains) > 1|| !is.logical(combine_chains) || is.na(combine_chains))
     stop("'combine_chains' must be TRUE or FALSE")
   
   mc <- match.call()
