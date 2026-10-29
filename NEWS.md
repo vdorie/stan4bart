@@ -404,13 +404,13 @@
   is refused with `dbarts`'s own message, as before.
 
 * The warning that `extract()`, `fitted()`, `predict()` and `residuals()` give
-  for arguments they do not use now names them, and says so when one is
-  `dbarts`' spelling of an argument written with an underscore here:
-  `combineChains` for `combine_chains`.
+  for arguments they do not use now names them. `extract()` and `predict()`
+  also say so when one is `dbarts`'s spelling of an argument written with an
+  underscore here: `combineChains` for `combine_chains`.
 
-* `predict()` given a vector for `type` that is not the default, such as one a
-  wrapper forwards, stops saying which `type` is allowed instead of "'arg'
-  must be of length 1".
+* `extract()`, `fitted()` and `predict()` given a vector for `type` that is not
+  the default, such as one a wrapper forwards, stop with an error naming the
+  allowed types instead of "'arg' must be of length 1".
 
 * Weights given as a data column, or any weights given with `subset`, now
   reach the counterfactual rows of a fit with `treatment`, as weights given as

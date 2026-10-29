@@ -106,7 +106,7 @@ expect_false(grepl("spelling", msg, fixed = TRUE))
 
 msg <- named_warning(extract(fit.full, "ev", combineChains = FALSE))
 expect_true(length(msg) == 1L && grepl("'combineChains'", msg, fixed = TRUE))
-expect_true(grepl("'combineChains' is dbarts' spelling of 'combine_chains'", msg, fixed = TRUE))
+expect_true(grepl("'combineChains' is dbarts's spelling of 'combine_chains'", msg, fixed = TRUE))
 
 msg <- named_warning(residuals(fit.full, 1))
 expect_true(grepl("1 unnamed", msg, fixed = TRUE))
@@ -117,6 +117,13 @@ expect_true(grepl("spelling of 'combine_chains'", msg, fixed = TRUE))
 
 expect_true(grepl("'foo'", named_warning(fitted(fit.full, foo = 1)), fixed = TRUE))
 expect_true(grepl("'foo'", named_warning(residuals(fit.full, foo = 1)), fixed = TRUE))
+
+# fitted() and residuals() have no 'combine_chains' to point a dbarts spelling at
+for (msg in list(named_warning(fitted(fit.full, combineChains = FALSE)),
+                 named_warning(residuals(fit.full, combineChains = FALSE))))
+{
+  expect_equal(msg, "unused arguments ignored: 'combineChains'")
+}
 
 # a vector 'type' names the types that are allowed ---------------------------
 
@@ -131,3 +138,25 @@ expect_error(predict(fit.trees, df, type = character(0)), "'type' must be a sing
 # the whole default, as a wrapper forwards it, still means the first type
 expect_equal(predict(fit.trees, df, type = predict_types), predict(fit.trees, df, type = "ev"))
 expect_equal(dim(predict(fit.trees, df, type = "ppd")), dim(predictions))
+
+# the same for extract() and fitted(), whose default is the first type as well
+
+extract_types <- c("ev", "ppd", "fixef", "indiv.fixef", "ranef", "indiv.ranef", "indiv.bart",
+                   "sigma", "Sigma", "k", "varcount", "stan", "trees", "callback")
+fitted_types <- setdiff(extract_types, "trees")
+
+for (case in list(list(f = extract, types = extract_types), list(f = fitted, types = fitted_types)))
+{
+  err <- tryCatch(case$f(fit.full, type = c("ev", "ppd")), error = function(e) conditionMessage(e))
+  expect_true(grepl("'type' must be a single string", err, fixed = TRUE))
+  expect_true(all(vapply(case$types, function(t) grepl(paste0("'", t, "'"), err, fixed = TRUE), TRUE)))
+  expect_false(grepl("'arg'", err, fixed = TRUE))
+  expect_error(case$f(fit.full, type = character(0)), "'type' must be a single string")
+}
+expect_false(grepl("'trees'", tryCatch(fitted(fit.full, type = c("ev", "ppd")), error = conditionMessage), fixed = TRUE))
+
+# the type left out, or the whole default forwarded, is the first type
+expect_equal(extract(fit.full), extract(fit.full, type = "ev"))
+expect_equal(extract(fit.full, type = extract_types), extract(fit.full, type = "ev"))
+expect_equal(fitted(fit.full), fitted(fit.full, type = "ev"))
+expect_equal(fitted(fit.full, type = fitted_types), fitted(fit.full, type = "ev"))

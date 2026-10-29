@@ -3,7 +3,9 @@
 ## rather than that something was.
 dbarts_spellings <- c(combineChains = "combine_chains")
 
-warn_unused_arguments <- function(dots)
+## 'takes' is the argument names of the calling method: a spelling is only
+## pointed at an argument that method has.
+warn_unused_arguments <- function(dots, takes)
 {
   if (length(dots) == 0L) return(invisible(NULL))
   
@@ -17,11 +19,24 @@ warn_unused_arguments <- function(dots)
   msg <- paste0(msg, ": ", paste0(labels, collapse = ", "))
   
   known <- argNames[named & argNames %in% names(dbarts_spellings)]
+  known <- known[dbarts_spellings[known] %in% takes]
   if (length(known) > 0L)
     msg <- paste0(msg, "; ",
-                  paste0("'", known, "' is dbarts' spelling of '", dbarts_spellings[known], "'", collapse = ", "))
+                  paste0("'", known, "' is dbarts's spelling of '", dbarts_spellings[known], "'", collapse = ", "))
   
   warning(msg, call. = FALSE)
+}
+
+## match.arg's own refusal of a vector says only that 'arg' is not of length
+## one, which a caller forwarding a wrapper's default cannot trace to 'type'.
+## The whole default vector still means its first element, and so does NULL.
+match_type <- function(type, choices)
+{
+  if (is.character(type) && length(type) != 1L && !identical(type, choices))
+    stop("'type' must be a single string, one of ",
+         paste0("'", choices, "'", collapse = ", "), "; it has length ", length(type),
+         call. = FALSE)
+  match.arg(type, choices)
 }
 
 combine_chains_f <- function(x) {
@@ -387,7 +402,7 @@ extract.stan4bartFit <-
            ...)
 {
   matchedCall <- match.call()
-  type <- match.arg(type)
+  type <- match_type(type, eval(formals(extract.stan4bartFit)$type))
   
   if (type == "trees") {
     if (is.null(object$state.bart))
@@ -423,7 +438,7 @@ extract.stan4bartFit <-
     row.names(trees) <- as.character(seq_len(nrow(trees)))
     return(trees)
   } else {
-    warn_unused_arguments(list(...))
+    warn_unused_arguments(list(...), names(formals(extract.stan4bartFit)))
   }
 
   sample <- match.arg(sample)
@@ -833,9 +848,9 @@ fitted.stan4bartFit <-
            sample_new_levels = TRUE,
            ...)
 {
-  warn_unused_arguments(list(...))
+  warn_unused_arguments(list(...), names(formals(fitted.stan4bartFit)))
 
-  type <- match.arg(type)
+  type <- match_type(type, eval(formals(fitted.stan4bartFit)$type))
   sample <- match.arg(sample)
 
   # skipped for weighted binomial, where the ppd mean is the weights times the
@@ -1068,7 +1083,7 @@ fitted_random <- function(object, reTrms, include_warmup, sample_new_levels)
 # under na.exclude are the frame's with the dropped rows missing
 residuals.stan4bartFit <- function(object, ...)
 {
-  warn_unused_arguments(list(...))
+  warn_unused_arguments(list(...), names(formals(residuals.stan4bartFit)))
   pad_kept_rows(object, object$y, NA_real_) - fitted(object, type = "ev", sample = "train")
 }
 
@@ -1082,18 +1097,11 @@ predict.stan4bartFit <-
            offset,
            ...)
 {
-  warn_unused_arguments(list(...))
-
-  ## match.arg's own refusal of a vector says only that 'arg' is not of length
-  ## one, which a caller forwarding a wrapper's default cannot trace to 'type'
-  choices <- eval(formals(sys.function())$type)
-  if (is.character(type) && length(type) != 1L && !identical(type, choices))
-    stop("'type' must be a single string, one of ",
-         paste0("'", choices, "'", collapse = ", "), "; it has length ", length(type),
-         call. = FALSE)
-  type <- match.arg(type)
-
-  if (length(combine_chains) > 1|| !is.logical(combine_chains) || is.na(combine_chains))
+  warn_unused_arguments(list(...), names(formals(predict.stan4bartFit)))
+  
+  type <- match_type(type, eval(formals(predict.stan4bartFit)$type))
+  
+  if (length(combine_chains) > 1 || !is.logical(combine_chains) || is.na(combine_chains))
     stop("'combine_chains' must be TRUE or FALSE")
   
   mc <- match.call()
