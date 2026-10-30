@@ -656,25 +656,15 @@ stan4bart_fit <-
     spec_call[[name]] <- bart_args[[name]]
   }
 
-  # 'k' and the cgm parameters remain spellable at the top level of bart_args,
-  # as they were before the priors themselves were reachable
+  # 'k' remains spellable at the top level of bart_args, as it was before the
+  # priors themselves were reachable; power, base and split.probs are
+  # dbartsSpec formals and were forwarded above
   if (!is.null(bart_args[["k"]])) {
     if (!is.null(bart_args[["leaf.prior"]]))
       stop("bart_args cannot set both 'k' and 'leaf.prior'", call. = FALSE)
     end_node_prior <- quote(normal(k = k))
     end_node_prior[[2L]] <- bart_args[["k"]]
     spec_call[["leaf.prior"]] <- end_node_prior
-  }
-  tree_pars <- c("power", "base", "split.probs")
-  tree_pars <- tree_pars[tree_pars %in% names(bart_args)]
-  if (length(tree_pars) > 0L) {
-    if (!is.null(bart_args[["tree.prior"]]))
-      stop("bart_args cannot set both 'tree.prior' and ",
-           paste0("'", tree_pars, "'", collapse = ", "), call. = FALSE)
-    tree_prior <- quote(cgm())
-    tree_prior[1L + seq_along(tree_pars)] <- bart_args[tree_pars]
-    names(tree_prior)[1 + seq_along(tree_pars)] <- tree_pars
-    spec_call[["tree.prior"]] <- tree_prior
   }
 
   bart_spec <- eval(spec_call)

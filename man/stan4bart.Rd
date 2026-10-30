@@ -379,7 +379,8 @@ stan4bart(formula,
       \code{n.trees}; keeping trees can be costly in terms of memory, but is
       required to use \code{\link[=stan4bart-generics]{predict}}
       \item the prior arguments of \code{\link[dbarts]{dbartsSpec}} -
-      \code{tree.prior} and \code{leaf.prior}. These are \emph{expressions},
+      \code{leaf.prior} and the tree prior's \code{power}, \code{base} and
+      \code{split.probs}. These are \emph{expressions},
       not values: \code{dbarts} resolves them in its own prior vocabulary
       (see \code{\link[dbarts]{dbartsPriors}}), so a bare
       \code{leaf.prior = normal(k = chi(1.25, Inf))} works whether or not
@@ -399,12 +400,10 @@ stan4bart(formula,
       variable referenced inside the call is found. A specification
       assembled beforehand, or passed on through a wrapper's \code{...},
       has to be built with \code{dbarts::dbartsForests$...} instead
-      \item \code{k}, \code{power}, \code{base}, and \code{split.probs},
-      shorthand for the corresponding \code{leaf.prior} and \code{tree.prior}
-      arguments. These are values too, not expressions, so they do not see
-      \code{dbarts}'s prior-evaluation environment; write the prior out in
-      full when that matters. Supplying both a shorthand and the prior it
-      writes into is an error
+      \item \code{k}, shorthand for \code{leaf.prior = normal(k = k)}. It is a
+      value too, not an expression, so it does not see \code{dbarts}'s
+      prior-evaluation environment; write the prior out in full when that
+      matters. Supplying both \code{k} and \code{leaf.prior} is an error
     }
     \code{sigma}, \code{resid.prior}, \code{resid.dist}, and \code{variance}
     are \emph{not} accepted: the parametric component draws the residual

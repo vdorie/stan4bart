@@ -72,10 +72,21 @@ set.seed(21)
 fit.pb <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
                     cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
                     bart_args = list(n.trees = 3, power = 2.5, base = 0.9))
+# the retired tree.prior reaches dbartsSpec's kept formal, which warns once and
+# uses the value
+treePriorWarnings <- character()
 set.seed(21)
-fit.tree <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
-                      cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
-                      bart_args = list(n.trees = 3, tree.prior = cgm(power = 2.5, base = 0.9)))
+fit.tree <- withCallingHandlers(
+  stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
+            cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
+            bart_args = list(n.trees = 3, tree.prior = cgm(power = 2.5, base = 0.9))),
+  warning = function(w) {
+    if (grepl("'tree.prior' has left '", conditionMessage(w), fixed = TRUE)) {
+      treePriorWarnings <<- c(treePriorWarnings, conditionMessage(w))
+      invokeRestart("muffleWarning")
+    }
+  })
+expect_equal(length(treePriorWarnings), 1L)
 expect_equal(fit.pb$bart_train, fit.tree$bart_train)
 
 # a shorthand and the prior it writes into cannot both be given
@@ -88,7 +99,7 @@ expect_error(
   stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
             cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
             bart_args = list(power = 2.5, tree.prior = cgm())),
-  "both 'tree.prior' and 'power'")
+  "'tree.prior' and 'power' both set the tree prior")
 
 # model-level constraints reach dbarts, which is what validates them
 expect_true(inherits(fitWith(list(n.trees = 3, monotone = c(X1 = 1))), "stan4bartFit"))
