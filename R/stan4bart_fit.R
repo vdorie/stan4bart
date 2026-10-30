@@ -650,8 +650,10 @@ stan4bart_fit <-
   # The unit-variance fix rides the family object now; the probit family's
   # latent scale is already fixed and takes no residual prior of its own.
   if (is_continuous) spec_call[["family"]] <- quote(gaussian(sigma = fixed(1)))
+  # a name both take went to the control above, and dbartsSpec refuses it twice
   for (name in intersect(names(bart_args),
-                         setdiff(names(formals(dbarts::dbartsSpec)), names(spec_call))))
+                         setdiff(names(formals(dbarts::dbartsSpec)),
+                                 c(names(spec_call), names(formals(dbarts::dbartsControl))))))
   {
     spec_call[[name]] <- bart_args[[name]]
   }
