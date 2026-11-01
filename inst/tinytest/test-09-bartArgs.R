@@ -194,6 +194,14 @@ expect_equal(fit.nCutsDouble$state.bart$data@n.cuts, rep(100L, 3L))
 fit.defaultCuts <- fitWith(list(n.trees = 3))
 expect_false(identical(fit.nCuts$bart_train, fit.defaultCuts$bart_train))
 
+# the quantile rule is the data object's, and the tree count the model's: neither
+# goes through the control, where it would draw a deprecation warning
+fit.quantiles <- fitWith(list(n.trees = 3, useQuantiles = TRUE, keepTrees = TRUE))
+expect_true(fit.quantiles$state.bart$data@useQuantiles)
+expect_identical(fit.quantiles$state.bart$control@n.trees, 3L)
+for (bad in list(NA, "yes", c(TRUE, FALSE)))
+  expect_error(fitWith(list(n.trees = 3, useQuantiles = bad)), "'useQuantiles'")
+
 # a bad count is refused naming n.cuts
 for (bad in list(0, -5, 2.5, NA, NA_real_, "20", c(1, 2), Inf))
   expect_error(fitWith(list(n.trees = 3, n.cuts = bad)), "'n.cuts'")

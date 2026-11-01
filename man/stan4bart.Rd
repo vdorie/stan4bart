@@ -375,9 +375,11 @@ stan4bart(formula,
     BART arguments include:
     \itemize{
       \item further arguments to \code{\link[dbarts]{dbartsControl}} that are not
-      specified by \code{stan4bart}, such as \code{keepTrees} or
-      \code{n.trees}; keeping trees can be costly in terms of memory, but is
+      specified by \code{stan4bart}, such as \code{keepTrees}; keeping trees can be costly in terms of memory, but is
       required to use \code{\link[=stan4bart-generics]{predict}}
+      \item \code{n.trees}, the number of trees, and \code{n.cuts} and
+      \code{useQuantiles}, which place the cut points; each is a setting of
+      the model or the data and not of the control
       \item the prior arguments of \code{\link[dbarts]{dbartsSpec}} -
       \code{leaf.prior} and the tree prior's \code{power}, \code{base} and
       \code{split.probs}. These are \emph{expressions},

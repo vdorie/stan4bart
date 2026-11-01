@@ -598,8 +598,11 @@ stan4bart_fit <-
   control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
                                               n.thin = skip.bart, n.threads = 1L,
                                               updateState = FALSE))
-  for (name in intersect(names(bart_args), setdiff(names(formals(dbarts::dbartsControl)),
-                                                   c(names(control_call), "n.cuts"))))
+  # n.trees goes to dbartsSpec, n.cuts and useQuantiles to the data object;
+  # on a control they are read with a deprecation warning
+  moved_args <- c("n.trees", "n.cuts", "useQuantiles")
+  control_formals <- setdiff(names(formals(dbarts::dbartsControl)), moved_args)
+  for (name in intersect(names(bart_args), setdiff(control_formals, names(control_call))))
   {
     control_call[[name]] <- bart_args[[name]]
   }
@@ -610,6 +613,12 @@ stan4bart_fit <-
   # n.cuts lives on the data object; when not given, dbarts's default stands
   if ("n.cuts" %in% names(bart_args))
     data.bart@n.cuts <- resolve_n_cuts(bart_args[["n.cuts"]], ncol(data.bart@x))
+  if ("useQuantiles" %in% names(bart_args)) {
+    use_quantiles <- bart_args[["useQuantiles"]]
+    if (!is.logical(use_quantiles) || length(use_quantiles) != 1L || is.na(use_quantiles))
+      stop("'useQuantiles' must be TRUE or FALSE", call. = FALSE)
+    data.bart@useQuantiles <- use_quantiles
+  }
   evalEnv <- sys.frame(sys.nframe())
 
   # dbarts::dbartsSpec resolves the control/model/data triple and the family
@@ -653,7 +662,7 @@ stan4bart_fit <-
   # a name both take went to the control above, and dbartsSpec refuses it twice
   for (name in intersect(names(bart_args),
                          setdiff(names(formals(dbarts::dbartsSpec)),
-                                 c(names(spec_call), names(formals(dbarts::dbartsControl))))))
+                                 c(names(spec_call), control_formals))))
   {
     spec_call[[name]] <- bart_args[[name]]
   }

@@ -70,8 +70,9 @@ mvbart(formula,
   \code{verbose} sweeps.}
   \item{bart_args}{an optional named list of further arguments forwarded to each
   outcome's BART sampler. Recognized \code{\link[dbarts]{dbartsControl}}
-  arguments not already set by \code{mvbart} (such as \code{n.cuts} or
-  \code{keepTrees}) are applied to the shared control; the leaf-prior scale
+  arguments not already set by \code{mvbart} (such as \code{keepTrees}) are
+  applied to the shared control, and \code{n.cuts} and \code{useQuantiles}
+  are passed to each outcome's \code{\link[dbarts]{dbarts}} call; the leaf-prior scale
   \code{k} is also honored. Any other name is an error rather than being
   dropped, and the rng seed is set with \code{mvbart}'s own \code{seed}
   argument, not here.}

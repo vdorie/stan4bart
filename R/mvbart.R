@@ -134,7 +134,9 @@ mvbart <-
   if (length(unknown) > 0L)
     stop("bart_args has unrecognized name", if (length(unknown) > 1L) "s" else "", ": ",
          paste0("'", unknown, "'", collapse = ", "))
-  for (nm in intersect(names(bart_args), setdiff(ctrlFormals, names(ctrlCall))))
+  ## the cut settings are the data's, so they go to dbarts() and not the control
+  cutArgs <- c("n.cuts", "useQuantiles")
+  for (nm in intersect(names(bart_args), setdiff(ctrlFormals, c(names(ctrlCall), cutArgs))))
     ctrlCall[[nm]] <- bart_args[[nm]]
   control <- eval(ctrlCall)
 
@@ -159,6 +161,8 @@ mvbart <-
                                       family = gaussian(sigma = fixed(.(vk))),
                                       control = control, seed = .(seedk),
                                       forests = list(dbarts::dbartsForests$forest(n.trees = .(n.trees)))))
+      for (nm in intersect(names(bart_args), cutArgs))
+        dbCall[[nm]] <- bart_args[[nm]]
       if (hasTest) {
         dbCall$test <- quote(Xtest)
         dbCall$offset.test <- quote(rep(0.0, nTest))
