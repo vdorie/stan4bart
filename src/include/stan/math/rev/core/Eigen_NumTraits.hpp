@@ -57,9 +57,13 @@ struct NumTraits<stan::math::var> : GenericNumTraits<stan::math::var> {
     IsSigned = 1,
 
     /**
-     * stan::math::var does not require initialization.
+     * stan::math::var does not require initialization prior to Eigen 5.
      */
+#if EIGEN_VERSION_AT_LEAST(3, 5, 0)
+    RequireInitialization = 1,
+#else
     RequireInitialization = 0,
+#endif
 
     /**
      * Twice the cost of copying a double.

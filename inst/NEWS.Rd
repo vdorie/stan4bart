@@ -1,6 +1,16 @@
 \name{NEWS}
 \title{stan4bart News}
 \encoding{UTF-8}
+\section{CHANGES IN VERSION 0.0-13.1}{
+  \subsection{BUG FIXES}{
+    \itemize{
+      \item Compiles and fits under Eigen 5, which a coming release of
+            \pkg{RcppEigen} brings; the package failed to compile there,
+            and once compiled crashed when fitting. Report and fix thanks
+            to Dirk Eddelbuettel.
+    }
+  }
+}
 \section{CHANGES IN VERSION 0.0-8}{
   \subsection{BUG FIXES}{
     \itemize{

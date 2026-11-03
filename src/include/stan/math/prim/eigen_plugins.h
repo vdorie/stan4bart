@@ -47,6 +47,9 @@ using forward_return_t = std::conditional_t<std::is_const<std::remove_reference_
  * For definitions of EIGEN_EMPTY_STRUCT_CTOR, EIGEN_DEVICE_FUNC, and
  * EIGEN_STRONG_INLINE; see: https://eigen.tuxfamily.org/dox/XprHelper_8h_source.html
  */
+#ifndef EIGEN_EMPTY_STRUCT_CTOR
+#define EIGEN_EMPTY_STRUCT_CTOR(ClassName) ClassName() = default;
+#endif
 struct val_Op{
   EIGEN_EMPTY_STRUCT_CTOR(val_Op);
 
