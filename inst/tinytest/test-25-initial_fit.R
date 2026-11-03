@@ -694,6 +694,7 @@ local({
     saveRDS(fit, file)
     readRDS(file)
   }
+  rounded <- logical()
   for (bart_range in c(if (has_lme4) "mixed", "lm", "response")) {
     pair <- route_of(big0, bart_range)$range
     expect_true(pair[1L] > 1e4 && pair[2L] > 2 * pair[1L], info = bart_range)
@@ -712,9 +713,8 @@ local({
       for (sampler in stan4bart:::getBartSampler(saved)) {
         leaf_prior <- sampler$getLeafPrior()
         expect_identical(leaf_prior$response.scale, pair[2L] - pair[1L], info = bart_range)
-        # PRECONDITION: the sampler's middle is not within 1e-12 of the
-        # pair's, and is within rounding of it
-        expect_true(abs(leaf_prior$response.shift - mean(pair)) > 1e-12, info = bart_range)
+        # the sampler's middle is within rounding of the pair's
+        rounded <- c(rounded, abs(leaf_prior$response.shift - mean(pair)) > 1e-12)
         expect_true(abs(leaf_prior$response.shift - mean(pair)) <=
                       2 * .Machine$double.eps * pair[2L], info = bart_range)
       }
@@ -722,6 +722,10 @@ local({
                    tolerance = 1e-10, check.attributes = FALSE, info = bart_range)
     }
   }
+  # PRECONDITION: on some range the sampler's middle is not within 1e-12 of
+  # the pair's, so a restore reads it relative to the pair's size; which range
+  # rounds depends on the platform's arithmetic
+  expect_true(any(rounded))
 })
 
 # the read-back refuses a sampler that is not on the pair: its width not the
@@ -807,13 +811,16 @@ if (has_lme4) local({
   own <- (d$x - mean(d$x)) * fixed[["x"]] + (d$s - mean(d$s)) * fixed[["s"]] + effects
 
   seen <- observe(start_of(binary0, verbose = 1L))
-  # both run lme4's two stages on the same pieces
-  expect_true(max(abs(seen$value - own)) < 1e-8)
+  # both run lme4's two stages on the same pieces; they agree to the
+  # optimizer's tolerance (its second stage stops at an absolute change of
+  # 1e-5), not to the bit, since a BLAS whose rounding depends on the call
+  # moves where each stops; here and below a wrong start is 0.07 or more away
+  expect_true(max(abs(seen$value - own)) < 1e-4)
   expect_identical(c(seen$warned, seen$printed), character())
   # glmer's linear predictor less the offset and the intercept terms
   intercept <- fixed[[1L]] + mean(d$x) * fixed[["x"]] + mean(d$s) * fixed[["s"]]
   expect_true(max(abs(seen$value[rows_b] -
-                      (predict(oracle, type = "link") - d$o[rows_b] - intercept))) < 1e-8)
+                      (predict(oracle, type = "link") - d$o[rows_b] - intercept))) < 1e-4)
   # PRECONDITION: no start on the scale of a probability reaches these
   expect_true(min(seen$value) < -0.5 && max(seen$value) > 1.5)
   # lme4 is given copies of what it writes into
@@ -1258,7 +1265,7 @@ if (has_lme4) local({
   own <- (d$x - mean(d$x)) * fixed[["x"]] + (d$s - mean(d$s)) * fixed[["s"]] +
     effects_g[, "(Intercept)"] + d$s * effects_g[, "s"]
   seen <- observe(start_of(crossed0, verbose = 1L))
-  expect_true(max(abs(seen$value - own)) < 1e-8)
+  expect_true(max(abs(seen$value - own)) < 1e-4)
   expect_identical(c(seen$warned, seen$printed), character())
 
   # estimates that are not one for every column and every effect are a failed
@@ -1299,7 +1306,7 @@ if (has_lme4) local({
   for (offset_type in names(expected)) {
     fit0 <- stan4bart(binary, d, weights = a, offset = o, offset_type = offset_type, iter = 0L)
     seen <- observe(start_of(fit0))
-    expect_true(max(abs(seen$value - expected[[offset_type]])) < 1e-8, info = offset_type)
+    expect_true(max(abs(seen$value - expected[[offset_type]])) < 1e-4, info = offset_type)
     expect_identical(seen$warned, character(), info = offset_type)
   }
   # PRECONDITION: the four starts differ
