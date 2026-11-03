@@ -210,16 +210,6 @@ items
   extract-test-no-test-data: extract and fitted of "ev" and "indiv.fixef"
     at sample = "test" on a fit with no test data say "newdata has
     unrecognized fixef names"; "indiv.bart" returns without error.
-  r-devel-initial-fit: six expectations in
-    inst/tinytest/test-25-initial_fit.R fail on R-devel 2026-11-01
-    r90825 (ubuntu, CI) and passed on r90766 (10-26) at the same
-    commit; R-release passes. Two compare the binary start, fitted by
-    lme4's modular sequence, to an oracle glmer() at 1e-8 (the crossed
-    model and offset_type "bart"); four are the "mixed" range's
-    precondition that the sampler's middle is more than 1e-12 from the
-    pair's. Find what moved before loosening anything: an optimizer
-    tolerance read as an identity, or a real change in the start.
-    Before the release.
   test-cores-literal: inst/tinytest/test-01-continuous.R passes a literal
     cores = 4 inside its at_home block; tests pass at most 2 cores (the
     machine is shared with other jobs). Before the release.
