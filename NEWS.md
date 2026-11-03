@@ -426,3 +426,11 @@
   a missing value the weight of a neighbor when the weights were given as a
   vector; R's "longer object length is not a multiple" warning was the only
   sign. Each row now takes its own weight.
+
+# stan4bart 0.0-13.1
+
+## Bug fixes
+
+* Compiles and fits under Eigen 5, which a coming release of RcppEigen
+  brings; the package failed to compile there, and once compiled crashed when
+  fitting. Report and fix thanks to Dirk Eddelbuettel.
