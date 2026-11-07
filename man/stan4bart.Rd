@@ -207,8 +207,8 @@ stan4bart(formula,
     Nothing is fitted.
   }
   Under \code{"response"} and under a pair, BART's first sweep is fitted to
-  the response less any offset, none of it set aside for the model's own
-  terms.
+  the response less any offset, with no part of it assigned to the model's
+  own terms.
   An estimated range is never wider than the response's own: where the fit
   would give a wider one, and where the fit cannot be computed, the response's
   own range is used and the \code{range.fallback} component of the result
