@@ -217,6 +217,28 @@ stan4bart(formula,
   fit under the default prior on the residual standard deviation, which is
   scaled by the response's.
 
+  Where a column of the model's own takes one value in each category of an
+  unordered BART factor, as a region's median income beside region inside
+  \code{bart()}, the factor's indicators and the intercept span it, and the
+  initial fit alone would set its coefficient by which categories are left
+  without an indicator, that is by the order of the category names. It is
+  given instead the slope of the least-squares line through the fit's
+  category totals (the part of its fixed effects constant within the
+  categories), each category counted once whatever its number of
+  observations or weights; the category totals' deviations from the line
+  belong to the BART predictors. Several such columns of one factor take
+  one least-squares fit. Not covered, so that the range can still depend
+  on the order of the category names: a column constant only within the
+  joint categories of two factors, a combination of columns constant
+  within a factor's categories where no column alone is, and a column
+  constant within the categories of two factors neither of which is nested
+  in the other.
+
+  A BART factor with many categories makes the initial fit slow and
+  memory-hungry: its indicators are a dense block of observations by
+  categories. \code{"response"} fits nothing and avoids it; a pair still
+  makes the linear fit for the values the first sweep starts from.
+
   Too narrow a range leaves group-level signal in the random effects that
   belongs to BART, and too wide a one costs accuracy and mixing in small
   samples. The linear terms that stand in for BART in the initial fit cannot

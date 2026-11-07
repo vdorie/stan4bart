@@ -192,7 +192,10 @@
   predictors as linear terms; `"lm"` from that fit without the random terms;
   `"response"` takes the response's own range; and a pair `c(lower, upper)`
   is used as given. An estimated range is never wider than the response's own.
-  The fit records it as `range.bart`, with `range.route`, `range.fallback` and
+  A model column that takes one value in each category of a BART factor is
+  given the slope of the line through the initial fit's category totals, each
+  category counted once, so the range does not depend on the order of the
+  category names. The fit records it as `range.bart`, with `range.route`, `range.fallback` and
   `range.info`, and `summary()` prints it. Results for a continuous response
   differ from earlier versions, including under a fixed seed.
   `extract(type = "trees")` now reports leaf values in one unit for every
