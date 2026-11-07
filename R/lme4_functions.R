@@ -155,6 +155,18 @@ glFormula <- function(formula, data = NULL, subset, weights,
       reTrms = list()
     }
     
+    # dbartsData evaluates its formula against the frame it is given, and the
+    # model frame holds a transformed variable, log(v), as a column named
+    # "log(v)" with no column v. Each such variable is written as the symbol
+    # of its column, so the formula reads the column instead of recomputing
+    # it from a variable the frame lacks. An offset() term keeps its call.
+    bartvars <- as.list(attr(bartterms, "variables"))[-1L]
+    bartvarnames <- names(bartfr)[seq_along(bartvars)]
+    is_transform <- vapply(bartvars, function(v)
+      is.call(v) && !identical(v[[1L]], as.name("offset")), logical(1L))
+    if (any(is_transform))
+      bartform <- sub_frame_columns(bartform, bartvars[is_transform], bartvarnames[is_transform])
+
     # dbartsData can't handle columns in the model frame not in the formula terms, so we
     # pull out  "(offset)" if it exists
     bartprednames <- as.character(attr(bartterms, "predvars"))[-1L]
@@ -839,6 +851,17 @@ checkZrank <- function(Zt, n, ctrl, nonSmall = 1e6, allow.n=FALSE)
   } else character()
 }
  
+# replaces each occurrence of vars[[i]] in term by the symbol names[[i]]; a
+# match ends the descent, so log(v) becomes one symbol, not log of one
+sub_frame_columns <- function(term, vars, names)
+{
+  for (i in seq_along(vars))
+    if (identical(term, vars[[i]])) return(as.name(names[[i]]))
+  if (is.call(term) && length(term) > 1L)
+    for (j in seq.int(2L, length(term))) term[[j]] <- sub_frame_columns(term[[j]], vars, names)
+  term
+}
+
 subbart <- function(term)
 {
   if (is.name(term) || !is.language(term)) return(term)

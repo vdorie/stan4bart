@@ -248,6 +248,10 @@
 
 ## Bug fixes
 
+* A variable that enters `bart()` only inside a transform, as in
+  `bart(log(v) + f)` or `bart(I(v^2))`, now fits; it used to stop with
+  "object 'v' not found". So does a transformed response such as `log(y)`.
+
 * `weights` beside a row dropped for a missing value no longer stop the fit
   ("weights must be of length equal to ..."). Under `na.exclude`, `extract()`,
   `fitted()` and `residuals()` report the dropped rows as missing whichever

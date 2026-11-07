@@ -126,3 +126,32 @@ local({
   options(stan4bart.lme4 = FALSE)
   expect_false(stan4bart:::lme4_is_used())
 })
+
+# a variable that enters bart() only through a transform fits: each fit on
+# transformed terms equals the fit on the same columns made by hand, in its
+# draws and in predict() on new rows
+local({
+  set.seed(2)
+  n <- 60L
+  d <- data.frame(x = rnorm(n), v = rexp(n) + 0.1, f = rnorm(n), g = factor(sample(4L, n, TRUE)))
+  d$y <- exp(0.3 * (d$x + log(d$v) + d$f) + rnorm(n, 0, 0.3))
+  d$lv <- log(d$v)
+  d$v2 <- d$v^2
+  d$ly <- log(d$y)
+  newd <- d[1:7, ]
+  fit_pair <- function(formula, hand) {
+    fit <- function(form)
+      stan4bart(form, d, chains = 1L, warmup = 5L, iter = 10L, verbose = -1L, seed = 3L,
+                bart_args = list(n.trees = 5L, keepTrees = TRUE))
+    a <- fit(formula)
+    b <- fit(hand)
+    expect_equal(unname(extract(a)), unname(extract(b)), info = deparse(formula))
+    expect_equal(unname(predict(a, newd)), unname(predict(b, newd)), info = deparse(formula))
+  }
+  fit_pair(y ~ x + bart(log(v) + f), y ~ x + bart(lv + f))
+  fit_pair(y ~ x + bart(log(v)), y ~ x + bart(lv))
+  fit_pair(y ~ x + bart(I(v^2) + f), y ~ x + bart(v2 + f))
+  fit_pair(y ~ x + v + bart(log(v) + f), y ~ x + v + bart(lv + f))
+  fit_pair(y ~ x + (1 | g) + bart(log(v) + f), y ~ x + (1 | g) + bart(lv + f))
+  fit_pair(log(y) ~ x + bart(v + f), ly ~ x + bart(v + f))
+})

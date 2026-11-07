@@ -86,11 +86,10 @@ items
     1e-10. It predates the one response range per fit.
   ranef-double-bar: extract(type = "ranef") stops ("subscript out of
     bounds") on a fit with a || term.
-  bart-transform-only: stan4bart(y ~ x + bart(log(v) + f), d) stops
-    with "object 'v' not found" whenever a variable enters bart() only
-    inside a transform (bart(log(v)), bart(I(v^2) + f), and also
-    y ~ x + v + bart(log(v) + f)); bart(v + log(v)) works. dbartsData
-    is handed y ~ log(v) with a frame whose column is log(v), not v.
+  binary-one-coefficient: stan4bart(yb ~ x + bart(v + f), d) with a
+    binary yb and no random term stops in package_samples ("'dimnames'
+    applied to non-array"): with one parametric coefficient the sapply
+    over chains' inv_mass returns a vector, not a matrix.
   ppd-zero-weight: extract(type = "ppd") of a continuous fit with a
     weight of zero gives NaN on those rows with R's bare "NAs produced"
     warning: the draw's sd is sigma over the root of the weight. It
