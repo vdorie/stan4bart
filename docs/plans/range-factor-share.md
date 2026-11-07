@@ -1,6 +1,6 @@
 # range-factor-share
 
-Status: built, in review. Branch range-factor-share from main 27ef163. Rulings: dbarts dec-B616 (the share), dec-A265
+Status: built, in review (fix round 1 applied). Branch range-factor-share from main 27ef163. Rulings: dbarts dec-B616 (the share), dec-A265
 call 41 (the guard); context dec-B441 to dec-B447 and dbarts docs/design/stan4bart-response-range.md.
 
 ## What changes
@@ -44,20 +44,37 @@ residual sd are the same for every order; only how f is written in the kept colu
 
 The rank condition. Let S be the block's columns constant within F's categories (the intercept, c and any other such
 model column, F's indicators, a numeric forest column taking one value per category, the indicators of a forest factor
-whose categories each lie within one of F's), and N the rest. Condition (C): no nonzero combination of the columns of
-N is constant within F's categories, that is span(N) and V meet only at 0. The code tests it as rank(block) =
-K + rank(N), both ranks by the QR at the fit's tolerance under the fit's weights; the inequality <= always holds and
-equality is (C). Under (C):
+whose categories each lie within one of F's), and N the rest. Let N1 = span(1, N). Condition (C): every combination of
+the columns of N that is constant within F's categories is a constant, that is V and N1 meet only in the constants.
+The code tests it as rank(block) = K - 1 + rank(cbind(1, N)), both ranks by the QR at the fit's tolerance under the
+fit's weights; span(block) = V + N1 and the two share the constants, so <= always holds and equality is (C). Under (C):
 
-- span(block) = V + span(N), a direct sum, and neither summand depends on the order of the names (V is F's space,
-  N's columns are named and placed independently of F's names; a second factor's indicators in N are another basis of
-  its own space under its names, as above).
-- The kept columns of S span V and the kept columns of N span span(N): a column dropped as dependent on earlier kept
-  columns has, by the direct sum, its V part in the kept S columns and its N part in the kept N columns, and the
-  counts add up to the rank.
-- So f splits in exactly one way as f = t + r, t in V and r in span(N). t, the category totals, is f's V part, the
-  same for every order; it is computed as the kept S columns' coefficients times their values at one row of each
-  category.
+- span(block) = V + N1, the two meeting in span(1) alone, and neither depends on the order of the names (V is F's
+  space; N's columns are named and placed independently of F's names, and a second factor's indicators in N are
+  another basis of its own space under its names, as above).
+- The kept columns of S span V, and the kept columns of N with the intercept span N1: the kept S columns are
+  independent and lie in V, so there are at most K of them; the kept N columns with the intercept are independent and
+  lie in N1, so there are at most rank(N1) - 1 of them besides the intercept; the kept columns number rank(block) =
+  K + rank(N1) - 1; so both bounds are met.
+- So f splits as f = t + r, t in V and r in N1, in one way up to a constant moved between the two: two such splits
+  differ by a vector of V and of N1 at once, a constant. t, the category totals, is f's V part, the same for every
+  order up to that constant; it is computed as the kept S columns' coefficients times their values at one row of each
+  category. A constant added to every t_k moves the line's intercept and not its slope.
+
+The first build asked that V and span(N) meet only at 0, rank(block) = K + rank(N). That refuses a share wherever the
+other columns combine to a constant: a second model column constant within a crossed factor also in bart() (it and
+that factor's indicators give 1), a numeric forest column constant within such a factor, or every level of a model
+factor, as in y ~ 0 + sex + ... . The review found the slope then following the names' order (a spread of 2.0 to 9.2
+over 6 relabelings); under the condition above all three take the share, equal to the review's oracle.
+
+Constancy. A column counts as constant within F's categories when what is left of it after its categories' weighted
+means are taken off has a weighted norm at most 1e-6 of the column's own, the QR's measure at ten times its
+tolerance. A column with smaller within-category variation is one the QR drops an indicator for; a column that counts
+as constant while the QR drops nothing for it raises rank(block) above the condition's count, and no share is made, so
+the looser reading cannot make a share the QR does not call for. Over the review's noise probe (within-category noise
+from 1e-5 to 1e-10 of the column's largest value, 8 relabelings each) a share is made in exactly the fits where the QR
+drops an indicator. The first build's test, the largest deviation within 1.5e-8 of the column's largest value, missed
+the QR's drop between about 1e-8 and 3e-8.
 
 The share. Given the totals t_k and the category values v_k of the shared columns (one column: a line; several
 constant within the same F: a plane, one least-squares fit), the share is the slope of the unweighted least-squares
@@ -86,7 +103,7 @@ each category once means.
 Limits, left as the QR leaves them and named in the help: a column constant only within two factors' joint
 categories (constant within neither, so there is no candidate; such a column is in the span of the two factors'
 indicators only when it is additive in them, which is when the QR drops an indicator); a column constant within a
-factor's categories only in combination with other columns; and any factor failing (C), such as two forest factors
+factor's categories only in combination with other columns; any factor failing (C), such as two forest factors
 whose categories both lie within those of a coarser grouping that the model does not name (the second factor's
 indicators then carry that grouping, which is constant within the first factor's categories). A column constant
 within two factors, one nested in the other, takes the finer factor's share: the coarser one fails (C), since the
@@ -94,13 +111,19 @@ finer one's indicators are in its N and span its V. Of the factors a column is c
 the finest categories can pass (C): if c is constant within F and G and G passes, F's indicators cannot be in G's N
 (c less a constant is a combination of them and is constant within G's categories), so F is constant within G's
 categories; if F's categories are coarser, G's indicators are in F's N and carry c, and F fails. Two factors with the
-same categories under different names both pass, and give the same totals and the same share.
+same categories under different names both pass, and give the same totals and the same share. Last, a band the QR
+draws itself: with within-category variation of about 1e-8 to 3e-8 of the column's size the QR drops an indicator
+under some orders of the names and not others (its pivoting reads the columns in order), and where it drops none the
+column's coefficient is set by that variation alone and is wild (a spread of 3.5e4 over 8 orders in the review's
+probe). The share follows the QR and so does not cure it; main has the same band. Forcing the share wherever the
+column counts as constant, with the totals averaged over each category's rows, would cure it at the cost of a share
+the fit does not call for; not done.
 
 What the check costs. Nothing where no kept model column is constant within an entered factor's categories (one pass
-over the model's kept columns per factor). Where one is: one pass over the block and a QR of N. At 20,000 rows and a
-500-category factor, "lm", 8.3 s against main's 8.0 s on this machine.
+over the model's kept columns per factor). Where one is: one pass over the block and a QR of [1, N]. At 20,000 rows
+and a 500-category factor, "lm", 8.2 s against main's 7.9 s on this machine.
 
-## Tests (inst/tinytest/test-26-factor-share.R, 205 results; test-08-glFormula.R, 4 more)
+## Tests (inst/tinytest/test-26-factor-share.R, 250 results; test-08-glFormula.R, 4 more)
 
 - The region example: 4 regions of unequal size, 400 rows, income per region. Over all 24 orders of the names the
   share is the same to 1e-10, as is the width; it is within 0.05 of the line through the raw region means (-0.086)
@@ -117,6 +140,12 @@ over the model's kept columns per factor). Where one is: one pass over the block
 - An unused level, a region of weight zero (three categories), a one-row region, and that region's response moved.
 - Nested forest factors (states within regions, income per region): the line through the state totals, each state
   once, the same over 3 region orders by 2 state orders; the share is the state factor's.
+- Category values not exact in binary (31.7, 45.3, 52.9, 70.1 and 0.1, 0.3, 0.7, 1.1) under weights, 4 orders each:
+  the share is made, equals the totals' line and is order-free.
+- Other columns combining to a constant, the review's three cases, 3 relabelings of both factors each: a second
+  model column constant within a crossed forest factor (both factors take a share), a numeric forest column constant
+  within a crossed forest factor, and y ~ 0 + sex + ...; each equal to 1e-8 to an oracle that replaces the factor's
+  indicators by a category basis orthogonal, one point per category, to [1, v], and each with one range.
 - Limits: a column additive in two factors (constant within their joint categories) takes no share and its slope
   moves with the second factor's names; two factors crossed under a common coarser grouping take no share, with the
   column constant within both and with it constant within one, the slope then moving with the other's names.
@@ -133,19 +162,23 @@ Mutants (each made, installed, run, reverted and touched): see Gates.
 
 ## Gates
 
-At e36d44b (the code's last commit; this record follows it), dbarts main f79874ea8 (shipped mode), lme4 2.1.0, R 4.6.2,
-arm64 macOS:
+At b234fd9 and 25b4caa (fix round 1; this record follows them), dbarts main f79874ea8 (shipped mode), lme4 2.1.0,
+R 4.6.2, arm64 macOS:
 
-- Full suite, NOT_CRAN=true, at_home = TRUE, one process: 1919 results, 0 failures, of which this branch adds 209
-  (test-26's 205, test-08's 4); test-25, 506 of 506.
+- Full suite, NOT_CRAN=true, at_home = TRUE, one process: 1964 results, 0 failures, of which this branch adds 254
+  (test-26's 250, test-08's 4); test-25, 506 of 506.
 - R CMD check --as-cran on the built tarball: 1 NOTE, CRAN incoming feasibility (the Description's arXiv form, the
-  Date field, days since the last update), main's own. A first run found a second NOTE, `lm.fit` not imported,
-  repaired in e36d44b.
+  Date field, days since the last update), main's own. (The first build's first run also found `lm.fit` not
+  imported, repaired in e36d44b.)
 - Lint and format: stan4bart's CI runs none (its workflows are R CMD check, the exactness and posterior gates, rhub
   and the sanitizers). The exactness gate, which runs on every push, passes 4 of 4 tiers within 1e-10.
-- Mutants, each installed, run against the test file and reverted: the line weighted by each category's rows
-  (`lm.wfit` with the counts) fails 98 of 205 in test-26; the share skipped (the QR's coefficient kept) fails 116 of
-  205; the guard removed fails 4 of 40 in test-08.
+- Bit for bit, as above: 24 of 24 fits with no such column identical to main, 4 of 4 with one different.
+- Mutants, each put into the installed namespace, run against test-26 (250) and test-08 (40), and dropped: the line
+  weighted by each category's rows, 115 fail; the share skipped, 135; the guard removed, 4 of 40; the rank condition
+  skipped, 11; the first build's stricter condition, 18; constancy at tolerance 0, 24; a line per column in place of
+  the plane, 6; totals from the shared columns alone, 135. The rank of [1, N] read without the weights fails none: it
+  is the same rank with positive weights. The first build's three mutants, installed from edited source, failed 98,
+  116 and 4.
 
 ## Calls made
 
@@ -158,11 +191,14 @@ arm64 macOS:
 3. The share is made only under the rank condition (C), which also decides between nested factors (the finer). The
    first build took the factor with the most categories where the others were nested in it and skipped crossed ones;
    that missed a factor crossed with another under a common coarser grouping, where the share would have been applied
-   and still followed the other factor's names. Alternative: that rule, or the share applied wherever a column is
-   constant, order-free or not.
-4. "Constant within" is to a tolerance of sqrt(machine epsilon) times the column's largest absolute value, well inside
-   the QR's 1e-7. Alternative: exact equality, which a column computed per row (log of a merged value) still meets
-   but a rounding difference would not.
+   and still followed the other factor's names. Its condition then asked V and span(N) to meet at 0; fix round 1
+   takes the review's, that they meet in the constants at most. Alternatives: the stricter condition, or the share
+   applied wherever a column is constant, order-free or not.
+4. "Constant within" is read in the QR's own measure, the weighted norm left after the categories' weighted means,
+   at 1e-6 of the column's norm, ten times the QR's tolerance, so that a share is made exactly where the QR drops an
+   indicator (fix round 1). The first build used the largest deviation against 1.5e-8 of the column's largest value,
+   which missed the QR's drop in a band. Alternatives: that test, or exact equality, which a value not exact in binary
+   fails once its category mean rounds.
 5. The check is vectorized over the block from category sums. One column at a time added 73 percent to the fit's time
    at 20,000 rows and 500 categories; vectorized, 4 percent.
 6. range.info gains no field naming the shared columns. Its `dropped` still names the indicator the QR dropped, which
@@ -171,6 +207,9 @@ arm64 macOS:
    as unreachable. Alternative: keep both.
 8. NEWS: one sentence in the 0.0-14 `bart_range` entry, not a bug-fix line, since the range is new in 0.0-14. The
    guard has no NEWS line: the message is the one 0.0-13 gave.
+9. The band where the QR's own drop follows the names' order (about 1e-8 to 3e-8 of within-category variation) is
+   stated as a limit, not cured. Alternative: force the share wherever the column counts as constant, with totals
+   averaged over each category's rows.
 
 ## Deviations and open points
 
@@ -179,9 +218,9 @@ arm64 macOS:
   still makes the linear fit. Recommendation: keep the help as written; if a pair should avoid the cost too, its start
   would have to come from the model's own columns alone, a change for its own ruling.
 - Code is about 45 lines against the ruling's 30, the rank condition and the vectorized check being the difference.
-- Found, not in scope: `stan4bart(y ~ x + bart(log(v) + f), d)` stops with "object 'v' not found", where
-  `bart(u + log(u + 1))` works; a transformed BART term whose variable is not also a plain term seems to fail in the
-  frame handed to dbartsData. Seen on the branch; the path is main's, untouched here.
+- Found, not in scope: `stan4bart(y ~ x + bart(log(v) + f), d)` stops with "object 'v' not found" on main and the
+  branch (the review reproduced it on 27ef163): a variable that appears in bart() only inside a transform fails,
+  dbartsData being handed a frame whose column is the transform. Left for its own fix.
 
 ## Landing note
 
