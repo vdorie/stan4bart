@@ -8,6 +8,20 @@ docs/design/dbarts-capability-adoption.md. An item graduates to its own
 docs/plans/<item>.md when it is picked up.
 
 items
+  shrinkage-priors: stan_args$prior takes every family rstanarm's
+    coefficient prior takes (dbarts dec-B645, VD 2026-11-07): hs,
+    hs_plus, lasso, laplace and product_normal drawn under WALNUTS with
+    their latent scales (local, global and slab scales; the mixing scales;
+    product_normal's factors) and a hand-derived gradient, each checked
+    against finite differences and against rstanarm's posterior on a
+    shared model, product_normal's mixing checked as its factors are
+    sign-unidentified; ok_dists' refusal goes. NEWS 0.0-14 says what
+    0.0-13 did with each, as run 2026-11-07: hs and hs_plus ran and gave
+    wrong answers (a null coefficient at 0.165 and 0.252 where rstanarm
+    gives -0.002 and 0.001), lasso and laplace aborted the R session,
+    product_normal matched rstanarm. The current NEWS item ("previously
+    this reached the sampler and crashed the R session") holds for lasso
+    and laplace only. 0.0-13.1 carries 0.0-13's Stan model.
   plot-method: a plot() method for stan4bartFit, the counterpart of
     dbarts 0.9-x's plot.rbart, which drew two base-graphics panels: the
     residual sd's trace across burn-in and draws, one line per chain,
