@@ -133,13 +133,19 @@ Mutants (each made, installed, run, reverted and touched): see Gates.
 
 ## Gates
 
-At tip TIP (see Landing note), dbarts main f79874ea8 (shipped mode), lme4 2.1.0, arm64 macOS, R RVERSION:
+At e36d44b (the code's last commit; this record follows it), dbarts main f79874ea8 (shipped mode), lme4 2.1.0, R 4.6.2,
+arm64 macOS:
 
-- Full suite, NOT_CRAN=true, at_home = TRUE, one process: SUITE.
-- R CMD check --as-cran on the built tarball: CHECK.
+- Full suite, NOT_CRAN=true, at_home = TRUE, one process: 1919 results, 0 failures, of which this branch adds 209
+  (test-26's 205, test-08's 4); test-25, 506 of 506.
+- R CMD check --as-cran on the built tarball: 1 NOTE, CRAN incoming feasibility (the Description's arXiv form, the
+  Date field, days since the last update), main's own. A first run found a second NOTE, `lm.fit` not imported,
+  repaired in e36d44b.
 - Lint and format: stan4bart's CI runs none (its workflows are R CMD check, the exactness and posterior gates, rhub
-  and the sanitizers).
-- Mutants: MUTANTS.
+  and the sanitizers). The exactness gate, which runs on every push, passes 4 of 4 tiers within 1e-10.
+- Mutants, each installed, run against the test file and reverted: the line weighted by each category's rows
+  (`lm.wfit` with the counts) fails 98 of 205 in test-26; the share skipped (the QR's coefficient kept) fails 116 of
+  205; the guard removed fails 4 of 40 in test-08.
 
 ## Calls made
 
