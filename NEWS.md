@@ -195,11 +195,12 @@
   A model column that takes one value in each category of a BART factor is
   given the slope of the line through the initial fit's category totals, each
   category counted once, so the range does not depend on the order of the
-  category names. The fit records it as `range.bart`, with `range.route`, `range.fallback` and
-  `range.info`, and `summary()` prints it. Results for a continuous response
-  differ from earlier versions, including under a fixed seed.
-  `extract(type = "trees")` now reports leaf values in one unit for every
-  chain.
+  category names, except for the cases the help names, such as a column
+  constant only within the joint categories of two factors. The fit records
+  it as `range.bart`, with `range.route`, `range.fallback` and `range.info`,
+  and `summary()` prints it. Results for a continuous response differ from
+  earlier versions, including under a fixed seed. `extract(type = "trees")`
+  now reports leaf values in one unit for every chain.
 
 * The initial mixed model is fitted by lme4, which stays a suggested package.
   Where it is not installed, a continuous model with random terms takes the
