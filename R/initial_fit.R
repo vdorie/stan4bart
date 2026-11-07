@@ -109,10 +109,9 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
   shares <- list()
   for (name in names(factors)) {
     codes <- factors[[name]]
-    shared <- which(is_own)[vapply(keep[is_own], function(j)
-      constant_within(block[, j], codes), NA)]
+    shared <- which(is_own)[constant_within(block[, keep[is_own], drop = FALSE], codes)]
     if (length(shared) == 0L) next
-    within <- vapply(seq_len(ncol(block)), function(j) constant_within(block[, j], codes), NA)
+    within <- constant_within(block, codes)
     rest <- block[, !within, drop = FALSE]
     rank_rest <- if (ncol(rest) == 0L) 0L else qr(sqrt(w) * rest, tol = 1e-7)$rank
     # no combination of the columns not constant within the categories is
@@ -128,10 +127,15 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
        left.out = left_out, shares = shares)
 }
 
-# A column is constant within the categories 'codes' mark, to a relative
-# tolerance well inside the QR's.
-constant_within <- function(column, codes)
-  all(abs(column - ave(column, codes)) <= sqrt(.Machine$double.eps) * max(abs(column)))
+# Which columns of 'x' are constant within the categories 'codes' mark, each
+# to a tolerance relative to its largest value well inside the QR's.
+constant_within <- function(x, codes)
+{
+  category <- match(codes, sort(unique(codes)))
+  means <- rowsum(x, category, reorder = TRUE) / tabulate(category)
+  tolerance <- sqrt(.Machine$double.eps) * apply(abs(x), 2L, max)
+  colSums(sweep(abs(x - means[category, , drop = FALSE]), 2L, tolerance, ">")) == 0
+}
 
 # A kept model column constant within the categories of a BART factor entered
 # as indicators lies in the span of the intercept and those indicators, so the
