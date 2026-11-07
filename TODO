@@ -86,10 +86,6 @@ items
     1e-10. It predates the one response range per fit.
   ranef-double-bar: extract(type = "ranef") stops ("subscript out of
     bounds") on a fit with a || term.
-  binary-one-coefficient: stan4bart(yb ~ x + bart(v + f), d) with a
-    binary yb and no random term stops in package_samples ("'dimnames'
-    applied to non-array"): with one parametric coefficient the sapply
-    over chains' inv_mass returns a vector, not a matrix.
   ppd-zero-weight: extract(type = "ppd") of a continuous fit with a
     weight of zero gives NaN on those rows with R's bare "NAs produced"
     warning: the draw's sd is sigma over the root of the weight. It
@@ -104,7 +100,8 @@ items
     scale. Whether newdata's weights should be read is open.
   one-parameter-binary: a binary fit whose parametric part has one
     parameter, as y ~ x + bart(...), stops when its chains are packaged
-    ("'dimnames' applied to non-array").
+    ("'dimnames' applied to non-array"): in package_samples the sapply
+    over the chains' inv_mass returns a vector, not a matrix.
   test-oracle-old-lme4: the at-home block of
     inst/tinytest/test-02-binary.R calls lme4::glmer itself for its
     deviance comparison. On lme4 1.1-35.5 that call stopped ("Downdated
