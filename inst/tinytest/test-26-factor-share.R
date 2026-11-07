@@ -260,6 +260,86 @@ local({
   }
 })
 
+# category values that are not exact in binary --------------------------
+
+# the categories' means of such a column round, and it is still constant
+# within them
+local({
+  for (values in list(c(31.7, 45.3, 52.9, 70.1), c(0.1, 0.3, 0.7, 1.1))) {
+    d <- d0
+    d$income <- values[codes]
+    d$y <- d$y + 0.3 * d$income
+    shares <- numeric()
+    for (names in orders[c(1L, 8L, 17L, 24L)]) {
+      d <- relabel(d, codes, names)
+      object <- stan4bart(y ~ income + bart(r + x), d, weights = w, iter = 0L)
+      expect_identical(names(block_of(object, d$w)$shares), "r")
+      share <- route_of(object, "lm")$coefficients[["income"]]
+      expect_equal(share, line_slope(lm_totals(d, y ~ x + r, d$w),
+                                     values[match(sort(names), names)]), tolerance = 1e-8)
+      shares <- c(shares, share)
+    }
+    expect_true(diff(range(shares)) < 1e-10 * max(1, abs(shares)))
+  }
+})
+
+# other columns that combine to a constant ---------------------------------
+
+# where the other columns meet the factor's category functions in a constant
+# alone, the share is made; each case is checked against a fit in which the
+# factor's indicators are replaced by a basis of the category functions
+# orthogonal, one point per category, to the constant and the shared columns,
+# so that the shared columns' coefficients are the slopes of the line
+local({
+  orthogonal_basis <- function(codes, values) {
+    K <- max(codes)
+    A <- cbind(1, values)
+    Q <- qr.Q(qr(cbind(A, diag(K))))[, -seq_len(ncol(A)), drop = FALSE]
+    Q[codes, seq_len(K - ncol(A)), drop = FALSE]
+  }
+  set.seed(3L)
+  m <- 600L
+  cf <- sample(6L, m, TRUE)
+  cg <- sample(5L, m, TRUE)
+  vf1 <- c(1, 4, 2, 8, 3, 5.5)
+  vf2 <- c(0, 1, 1, 0, 2, 3.1)
+  vg <- c(10, 12, 9, 15, 11.3)
+  d <- data.frame(a1 = vf1[cf], a2 = vf2[cf], b = vg[cg], x = rnorm(m),
+                  pg = c(3, 1, 4, 1, 5)[cg], sex = factor(sample(c("F", "M"), m, TRUE)))
+  d$y <- d$a1 + 2 * d$a2 - 0.5 * d$b + rnorm(6L, sd = 2)[cf] + rnorm(5L, sd = 2)[cg] + d$x +
+    rnorm(m)
+  cases <- list(
+    # a second model column constant within a crossed factor in the forest
+    list(formula = y ~ a1 + a2 + b + bart(f + gg + x), shares = c("f", "gg"),
+         oracle = function(d) lm(y ~ a1 + a2 + b + x + orthogonal_basis(cf, cbind(vf1, vf2)) +
+                                   orthogonal_basis(cg, vg), d),
+         shared = c("a1", "a2", "b")),
+    # a numeric forest column constant within a crossed forest factor
+    list(formula = y ~ a1 + bart(f + gg + pg + x), shares = "f",
+         oracle = function(d) lm(y ~ a1 + x + pg + orthogonal_basis(cf, vf1) + gg, d),
+         shared = "a1"),
+    # every level of a model factor, which sum to the intercept
+    list(formula = y ~ 0 + sex + a1 + bart(f + x), shares = "f",
+         oracle = function(d) lm(y ~ sex + a1 + x + orthogonal_basis(cf, vf1), d),
+         shared = "a1"))
+  name_sets <- list(list(f = letters[1:6], g = LETTERS[1:5]), list(f = letters[6:1], g = LETTERS[5:1]),
+                    list(f = c("c", "a", "f", "b", "e", "d"), g = c("D", "B", "E", "A", "C")))
+  for (case in cases) {
+    reference <- NULL
+    for (names in name_sets) {
+      d$f <- factor(names$f[cf], levels = sort(names$f))
+      d$gg <- factor(names$g[cg], levels = sort(names$g))
+      object <- stan4bart(case$formula, d, iter = 0L)
+      expect_identical(names(block_of(object)$shares), case$shares)
+      route <- route_of(object, "lm")
+      expect_equal(unname(route$coefficients[case$shared]),
+                   unname(coef(case$oracle(d))[case$shared]), tolerance = 1e-8)
+      if (is.null(reference)) reference <- route
+      expect_equal(route$range, reference$range, tolerance = 1e-10)
+    }
+  }
+})
+
 # the limits ----------------------------------------------------------------
 
 # a column constant within two factors' joint categories, as the sum of a

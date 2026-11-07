@@ -109,14 +109,14 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
   shares <- list()
   for (name in names(factors)) {
     codes <- factors[[name]]
-    shared <- which(is_own)[constant_within(block[, keep[is_own], drop = FALSE], codes)]
+    shared <- which(is_own)[constant_within(block[, keep[is_own], drop = FALSE], codes, w)]
     if (length(shared) == 0L) next
-    within <- constant_within(block, codes)
-    rest <- block[, !within, drop = FALSE]
-    rank_rest <- if (ncol(rest) == 0L) 0L else qr(sqrt(w) * rest, tol = 1e-7)$rank
-    # no combination of the columns not constant within the categories is
-    # constant within them
-    if (decomposition$rank == length(unique(codes)) + rank_rest)
+    within <- constant_within(block, codes, w)
+    # the columns not constant within the categories, with the intercept
+    rest <- cbind(1, block[, !within, drop = FALSE])
+    # no combination of those columns is constant within the categories other
+    # than a constant, which moves the totals and not their slope
+    if (decomposition$rank == length(unique(codes)) - 1L + qr(sqrt(w) * rest, tol = 1e-7)$rank)
       shares[[name]] <- list(codes = codes, shared = shared, within = which(within[keep]))
   }
   list(X = block[, keep, drop = FALSE],
@@ -127,14 +127,19 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
        left.out = left_out, shares = shares)
 }
 
-# Which columns of 'x' are constant within the categories 'codes' mark, each
-# to a tolerance relative to its largest value well inside the QR's.
-constant_within <- function(x, codes)
+# Which columns of 'x' are constant within the categories 'codes' mark, read
+# in the QR's own measure: the norm, under the weights 'w', of what is left of
+# a column once its categories' weighted means are taken off, relative to the
+# column's norm. The tolerance is ten times the QR's, so that a column whose
+# remainder is small enough for the QR to drop an indicator for it counts as
+# constant; one that counts as constant without the QR dropping anything fails
+# the rank condition and takes no share.
+constant_within <- function(x, codes, w)
 {
   category <- match(codes, sort(unique(codes)))
-  means <- rowsum(x, category, reorder = TRUE) / tabulate(category)
-  tolerance <- sqrt(.Machine$double.eps) * apply(abs(x), 2L, max)
-  colSums(sweep(abs(x - means[category, , drop = FALSE]), 2L, tolerance, ">")) == 0
+  means <- rowsum(w * x, category, reorder = TRUE) / as.vector(rowsum(w, category, reorder = TRUE))
+  remainder <- colSums(w * (x - means[category, , drop = FALSE])^2)
+  remainder <= 1e-12 * colSums(w * x^2)
 }
 
 # A kept model column constant within the categories of a BART factor entered
@@ -142,11 +147,12 @@ constant_within <- function(x, codes)
 # QR drops one more indicator and the fit sets the column's coefficient by the
 # categories left without one: by the order of the category names. Where no
 # combination of the fit's columns not constant within the categories is
-# constant within them, the fit's values split in one way into a part
-# constant within the categories, its category totals, and the rest, neither
-# depending on that order; the kept columns constant within the categories
-# then span every function of the categories, and the totals are their
-# coefficients times their values. Such a model column takes instead the
+# constant within them, other than a constant, the fit's values split into a
+# part constant within the categories, its category totals, and the rest, in
+# one way up to a constant moved between the two, and neither depends on that
+# order; the kept columns constant within the categories then span every
+# function of the categories, and the totals are their coefficients times
+# their values. Such a model column takes instead the
 # slope of the least-squares line through those totals, each category present
 # among the rows in counted once whatever its rows or weights, and the
 # deviations from the line stay with the indicators, the forest's part.
