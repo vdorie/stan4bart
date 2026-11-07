@@ -75,6 +75,7 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
   factor_levels <- attr(object$bartData@x, "factor.levels")
   added <- list()
   left_out <- character()
+  factors <- list()
   for (j in seq_len(if (forest) ncol(x_bart) else 0L)) {
     name <- colnames(x_bart)[j]
     value <- x_bart[rows_in, j]
@@ -94,6 +95,7 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
     indicators <- outer(value, present, "==") + 0
     colnames(indicators) <- paste0(name, factor_levels[[j]][present + 1L])
     added[[length(added) + 1L]] <- indicators
+    factors[[name]] <- value
   }
 
   n_own <- NCOL(object$X)
@@ -107,7 +109,51 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
        own_cols = keep[is_own] - 1L,
        added = colnames(block)[keep[keep > 1L + n_own]],
        dropped = colnames(block)[setdiff(seq_len(ncol(block)), keep)],
-       left.out = left_out)
+       left.out = left_out, factors = factors)
+}
+
+# A column is constant within the categories 'codes' mark, to a relative
+# tolerance well inside the QR's.
+constant_within <- function(column, codes)
+  all(abs(column - ave(column, codes)) <= sqrt(.Machine$double.eps) * max(abs(column)))
+
+# A kept model column constant within the categories of a BART factor entered
+# as indicators lies in the span of the intercept and those indicators, so the
+# QR drops one more indicator and the fit sets the column's coefficient by the
+# two categories left without one: by the order of the category names. The
+# fit's values do not depend on that order, and neither does its category
+# totals' part, the coefficients times the kept columns constant within the
+# categories. Such a column takes instead the slope of the least-squares line
+# through those totals, each category present among the rows in counted once
+# whatever its rows or weights; the deviations from the line stay with the
+# indicators, the forest's part. Several such columns of one factor share one
+# fit. A column constant within more than one factor takes the factor with
+# the most categories, provided each of the others is constant within its
+# categories; otherwise, and where only a combination of columns is constant
+# within a factor's categories, the coefficient stays as the QR leaves it.
+range_factor_share <- function(columns, beta)
+{
+  X <- columns$X
+  factors <- columns$factors
+  if (length(columns$own) == 0L || length(factors) == 0L) return(beta)
+  home <- vapply(columns$own, function(j) {
+    within <- which(vapply(factors, function(codes) constant_within(X[, j], codes), NA))
+    if (length(within) == 0L) return(NA_integer_)
+    finest <- within[which.max(vapply(factors[within], function(codes)
+      length(unique(codes)), 0L))]
+    nested <- vapply(factors[within], constant_within, NA, codes = factors[[finest]])
+    if (all(nested)) finest else NA_integer_
+  }, 0L)
+  for (f in unique(home[!is.na(home)])) {
+    codes <- factors[[f]]
+    # one row of each category
+    rows <- match(sort(unique(codes)), codes)
+    in_categories <- which(apply(X, 2L, constant_within, codes))
+    totals <- drop(X[rows, in_categories, drop = FALSE] %*% beta[in_categories])
+    shared <- columns$own[!is.na(home) & home == f]
+    beta[shared] <- lm.fit(cbind(1, X[rows, shared, drop = FALSE]), totals)$coefficients[-1L]
+  }
+  beta
 }
 
 # The initial fit of z on the fixed columns X with weights w, all on the rows
@@ -227,6 +273,7 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
         } else {
           info$fit <- if (mixed) "lme4" else "linear"
           info[c("theta", "sigma", "message")] <- fit[c("theta", "sigma", "message")]
+          fit$beta <- range_factor_share(columns, fit$beta)
           coefficients <- setNames(fit$beta, colnames(columns$X))
           own <- initial_fit_own(object, columns, fit, rows$offset_type)
         }
