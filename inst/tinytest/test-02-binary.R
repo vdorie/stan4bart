@@ -114,8 +114,6 @@ expect_equal(samples.pred, samples.ev)
 
 # ppd has approximately right amount of noise
 if (at_home()) {
-  # skip because the test is highly platform dependent due to small differences in how
-  # the data are simulated
   df.train <- df
 
   set.seed(0)
@@ -129,9 +127,12 @@ if (at_home()) {
   expect_true(mean((apply(samples.ev, 2, mean) - apply(samples.ppd, 2, mean))^2) <= 1e-1)
 
 
-  r <- (samples.ev - samples.ppd) / sqrt(samples.ev * (1 - samples.ev))
-  r <- mean(r[!is.nan(r)])
-  # tolerance refreshed for dbarts 1.0-0 (draw sequence shifted); ppd stays
-  # unbiased around ev (observed r ~ -0.038 on this platform)
-  expect_true(abs(r) <= 0.05)
+  # Given ev, each standardized term has mean 0 and variance 1, so r has sd
+  # 1 / sqrt(n) over the n finite terms: 0.024 for one ppd draw of this fit,
+  # which put a fixed bar of 0.05 at two sd. Averaging 25 ppd draws of the
+  # one fit gives sd 0.0047; the bar is 4 sd at the test's own n.
+  samples.ppd <- replicate(25L, extract(fit, type = "ppd"))
+  r <- (as.vector(samples.ev) - samples.ppd) / sqrt(as.vector(samples.ev) * (1 - as.vector(samples.ev)))
+  r <- r[!is.nan(r)]
+  expect_true(abs(mean(r)) <= 4 / sqrt(length(r)))
 }
