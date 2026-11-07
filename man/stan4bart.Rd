@@ -227,12 +227,15 @@ stan4bart(formula,
   categories), each category counted once whatever its number of
   observations or weights; the category totals' deviations from the line
   belong to the BART predictors. Several such columns of one factor take
-  one least-squares fit. Not covered, so that the range can still depend
-  on the order of the category names: a column constant only within the
-  joint categories of two factors, a combination of columns constant
-  within a factor's categories where no column alone is, and a column
-  constant within the categories of two factors neither of which is nested
-  in the other.
+  one least-squares fit. A factor whose categories each lie within one of
+  the first factor's is no obstacle. The coefficient is left as the fit
+  sets it, so that the range can still depend on the order of the category
+  names, for a column constant only within the joint categories of two
+  factors, for one constant within a factor's categories only in
+  combination with other columns, and where some combination of the
+  initial fit's other columns is also constant within the factor's
+  categories, as the indicators of a second factor are when the categories
+  of both lie within those of a coarser grouping.
 
   A BART factor with many categories makes the initial fit slow and
   memory-hungry: its indicators are a dense block of observations by
