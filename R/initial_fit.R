@@ -228,8 +228,8 @@ range_cut_reTrms <- function(reTrms, rows_in)
 # the first residual standard deviation. An estimated range is never wider
 # than the response's own, and where the fit cannot be computed the response's
 # own range stands in with the start that goes with it: an own part of zero.
-# Under an 'offset_type' of "parametric" the own part is zero and no fit is
-# made.
+# Under "response", under a pair the user gives, and under an 'offset_type' of
+# "parametric" no fit is made and the own part is zero.
 bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fit)
 {
   verbose <- isTRUE(as.integer(verbose) > 0L)
@@ -250,7 +250,7 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
                dropped = character(), left.out = character(), theta = NULL,
                sigma = NULL, message = NULL)
 
-  if (route != "response" && rows$offset_type != "parametric") {
+  if (!supplied && route != "response" && rows$offset_type != "parametric") {
     if (mixed && !lme4_is_used()) {
       fallback <- "lme4"
       warning("lme4 is not installed, so the BART response range is the response's own, ",
@@ -267,7 +267,7 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
       if (n - p < 1L || any(n_effects >= n)) {
         fallback <- "undefined"
       } else {
-        if (verbose && !supplied) {
+        if (verbose) {
           cat("estimating the BART response range by a linear ",
               if (mixed) "mixed model (lme4)" else "model", " on ", n, " rows and ", p,
               " fixed columns; see 'bart_range'\n", sep = "")
@@ -281,10 +281,9 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
         fit <- checked_initial_fit(fit, p, if (mixed) nrow(reTrms$Zt) else 0L)
         if (inherits(fit, "error")) {
           fallback <- "failed"
-          if (!supplied)
-            warning("the initial fit for the BART response range failed (",
-                    conditionMessage(fit), "); the response's own range is used; ",
-                    "see 'bart_range'", call. = FALSE)
+          warning("the initial fit for the BART response range failed (",
+                  conditionMessage(fit), "); the response's own range is used; ",
+                  "see 'bart_range'", call. = FALSE)
         } else {
           info$fit <- if (mixed) "lme4" else "linear"
           info[c("theta", "sigma", "message")] <- fit[c("theta", "sigma", "message")]
@@ -315,13 +314,10 @@ bart_range_route <- function(object, bart_range, verbose = 0L, fitter = range_fi
   if (!(range_bart[2L] > range_bart[1L])) range_bart <- NULL
 
   if (supplied) {
-    # a fallback of the start is not one of the range
-    fallback <- NULL
-    fitted_to <- range((target - own)[rows_in])
-    if (bart_range[2L] < fitted_to[1L] || bart_range[1L] > fitted_to[2L])
+    if (bart_range[2L] < range_own[1L] || bart_range[1L] > range_own[2L])
       warning("'bart_range' (", paste(format_range(bart_range), collapse = ", "),
               ") lies wholly outside the values BART is fitted to (",
-              paste(format_range(fitted_to), collapse = " to "), ")", call. = FALSE)
+              paste(format_range(range_own), collapse = " to "), ")", call. = FALSE)
   } else if (verbose && !is.null(range_bart) && isTRUE(fallback %in% c("undefined", "wider"))) {
     cat("the BART response range is the response's own, ",
         paste(format_range(range_bart), collapse = " to "), ": ",

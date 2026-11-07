@@ -241,13 +241,14 @@ local({
   expect_identical(route$info$fit, "none")
 
   # a pair is used as it is, far wider than the response's own or inside it,
-  # and starts from the linear fit
+  # fits nothing and starts as "response" does
   for (pair in list(c(-150.5, 300.25), c(49, 51))) {
-    route <- route_of(mixed0, pair)
+    route <- route_of(mixed0, pair, fitter = function(...) stop("fitted"))
     expect_identical(route$range, pair)
     expect_identical(route[c("route", "fallback")], list(route = "supplied", fallback = NULL))
-    expect_true(max(abs(route$own - lm_own)) < 1e-10 * diff(lm_range))
-    expect_equal(route$sigma, sd((d$y - d$o - lm_own)[rows_in]), tolerance = 1e-10)
+    expect_identical(route$own, numeric(n))
+    expect_identical(route$sigma, sd((d$y - d$o)[rows_in]))
+    expect_identical(route$info$fit, "none")
   }
 })
 
@@ -262,6 +263,19 @@ if (has_lme4) local({
   expect_identical(calls, 1L)
   for (bart_range in list("lm", "response", c(0, 100))) route_of(mixed0, bart_range)
   route_of(plain0, "mixed")
+  expect_identical(calls, 1L)
+})
+
+# neither a pair nor "response" builds the initial fit's columns
+local({
+  calls <- 0L
+  invisible(suppressMessages(trace("range_fixed_block", where = asNamespace("stan4bart"),
+                                   print = FALSE, tracer = function() calls <<- calls + 1L)))
+  on.exit(invisible(suppressMessages(untrace("range_fixed_block",
+                                             where = asNamespace("stan4bart")))))
+  for (bart_range in list("response", c(0, 100))) route_of(mixed0, bart_range)
+  expect_identical(calls, 0L)
+  route_of(plain0, "lm")
   expect_identical(calls, 1L)
 })
 
@@ -415,7 +429,7 @@ local({
                                          "(its estimates are not of the model's size); the ",
                                          "response's own range is used; see 'bart_range'"))
   }
-  # a pair whose start fails is still the pair, and says nothing
+  # a pair calls no fit, so one that would fail says nothing
   seen <- observe(route_of(plain0, c(0, 100), fitter = function(...) stop("no optimum")))
   expect_identical(seen$value$range, c(0, 100))
   expect_identical(seen$value$own, numeric(n))
@@ -510,8 +524,8 @@ local({
   expect_identical(seen$value$range.bart, c(1000, 1001))
   expect_identical(seen$value$range.route, "supplied")
   expect_identical(state_pairs(seen$value), matrix(c(1000, 1001), 2L, 2L))
-  # one that touches them is not warned of
-  touching <- c(lm_range[2L], lm_range[2L] + 1)
+  # one that touches them, the response less the offset, is not warned of
+  touching <- c(own_range[2L], own_range[2L] + 1)
   expect_identical(observe(route_of(plain0, touching))$warned, character())
 
   # a binary response has no range
@@ -1012,9 +1026,9 @@ local({
 # a pair is warned of where it misses the values on the rows in, whatever
 # the rows of weight zero hold
 local({
-  pair <- lm_range[2L] + c(5, 10)
+  pair <- own_range[2L] + c(5, 10)
   # PRECONDITION: a row of weight zero lies above the pair
-  expect_true(max(d$y - d$o - lm_own) > pair[2L] && max((d$y - d$o - lm_own)[rows_in]) < pair[1L])
+  expect_true(max(d$y - d$o) > pair[2L] && max((d$y - d$o)[rows_in]) < pair[1L])
   seen <- observe(route_of(plain0, pair))
   expect_identical(length(seen$warned), 1L)
   expect_true(startsWith(seen$warned, "'bart_range' ("))
