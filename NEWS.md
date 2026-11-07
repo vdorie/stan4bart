@@ -191,16 +191,17 @@
   default, estimates it from an initial mixed model that holds the BART
   predictors as linear terms; `"lm"` from that fit without the random terms;
   `"response"` takes the response's own range; and a pair `c(lower, upper)`
-  is used as given. An estimated range is never wider than the response's own.
-  A model column that takes one value in each category of a BART factor is
-  given the slope of the line through the initial fit's category totals, each
-  category counted once, so the range does not depend on the order of the
-  category names, except for the cases the help names, such as a column
-  constant only within the joint categories of two factors. The fit records
-  it as `range.bart`, with `range.route`, `range.fallback` and `range.info`,
-  and `summary()` prints it. Results for a continuous response differ from
-  earlier versions, including under a fixed seed. `extract(type = "trees")`
-  now reports leaf values in one unit for every chain.
+  is used as given. A pair or `"response"` makes no initial fit. An estimated
+  range is never wider than the response's own. A model column that takes one
+  value in each category of a BART factor is given the slope of the line
+  through the initial fit's category totals, each category counted once, so
+  the range does not depend on the order of the category names, except for
+  the cases the help names, such as a column constant only within the joint
+  categories of two factors. The fit records it as `range.bart`, with
+  `range.route`, `range.fallback` and `range.info`, and `summary()` prints it.
+  Results for a continuous response differ from earlier versions, including
+  under a fixed seed. `extract(type = "trees")` now reports leaf values in one
+  unit for every chain.
 
 * The initial mixed model is fitted by lme4, which stays a suggested package.
   Where it is not installed, a continuous model with random terms takes the

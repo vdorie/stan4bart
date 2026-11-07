@@ -206,6 +206,9 @@ stan4bart(formula,
     \item \code{"response"} - the range of the response less any offset.
     Nothing is fitted.
   }
+  Under \code{"response"} and under a pair, BART's first sweep is fitted to
+  the response less any offset, none of it set aside for the model's own
+  terms.
   An estimated range is never wider than the response's own: where the fit
   would give a wider one, and where the fit cannot be computed, the response's
   own range is used and the \code{range.fallback} component of the result
@@ -241,8 +244,7 @@ stan4bart(formula,
 
   A BART factor with many categories makes the initial fit slow and
   memory-hungry: its indicators are a dense block of observations by
-  categories. \code{"response"} fits nothing and avoids it; a pair still
-  makes the linear fit for the values the first sweep starts from.
+  categories. A pair or \code{"response"} fits nothing and avoids it.
 
   Too narrow a range leaves group-level signal in the random effects that
   belongs to BART, and too wide a one costs accuracy and mixing in small
@@ -445,12 +447,13 @@ stan4bart(formula,
   }
   \subsection{The initial fit and lme4}{
     Before sampling, the model is fitted once without its BART component: for
-    a continuous response to fix the range BART is calibrated to (see
-    \code{bart_range}), and for either family to give the first sweep the
-    values it starts from. Where the model has random terms this is a mixed
-    model, fitted by \pkg{lme4} when it is installed: that of
-    \code{\link[lme4]{lmer}} for a continuous response and of
-    \code{\link[lme4]{glmer}} for a binary one.
+    a continuous response whose range is estimated, \code{"mixed"} or
+    \code{"lm"}, to fix the range BART is calibrated to (see
+    \code{bart_range}) and the values the first sweep starts from, and for a
+    binary response to give the first sweep the values it starts from. Where
+    the model has random terms this is a mixed model, fitted by \pkg{lme4}
+    when it is installed: that of \code{\link[lme4]{lmer}} for a continuous
+    response and of \code{\link[lme4]{glmer}} for a binary one.
 
     lme4 is a suggested package. Without it, a continuous model with random
     terms takes the response's own range and a binary one starts from a probit
