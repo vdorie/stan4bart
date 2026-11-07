@@ -66,7 +66,9 @@ initial_fit_own <- function(object, columns, fit, offset_type)
 # which puts the model's own columns ahead of the forest's; lme4 stops on a
 # dependent column and so is never left to choose. 'own' indexes the kept
 # columns that are the model's and 'own_cols' the columns of the model's
-# design they are.
+# design they are. 'shares' holds, for each factor the share of
+# range_factor_share applies to, its codes on the rows in, the kept model
+# columns constant within its categories and all kept columns that are.
 range_fixed_block <- function(object, rows_in, w, forest = TRUE)
 {
   x_bart <- as.matrix(object$bartData@x)
@@ -104,12 +106,26 @@ range_fixed_block <- function(object, rows_in, w, forest = TRUE)
   decomposition <- qr(sqrt(w) * block, tol = 1e-7)
   keep <- sort(decomposition$pivot[seq_len(decomposition$rank)])
   is_own <- keep > 1L & keep <= 1L + n_own
+  shares <- list()
+  for (name in names(factors)) {
+    codes <- factors[[name]]
+    shared <- which(is_own)[vapply(keep[is_own], function(j)
+      constant_within(block[, j], codes), NA)]
+    if (length(shared) == 0L) next
+    within <- vapply(seq_len(ncol(block)), function(j) constant_within(block[, j], codes), NA)
+    rest <- block[, !within, drop = FALSE]
+    rank_rest <- if (ncol(rest) == 0L) 0L else qr(sqrt(w) * rest, tol = 1e-7)$rank
+    # no combination of the columns not constant within the categories is
+    # constant within them
+    if (decomposition$rank == length(unique(codes)) + rank_rest)
+      shares[[name]] <- list(codes = codes, shared = shared, within = which(within[keep]))
+  }
   list(X = block[, keep, drop = FALSE],
        own = which(is_own),
        own_cols = keep[is_own] - 1L,
        added = colnames(block)[keep[keep > 1L + n_own]],
        dropped = colnames(block)[setdiff(seq_len(ncol(block)), keep)],
-       left.out = left_out, factors = factors)
+       left.out = left_out, shares = shares)
 }
 
 # A column is constant within the categories 'codes' mark, to a relative
@@ -120,40 +136,29 @@ constant_within <- function(column, codes)
 # A kept model column constant within the categories of a BART factor entered
 # as indicators lies in the span of the intercept and those indicators, so the
 # QR drops one more indicator and the fit sets the column's coefficient by the
-# two categories left without one: by the order of the category names. The
-# fit's values do not depend on that order, and neither does its category
-# totals' part, the coefficients times the kept columns constant within the
-# categories. Such a column takes instead the slope of the least-squares line
-# through those totals, each category present among the rows in counted once
-# whatever its rows or weights; the deviations from the line stay with the
-# indicators, the forest's part. Several such columns of one factor share one
-# fit. A column constant within more than one factor takes the factor with
-# the most categories, provided each of the others is constant within its
-# categories; otherwise, and where only a combination of columns is constant
-# within a factor's categories, the coefficient stays as the QR leaves it.
+# categories left without one: by the order of the category names. Where no
+# combination of the fit's columns not constant within the categories is
+# constant within them, the fit's values split in one way into a part
+# constant within the categories, its category totals, and the rest, neither
+# depending on that order; the kept columns constant within the categories
+# then span every function of the categories, and the totals are their
+# coefficients times their values. Such a model column takes instead the
+# slope of the least-squares line through those totals, each category present
+# among the rows in counted once whatever its rows or weights, and the
+# deviations from the line stay with the indicators, the forest's part.
+# Several such columns of one factor take one least-squares fit. Elsewhere the
+# coefficient stays as the QR leaves it.
 range_factor_share <- function(columns, beta)
 {
-  X <- columns$X
-  factors <- columns$factors
-  if (length(columns$own) == 0L || length(factors) == 0L) return(beta)
-  home <- vapply(columns$own, function(j) {
-    within <- which(vapply(factors, function(codes) constant_within(X[, j], codes), NA))
-    if (length(within) == 0L) return(NA_integer_)
-    finest <- within[which.max(vapply(factors[within], function(codes)
-      length(unique(codes)), 0L))]
-    nested <- vapply(factors[within], constant_within, NA, codes = factors[[finest]])
-    if (all(nested)) finest else NA_integer_
-  }, 0L)
-  for (f in unique(home[!is.na(home)])) {
-    codes <- factors[[f]]
+  result <- beta
+  for (share in columns$shares) {
     # one row of each category
-    rows <- match(sort(unique(codes)), codes)
-    in_categories <- which(apply(X, 2L, constant_within, codes))
-    totals <- drop(X[rows, in_categories, drop = FALSE] %*% beta[in_categories])
-    shared <- columns$own[!is.na(home) & home == f]
-    beta[shared] <- lm.fit(cbind(1, X[rows, shared, drop = FALSE]), totals)$coefficients[-1L]
+    rows <- match(sort(unique(share$codes)), share$codes)
+    totals <- drop(columns$X[rows, share$within, drop = FALSE] %*% beta[share$within])
+    result[share$shared] <- lm.fit(cbind(1, columns$X[rows, share$shared, drop = FALSE]),
+                                   totals)$coefficients[-1L]
   }
-  beta
+  result
 }
 
 # The initial fit of z on the fixed columns X with weights w, all on the rows

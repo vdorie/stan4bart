@@ -248,6 +248,7 @@ local({
     for (state_names in list(sprintf("s%02d", 1:12), sprintf("s%02d", 12:1))) {
       d$s <- factor(state_names[state], levels = sort(state_names))
       object <- stan4bart(y ~ income + bart(r + s + x), d, iter = 0L)
+      expect_identical(names(block_of(object)$shares), "s")
       route <- route_of(object, "lm")
       totals <- lm_totals(d, y ~ x + s, factor = "s")
       income_s <- tapply(d$income, d$s, unique)
@@ -292,8 +293,24 @@ local({
                   income = c(2, 5)[pair], fa = factor(first), fb = factor(second))
   object <- stan4bart(y ~ income + bart(fa + fb + x), d, iter = 0L)
   columns <- block_of(object)
+  expect_identical(length(columns$shares), 0L)
   beta <- seq_len(ncol(columns$X)) + 0.5
   expect_identical(share_of(columns, beta), beta)
+
+  # a column constant within the first factor's categories alone, where both
+  # factors' categories lie within those of the pair: the second factor's
+  # indicators carry the pair, which is constant within the first's
+  # categories, so the first takes no share, and the coefficient follows the
+  # order of the second's names
+  d$income <- c(1, 2, 4, 3, 6, 8)[first]
+  slopes <- numeric()
+  for (names in list(c("p", "q", "r", "s"), c("s", "r", "q", "p"), c("q", "s", "p", "r"))) {
+    d$fb <- factor(names[second], levels = sort(names))
+    object <- stan4bart(y ~ income + bart(fa + fb + x), d, iter = 0L)
+    expect_identical(length(block_of(object)$shares), 0L)
+    slopes <- c(slopes, route_of(object, "lm")$coefficients[["income"]])
+  }
+  expect_true(diff(range(slopes)) > 0.01)
 })
 
 # no such column ------------------------------------------------------------
