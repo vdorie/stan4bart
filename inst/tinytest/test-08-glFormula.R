@@ -155,3 +155,13 @@ local({
   fit_pair(y ~ x + (1 | g) + bart(log(v) + f), y ~ x + (1 | g) + bart(lv + f))
   fit_pair(log(y) ~ x + bart(v + f), ly ~ x + bart(v + f))
 })
+
+# a formula with no BART predictor is refused in stan4bart's words, before
+# dbarts's refusal of an empty design is reached
+local({
+  for (formula in list(y ~ X1 + (1 | g.1), y ~ X1 + (1 | g.1) + bart(1))) {
+    glCall$formula <- formula
+    expect_error(eval(glCall), "no bart component detected")
+    expect_error(stan4bart(formula, df, iter = 0L), "no bart component detected")
+  }
+})

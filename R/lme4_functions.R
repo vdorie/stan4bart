@@ -183,11 +183,13 @@ glFormula <- function(formula, data = NULL, subset, weights,
     # per factor, with the tree prior choosing level subsets to split on,
     # rather than one indicator column per level. This applies only to the
     # bart() component; fixed effects keep model.matrix contrasts and random
-    # effects keep the lme4 grouping-factor machinery untouched.
-    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "categorical")
-    if (ncol(bartData@x) == 0L)
+    # effects keep the lme4 grouping-factor machinery untouched. dbartsData
+    # refuses a design with no term in its own words, so the check is made
+    # before it.
+    if (length(attr(bartterms, "term.labels")) == 0L)
       stop("no bart component detected in formula; consider using rstanarm package instead")
-    
+    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "categorical")
+
     X <- model.matrix(fixedform, fixedfr, contrasts)
     # drop intercept, offset; the contrasts each factor was coded by stay on
     # the design, for a design built later on other rows
