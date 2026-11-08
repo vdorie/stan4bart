@@ -10,12 +10,18 @@ rm(testData)
 
 a <- as.double(seq_len(nrow(df)) %% 4L != 1L)
 
-# the sampler stan4bart drives reports the mask its weights installed
+# the sampler stan4bart drives holds the membership its weights state: dbarts
+# keeps a probit fit's 0/1 weights on the sampler's data, where its engine
+# reads them as the rows in the likelihood; a dbarts that installs them as the
+# active-row mask instead reports them there
 fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                  weights = a,
                  cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6, seed = 11,
                  bart_args = list(n.trees = 5, keepTrees = TRUE))
-expect_identical(lapply(stan4bart:::getBartSampler(fit), function(sampler) sampler$activeRows), list(a))
+membership <- function(sampler) {
+  if (is.null(sampler$activeRows)) sampler$data@weights else sampler$activeRows
+}
+expect_identical(lapply(stan4bart:::getBartSampler(fit), membership), list(a))
 
 # a masked row leaves the likelihood: substituting arbitrary labels at the
 # inactive rows leaves every active row's draw bitwise, matching dbarts's own
@@ -55,5 +61,5 @@ expect_error(
   "probit models do not support weights other than 0 and 1"
 )
 
-rm(a, fit, fitWithResponse, fit.orig, fit.flipped, ev.orig, ev.flipped,
+rm(a, fit, membership, fitWithResponse, fit.orig, fit.flipped, ev.orig, ev.flipped,
    fit.unmasked, ev.unmasked, y.flipped, df)
