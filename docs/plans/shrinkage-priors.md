@@ -61,12 +61,12 @@ on main.
 - What 0.0-13 did (dec-B645, run 2026-11-07 on 0.0-13, continuous response): hs and hs_plus ran and gave wrong
   answers, lasso and laplace aborted the R session, product_normal matched rstanarm. Read in the 0.0-13 source
   (git show 0.0-13), not run: its Stan model's target was rstanarm's, but the generated `get_parametric_mean`
-  skipped `2 + K` rows for the hs latents (`if (hs > 0) offset += 2 + K;`) where the draw holds `h + h*K + 1` (2K + 3 for hs, 4K + 5 for hs_plus,
-  whose `global` has h = 4 entries), so BART was handed the mean computed from the wrong rows. That mechanism is
-  inferred from the source; NEWS does not state it. Run 2026-11-07 on 0.0-13 with a binary response (200 rows, one
-  chain of 300 draws): hs and hs_plus aborted the R session (`std::out_of_range`, the transform reading `aux[1]`
-  from the empty `real aux[!is_binary]`), laplace and lasso aborted it ("no more scalars to read"), product_normal
-  ran.
+  skipped `2 + K` rows for the hs latents (`if (hs > 0) offset += 2 + K;`) where the draw holds `h + h*K + 1`
+  (2K + 3 for hs, 4K + 5 for hs_plus, whose `global` has h = 4 entries), so BART was handed the mean computed
+  from the wrong rows. That mechanism is inferred from the source; NEWS does not state it. Run 2026-11-07 on
+  0.0-13 with a binary response (200 rows, one chain of 300 draws): hs and hs_plus aborted the R session
+  (`std::out_of_range`, the transform reading `aux[1]` from the empty `real aux[!is_binary]`), laplace and lasso
+  aborted it ("no more scalars to read"), product_normal ran.
 - Sources read for this plan: rstanarm 2.32.2 from CRAN (inst/stan/parameters/parameters_glm.stan,
   tparameters/tparameters_glm.stan, model/priors_glm.stan, functions/common_functions.stan `hs_prior` and
   `hsplus_prior`, tdata/tdata_glm.stan, data/hyperparameters.stan; R/priors.R, R/data_block.R `handle_glm_prior`,
@@ -245,8 +245,8 @@ remove the ridge, so it does not change the case for rstanarm's choice. Piironen
 and tau as single half-t coordinates, K + 1 fewer coordinates) is the alternative; they "have not observed problems
 with the code presented in Appendix C.1" but ran their experiments with C.2. Whether the ridge hurts at
 stan4bart's sizes is what the comparison's strong-signal dataset (D2 in 5.5) measures; a move along that ridge, the
-counterpart of `ridgeMove` for the coefficient scales, would be our own construction and needs a proof by independent agents before build (dec-B591). It is not in this plan (For the
-maintainer, item 1).
+counterpart of `ridgeMove` for the coefficient scales, would be our own construction and needs a proof by
+independent agents before build (dec-B591). It is not in this plan (For the maintainer, item 1).
 
 Ours, stated plainly, none of them a sampling construction (each changes the arithmetic, not the target or the
 chain's transition rule):
