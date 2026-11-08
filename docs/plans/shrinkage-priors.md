@@ -17,7 +17,8 @@ rng/oracle: draws for normal, student_t, cauchy and no prior must be BITWISE UNC
 
 budget: about 250-350 engine lines (parametric_model.hpp: transforms, adjoint, priors, Jacobians, emission and
   names; the builder; the test export), about 25 R lines net (the refusal out, list validation in), about 300 test
-  lines (test-17 fixtures and the value oracle, one new test file), about 250 benchmark lines (not shipped) plus one
+  lines (test-17 fixtures and the value oracle, one new test file), about 350 benchmark lines (not shipped: the
+  comparison, its oracle check, the identical-draws script) plus one
   recorded reference file, help and NEWS. One engine slice, as dec-B645 priced it, plus a gate-only slice and an R
   slice.
 
@@ -57,11 +58,15 @@ on main.
   the transformed block (aux, beta, b, theta_L) is stored; raw rows under `save_raw_parameters = TRUE`.
 - History: docs/plans/walnuts.md Q(b) and docs/design/walnuts.md "The prior-scope restriction (Q(b))" record the
   refusal this item lifts.
-- What 0.0-13 did (dec-B645, run 2026-11-07 on 0.0-13): hs and hs_plus ran and gave wrong answers, lasso and laplace
-  aborted the R session, product_normal matched rstanarm. Read in the 0.0-13 source (git show 0.0-13), not run: its
-  Stan model's target was rstanarm's, but the generated `get_parametric_mean` skipped `2 + K` rows for the hs
-  latents where the draw holds `h + h*K + 1` (2K + 3 for hs, 4K + 3 for hs_plus), so BART was handed the mean
-  computed from the wrong rows. That mechanism is inferred from the source; NEWS does not state it.
+- What 0.0-13 did (dec-B645, run 2026-11-07 on 0.0-13, continuous response): hs and hs_plus ran and gave wrong
+  answers, lasso and laplace aborted the R session, product_normal matched rstanarm. Read in the 0.0-13 source
+  (git show 0.0-13), not run: its Stan model's target was rstanarm's, but the generated `get_parametric_mean`
+  skipped `2 + K` rows for the hs latents (`if (hs > 0) offset += 2 + K;`) where the draw holds `h + h*K + 1` (2K + 3 for hs, 4K + 5 for hs_plus,
+  whose `global` has h = 4 entries), so BART was handed the mean computed from the wrong rows. That mechanism is
+  inferred from the source; NEWS does not state it. Run 2026-11-07 on 0.0-13 with a binary response (200 rows, one
+  chain of 300 draws): hs and hs_plus aborted the R session (`std::out_of_range`, the transform reading `aux[1]`
+  from the empty `real aux[!is_binary]`), laplace and lasso aborted it ("no more scalars to read"), product_normal
+  ran.
 - Sources read for this plan: rstanarm 2.32.2 from CRAN (inst/stan/parameters/parameters_glm.stan,
   tparameters/tparameters_glm.stan, model/priors_glm.stan, functions/common_functions.stan `hs_prior` and
   `hsplus_prior`, tdata/tdata_glm.stan, data/hyperparameters.stan; R/priors.R, R/data_block.R `handle_glm_prior`,
@@ -153,6 +158,12 @@ C+(0, tau eta_i), eta_i ~ C+(0, 1)". rstanarm's is that product at df1 = df2 = 1
 and Vehtari (2017) only "expect our idea to be useful with the horseshoe+", so the regularized horseshoe+ is
 rstanarm's construction, not a paper's. Map: df1 -> `prior_df`, df2 -> `prior_scale` (length K), the rest as hs.
 
+rstanarm's hs_plus carries FOUR globals: `hs = 4` sizes `array[hs] real<lower=0> global`, but only `global[1]` and
+`global[2]` appear in `hsplus_prior` and in the prior block. `global[3]` and `global[4]` have no density, an improper
+flat prior on the positive line in two coordinates nothing reads (0.0-13's continuous.stan declared the same). Beta's
+posterior, and every quantity a user reads, is unaffected; the joint posterior over those two is improper.
+stan4bart draws two globals for hs_plus, as for hs: a departure from rstanarm, ours (section 2, Calls made 13).
+
 ### laplace (code 5)
 
 Constructor: `laplace(location = 0, scale = NULL, autoscale = FALSE)`; `handle_glm_prior` sets the scale by
@@ -213,11 +224,12 @@ root of an inverse gamma), and every positive latent on the log scale, the uncon
 `<lower=0>` (x = exp(u), log Jacobian u). The free vector grows by segments placed after z_beta, in rstanarm's
 declaration order:
 
-    [ z_beta(Kz), global(h), local(h*K), caux(h > 0), mix(K, codes 5-6), one_over_lambda(1, code 6),
+    [ z_beta(Kz), global(2 if h > 0), local(h*K), caux(h > 0), mix(K, codes 5-6), one_over_lambda(1, code 6),
       z_b(q), z_T, rho_free, zeta_free, tau_free, aux_unscaled_free(!binary) ]
 
 with Kz = sum(num_normals) under product_normal and K otherwise, h = 2 (hs), 4 (hs_plus), 0 otherwise; local holds
-local[1] (K values), then local[2], and so on. For codes 0-2 every new segment is empty and the offsets of z_b and
+local[1] (K values), then local[2], and so on. global has two entries for hs_plus too, where rstanarm has four
+(section 1). For codes 0-2 every new segment is empty and the offsets of z_b and
 after are unchanged in value, so existing fits draw bit for bit as before. Added dimension: hs 2K + 3, hs_plus
 4K + 3, laplace K, lasso K + 1, product_normal sum(num_normals) - K.
 
@@ -231,9 +243,9 @@ an orbit, which lets it reach a funnel's neck where NUTS does not, but Bou-Rabee
 Neal's funnel that "both samplers mix very slowly" along the scale axis; the within-orbit adaptation does not
 remove the ridge, so it does not change the case for rstanarm's choice. Piironen and Vehtari's simpler C.1 (lambda
 and tau as single half-t coordinates, K + 1 fewer coordinates) is the alternative; they "have not observed problems
-with the code presented in Appendix C.1" but ran their experiments with C.2. Whether the ridge hurts at stan4bart's sizes is what the strong-signal dataset of the comparison (4.2)
-measures; a move along that ridge, the counterpart of `ridgeMove` for the coefficient scales, would be our own
-construction and needs a proof by independent agents before build (dec-B591). It is not in this plan (For the
+with the code presented in Appendix C.1" but ran their experiments with C.2. Whether the ridge hurts at
+stan4bart's sizes is what the comparison's strong-signal dataset (D2 in 5.5) measures; a move along that ridge, the
+counterpart of `ridgeMove` for the coefficient scales, would be our own construction and needs a proof by independent agents before build (dec-B591). It is not in this plan (For the
 maintainer, item 1).
 
 Ours, stated plainly, none of them a sampling construction (each changes the arithmetic, not the target or the
@@ -245,6 +257,11 @@ chain's transition rule):
 - When K = 0 (no fixed-effect columns) the shrinkage segments are left empty; rstanarm would still carry global and
   caux, drawn from their prior and read by nothing.
 - product_normal's gradient through prefix and suffix products, so a factor at exactly zero does not divide.
+- hs_plus with two globals, not rstanarm's four: the two dropped coordinates have no prior and no role, so the
+  posterior of everything read (beta, b, sigma, Sigma, and the latents that enter beta) is rstanarm's, and the
+  sampler is spared two coordinates that drift without bound. This is the one place the target differs from
+  rstanarm's: by two flat, improper, unread coordinates. Its user-visible trace is in save_raw rows (For the
+  maintainer, item 7).
 
 The ridge move needs no change: its conditional lists the terms involving tau_i or z_b(i), and no new term involves
 either (the coefficient latents enter only beta; under hs with a Gaussian response beta also depends on aux, which
@@ -296,8 +313,12 @@ Derivatives of the scale: d log s_k / d a_k = w_k / 2 and d log s_k / d gam = (1
     Gaussian: dl/daux += T / aux       (d log tau / d aux = 1/aux; added to `g_aux` before the existing
                                          daux_dau and aux_unscaled chain, beside the dispersion term g_disp)
 
-Compute w_k as a logistic of gam - a_k and log w_k as -log1p(exp(a_k - gam)) (or its mirror for a_k < gam), so a
-point far into either tail gives a finite w_k and s_k.
+Compute log w_k with d_k = a_k - gam as -log1p(exp(d_k)) when d_k < 0 and as -d_k - log1p(exp(-d_k)) when
+d_k >= 0, and w_k = exp(log w_k). The direct form is the stable one below zero; above about 709 it overflows to
+log w_k = -Inf and s_k = 0, a finite and silently wrong beta_k = 0 that the non-finite throw does not catch, where
+the mirror gives s_k = sqrt(c2), the slab's limit. Such points are reachable with finite prior terms (u2_k large).
+rstanarm's own direct expression gives NaN there (Inf / Inf), so its sampler rejects them; the stable form gives the
+density's correct value, equal to rstanarm's wherever rstanarm's is finite.
 
 ### 3.2 laplace and lasso
 
@@ -318,15 +339,20 @@ same beta_k.
 
 The formulas of 3.1-3.3 were checked at planning, 2026-11-07, by an R finite-difference probe written from them
 (hs_plus with the aux term, lasso, product_normal with a factor at exactly 0; three random points each, worst
-relative error 3.7e-9). That checks the derivation, not the C++ that S1 writes.
+relative error 3.7e-9). That checks the derivation, not the C++ that S1 writes. Rerun after critique round 1 with
+the branch above and a point at a - gam = 1599 (u2 at 1600): worst relative error 9.4e-9 over all points, s equal
+to sqrt(c2) to the printed six digits there, the direct form giving 0. The critique's independent check, its value
+written from rstanarm's Stan lines with R's densities, found 1.3e-9 and the logistic s equal to rstanarm's
+`lambda_tilde * tau` to 2.2e-16.
 
 ### 3.4 What else changes in eval
 
 - `finalize()` accepts codes 0-7 and computes the new offsets; `dim_` grows as in section 2.
 - `rawConstrainedDim`, and with it `betaConstrainedOffset` and `auxConstrainedOffset`, counts the new raw rows in
   their emission order (0.0-13's failure was exactly this count).
-- `constrainedParamNames` under save_raw emits, after z_beta, `global.j`, `local.j.k` (j fastest, as 0.0-13's
-  generated names), `caux.1`, `mix.1.k`, `one_over_lambda.1`, with the constrained (exp'd) values, as Stan's
+- `constrainedParamNames` under save_raw emits, after z_beta, `global.1` and `global.2` (two for hs_plus too, where
+  0.0-13 stored four), `local.j.k` (j fastest, as 0.0-13's generated names; the emission reorders the state's
+  local[j] blocks), `caux.1`, `mix.1.k`, `one_over_lambda.1`, with the constrained (exp'd) values, as Stan's
   write_array did; z_beta has Kz rows under product_normal.
 - The non-finite throw stays the guard for exp overflow in the new latents.
 
@@ -358,19 +384,33 @@ hs and hs_plus with a Gaussian response and an nc = 2 block (both the aux -> dis
 accumulate into one aux gradient), the same with a binary response (error scale 1), hs weighted, laplace, lasso,
 product_normal with num_normals (2, 3) on K = 2 and (2, 4) with a nonzero location, K = 4 for hs to have several
 local scales. Points: the existing four moderate random points per fixture, plus two points with every log-scale
-latent drawn at +/-5, so w_k sits near 0 and near 1. Rule as today: max |fd - grad| / max(|grad|, 1) < 1e-6 at h =
-1e-5. `model_dim` and `gen_point` learn the new segments; the test asserts the C side's gradient length equals
-`model_dim`.
+latent drawn at +/-5, so w_k sits near 0 and near 1, plus one hs and one hs_plus point with u2_1 = 1600, so a_1 - gam
+is above 709 (the mirror branch of 3.1): there the test also asserts s_1 = sqrt(c2) to 1e-12 relative, through the
+read-back output of 5.3 (beta_1 / z_1). Rule as today: max |fd - grad| / max(|grad|, 1) < 1e-6 at h = 1e-5. FD is
+the gradient's only gate (5.5 cannot fail on a wrong gradient). `model_dim` and `gen_point` learn the new
+segments; the test asserts the C side's gradient length equals `model_dim`.
 
 ### 5.2 The value oracle (test-17, new; replaces the retired Stan cross-check)
 
-An R function `rstanarm_lp(d, par)` translates rstanarm's model block line by line with R's own densities (dnorm,
-an inverse-gamma log density written from its formula, dexp, dchisq, all with log = TRUE) plus the log Jacobians, from
-section 1 and not from section 3 or the C++. At each fixture's points, value(C) - rstanarm_lp must be constant: its
-spread across the points below 1e-8. FD proves the gradient matches the coded value; this proves the coded value is
-rstanarm's density. 1e-8 is ours, chosen against the C1 oracle's landed 9.1e-13 spread.
+Scope: the new terms only, isolated against the already validated rest of the target. For a family's point par,
+let beta(par) be the coefficients its transform gives, and par0 the point of the same fixture under prior_dist = 0
+(no prior, beta = z_beta) with z_beta = beta(par) and every other coordinate (z_b, z_T, rho, zeta, tau, aux) copied.
+Then value_family(par) - value_flat(par0) is the family's prior terms plus their log Jacobians alone, the
+likelihood, decov and aux terms cancelling. An R function `rstanarm_prior_lp(d, par)` computes those terms by a
+line-by-line translation of rstanarm's priors_glm.stan and tparameters_glm.stan (dnorm, an inverse gamma through
+dgamma of 1/x with its Jacobian, dexp, dchisq, all with log = TRUE, plus Stan's log Jacobian u for each `<lower=0>`
+coordinate), from section 1's quotations and not from section 3 or the C++. For hs_plus it omits rstanarm's two
+flat globals and their Jacobian terms (section 1). At each fixture's points the difference [value_family(par) -
+value_flat(par0)] - rstanarm_prior_lp(par) must be constant: spread across the points, divided by max(1, max |value|)
+over those points, below 1e-12. The rule is relative because at the +/-5 points |value| reaches about 1e6 and the
+summation order alone moves the last digits (the critique saw an absolute spread of 3.8e-9 there with nothing wrong).
+FD proves the gradient matches the coded value; this proves the coded value is rstanarm's density. The 1e-12 is ours.
 
-### 5.3 Read-back under both storage modes (new test file)
+Who writes it: not the S1 implementer. The oracle is written in S0, before the engine exists, by S0's implementer,
+seeded from the critique's translation (`lp_rstanarm` in its fd-check.R), so the C++ and the oracle cannot share a
+misreading of rstanarm. It matters most for binary responses, which 5.5 does not cover.
+
+### 5.3 Read-back under both storage modes (test-27-shrinkage.R, new)
 
 The export `stan4bart_logdensity_grad` gains an optional third output: the constrained array, `parametricMean` and
 `getAux` at the point, for save_raw FALSE and TRUE. For every family, the test checks the mean equals X beta + Z b
@@ -381,8 +421,9 @@ model (finite draws, the expected rows under save_raw, `fitted` consistent with 
 ### 5.4 Existing draws unchanged
 
 `identical()` on fixef, ranef, sigma, Sigma and the stored stan block for fits under normal, student_t, cauchy and
-the default prior, Gaussian and binary, save_raw FALSE and TRUE, at two seeds, between the slice's library and main
-98db852's. Plus the full suite.
+the default prior, Gaussian and binary, save_raw FALSE and TRUE, at two seeds (32 fits), plus a weighted Gaussian
+fit and a fit with an nc = 3 random-effect block (the onion), each under normal and student_t at both seeds (8
+more): 40 fits, between the slice's library and main 98db852's. Plus the full suite.
 
 ### 5.5 The comparison against rstanarm (benchmarks/R/compare-rstanarm.R)
 
@@ -402,10 +443,15 @@ normal() as a control the current sampler already passes: 12 cells.
 
 Reference (rstanarm, recorded first, S0): 8 chains of 1000 warmup and 5000 draws, adapt_delta 0.99 for hs and
 hs_plus (rstanarm's own advice) and 0.95 otherwise; a cell's reference stands only if it meets posteriordb's
-criteria (Magnusson et al. 2024, section 3.3: R-hat below 1.01, no divergent transitions, the E-FMI criterion, and
-10,000 approximately independent draws, read here as bulk and tail ESS of at least 10,000 for every compared
-quantity, in place of thinning, our substitution). A cell whose reference fails after doubling the draws is recorded
-and not compared.
+criteria (Magnusson et al. 2024, section 3.3: "an R-hat below 1.01 for all parameters", "no divergent transitions",
+the E-FMI criterion, and 10,000 approximately independent draws, read here as bulk and tail ESS of at least 10,000
+for every compared quantity, in place of thinning, our substitution). R-hat and ESS are read on the compared
+quantities only, not "all parameters": rstanarm's hs_plus carries two flat, unread globals that drift without bound
+(section 1), and product_normal's factors are sign-unidentified, so neither can meet an all-parameter criterion
+however correct the fit. For hs_plus, S0 also records treedepth, step size and E-FMI against hs's, to see whether
+the two drifting globals disturb rstanarm's adaptation. A failing reference is repaired in this order: adapt_delta
+raised to 0.999 (divergences are not cured by more draws), then the draws doubled; a cell still failing is recorded
+and not compared. A family left with no compared cell does not ship on 5.1-5.3 alone: it goes to the maintainer.
 
 stan4bart: 4 chains of 1000 warmup and 2500 draws. A cell's run is read only if R-hat < 1.01 and bulk and tail ESS
 > 400 for every compared quantity (Vehtari et al. 2021: "the rank-normalized ESS is greater than 400"); the run is
@@ -418,9 +464,19 @@ for sigma and for the group sd: 21 summaries, 252 over 12 cells. Each gives z = 
 directly here: with the offset fixed, the parametric chain has none of the slow BART alternation that made the
 walnuts baselines need their own MCSE. Pass: every |z| below c = qnorm(1 - 0.01 / (2 M)), a Bonferroni bound holding
 the familywise false-alarm rate at 1% over the M compared summaries; at M = 252, c = 4.11, fixed in S0 from the
-registered M before any shrinkage draw exists. At ESS 2000 against 10,000 a mean shift of about 0.10 posterior sd
-is detectable (c sqrt(1/2000 + 1/10000)); 0.0-13's hs error, 0.165 against -0.002, would be caught unless that
-coefficient's posterior sd exceeded about 1.6. The comparison of two Monte Carlo estimates through their standard errors under the Markov
+registered M before any shrinkage draw exists. Power, for a mean at ESS 2000 against 10,000 (standard error 0.0245
+posterior sd): a shift of 0.10 sd (c x 0.0245) is detected with probability one half, a shift of 0.13 sd ((c +
+1.28) x 0.0245) with probability 0.9; quantiles' MCSEs are larger, so their detectable shifts are too. 0.0-13's hs
+error, 0.165 against a coefficient simulated at zero, would be caught at 90% power unless that coefficient's
+posterior sd exceeded about 1.25.
+
+What 5.5 cannot catch. A wrong gradient passes it by construction: leapfrog under any force field is
+volume-preserving and reversible, and WALNUTS weights orbit points by the coded density, so the chain stays exact
+for the coded density, only slower; 5.1 is the gradient's only gate. A wrong prior passes it when its effect on the
+compared summaries is under about 0.1 sd (a slab_df or df slip may be); 5.2 is the density's gate. 5.5 checks the
+whole: that the coded density, the wiring through `offset_type`, centering, autoscaling and storage give rstanarm's
+posterior at the sizes run. It also records each cell's sampling-phase mean_leapfrog per chain (For the maintainer,
+item 5). The comparison of two Monte Carlo estimates through their standard errors under the Markov
 chain CLT follows posteriordb's reading; the Bonferroni level, the ESS sizing, the quantiles chosen and the one
 allowed rerun below are the project's own reading rule, as walnuts.md's k = 4 was.
 
@@ -442,8 +498,14 @@ Tiers from docs/plans/README.md, "Process by risk" (dbarts). This plan takes a b
 S0. The reference and the harness, before the code. benchmarks/R/compare-rstanarm.R (data, fits, summaries, the
   rule with M and c written into the output), the rstanarm references recorded to
   benchmarks/baselines/rstanarm-reference-<commit>.rds with a MANIFEST row, and the harness proven on the normal()
-  control cells against the current sampler (21 of 21 summaries per control cell within c, at M as registered). rstanarm and
-  posterior are benchmark requirements, not Suggests. Gate-only slice: the R-surface tier's one sonnet review.
+  control cells against the current sampler (21 of 21 summaries per control cell within c, at M as registered);
+  and the value oracle's R side, `rstanarm_prior_lp` (5.2), checked once against rstanarm's own density: the
+  script's `oracle` command evaluates `rstan::log_prob` on an hs, an hs_plus and a lasso stanreg less the same on a
+  `prior = NULL` stanreg (beta = z_beta there too) at three points each, and requires the 5.2 rule (relative spread
+  below 1e-12) against `rstanarm_prior_lp`; hs_plus's two flat globals add only their log Jacobians there, which
+  the check subtracts. The shipped test-17 carries the oracle without rstanarm. rstanarm and posterior are
+  benchmark requirements, not Suggests. Gate-only slice: the R-surface tier's one sonnet review, which also reads
+  the oracle line by line against rstanarm's Stan files.
 
 S1. The engine. ParametricModel (section 3), the builder, the export's read-back output, test-17's fixtures and value
   oracle (5.1, 5.2), the read-back unit tests (5.3, the part that needs no fit), and the header comment on the
@@ -452,8 +514,10 @@ S1. The engine. ParametricModel (section 3), the builder, the export's read-back
   every new term; stan4bart's sanitizers workflow and a local ASan run of test-17 and the new file); R CMD check
   --as-cran. Engine tier: one opus review that runs mutants, at least: drop the 1/2 on u2_k, drop the aux -> tau term,
   use df + 1 in an inverse gamma, drop one log Jacobian, write the chi-square term as df_1 uo in place of
-  (df_1/2) uo, take the product's derivative by division, count the raw rows as 0.0-13 did; each must fail 5.1, 5.2
-  or 5.3.
+  (df_1/2) uo, take the product's derivative by division, count the raw rows as 0.0-13 did; and mutants that change
+  the value consistently with its gradient, which FD cannot see: tau without sigma under a Gaussian response, sigma
+  in tau under a binary one, the slab scaled by sigma, lasso reading df[k] for df[1], the direct log-weight form
+  above 709, four globals for hs_plus. Each must fail 5.1, 5.2 or 5.3; the reviewer reports which caught it.
 
 S2. The R surface and the comparison. The refusal and its list go; the list validation (section 4); help; NEWS
   (section 7); the end-to-end part of 5.3. Gate: 5.5 on all 12 cells, run by the implementer and rerun independently
@@ -471,14 +535,60 @@ The 0.0-14 item on the refusal goes (it never reached a release) and this item t
 * The shrinkage coefficient priors `hs`, `hs_plus`, `laplace`, `lasso` and `product_normal` (rstanarm's constructors)
   are accepted again for `stan_args$prior`, drawn by the new sampler with their latent scales, and each checked
   against rstanarm's posterior on a shared model. In 0.0-13 and 0.0-13.1:
-  - `hs` and `hs_plus` ran and gave wrong answers: a coefficient whose posterior mean under rstanarm was -0.002
-    (hs) or 0.001 (hs_plus) came out at 0.165 and 0.252, and under `hs_plus` a coefficient simulated at 0.5 at
-    1.07.
+  - `hs` and `hs_plus` gave wrong answers with a continuous response: a coefficient simulated at zero came out at
+    0.165 (hs) and 0.252 (hs_plus), and under `hs_plus` one simulated at 0.5 at 1.07. With a binary response they
+    aborted the R session with an uncaught C++ exception.
   - `laplace` and `lasso` aborted the R session with an uncaught C++ exception.
-  - `product_normal` gave rstanarm's answers; its draws now differ, as every fit's do.
+  - `product_normal` gave rstanarm's answers with a continuous response and ran with a binary one; its draws now
+    differ, as every fit's do.
 
-0.0-13 was run (dec-B645); 0.0-13.1 carries the same Stan model and accessors and is stated from its source. The
-numbers are the dec-B645 run's; S2 rechecks them against its record before NEWS is committed.
+Each line is from a run on 0.0-13: the continuous ones dec-B645's (laplace and lasso aborted there), the binary ones
+2026-11-07 (Context; laplace and lasso aborted there too, product_normal's coefficient means 0.495, -0.113, -0.313
+against 0.5, 0, 0, with no rstanarm reference for a binary BART model). 0.0-13.1's Stan model and accessors are
+0.0-13's (its diff touches Stan headers, NEWS and DESCRIPTION only), so the lines hold for it from the source. S2
+rechecks the continuous numbers against dec-B645's record before NEWS is committed.
+
+## 8. Verification
+
+Run from the stan4bart worktree; LIB is the slice's own library, an absolute path, and MAINLIB main 98db852's;
+each R call sets R_LIBS to it. The script prints the line quoted after each command; anything else is a failure.
+
+S0:
+
+    R_LIBS=$LIB Rscript benchmarks/R/compare-rstanarm.R oracle
+      ORACLE PASS: 9/9 points, relative spread below 1e-12 (hs, hs_plus, lasso against rstan::log_prob)
+    R_LIBS=$LIB Rscript benchmarks/R/compare-rstanarm.R record benchmarks/baselines/rstanarm-reference-<commit>.rds
+      REFERENCE <cell> OK (adapt_delta <a>, draws <n>)       one line per cell, 12 lines; or
+      REFERENCE <cell> NOT COMPARED (<criterion failed>)      after 0.999 and doubling; reported, not hidden
+    R_LIBS=$LIB Rscript benchmarks/R/compare-rstanarm.R compare <rds> --cells normal
+      VERDICT PASS: 42/42 summaries within c = 4.11 (M = 252)
+
+S1:
+
+    R CMD INSTALL --preclean -l $LIB .
+    R_LIBS=$LIB Rscript -e 'library(stan4bart); tinytest::run_test_file("inst/tinytest/test-17-gradient.R")'
+    R_LIBS=$LIB Rscript -e 'library(stan4bart); tinytest::run_test_file("inst/tinytest/test-27-shrinkage.R")'
+      all tests OK, both files
+    Rscript benchmarks/R/identical-draws.R $MAINLIB $LIB
+      IDENTICAL 40/40 fits (fixef, ranef, sigma, Sigma, stan block)
+    R_LIBS=$LIB Rscript -e 'tinytest::test_package("stan4bart", lib.loc = Sys.getenv("R_LIBS"))'
+      all tests OK, at the default ncpu, in one process
+    R_LIBS=$LIB Rscript benchmarks/R/recompute-exactness.R all     (gates.yaml's blocking gate)
+    R CMD build . && R_LIBS=$LIB R CMD check --as-cran stan4bart_*.tar.gz
+      Status: OK, or only the NOTEs main already has
+
+  plus a local ASan run of the two test files and the sanitizers workflow green on the branch tip.
+  identical-draws.R is new in S1 (benchmark lines, not shipped): it fits 5.4's 40 fits under each library in a
+  fresh process and compares with `identical()`.
+
+S2:
+
+    R_LIBS=$LIB Rscript benchmarks/R/compare-rstanarm.R compare <rds>
+      VERDICT PASS: N/N summaries within c = 4.11 (M = 252)
+
+  N is the number of summaries in compared cells (252 when every reference stood); c stays at the registered M.
+  The reviewer reruns the same command from the same rds and must print the same verdict. Then the full suite, R
+  CMD check --as-cran, and the CI workflows (check-standard, gates, sanitizers) green on the tip.
 
 ## Calls made
 
@@ -486,7 +596,8 @@ numbers are the dec-B645 run's; S2 rechecks them against its record before NEWS 
    scale). Alternative: their C.1, single half-t coordinates, K + 1 fewer dimensions for hs; or centered beta for
    strong data. Neither is rstanarm's; C.1 changes the raw rows and the value oracle's translation.
 2. New segments after z_beta, in rstanarm's declaration order. Alternative: appended after aux_unscaled; equally
-   draw-neutral for existing fits, but the raw emission would then follow a different order from the state.
+   draw-neutral for existing fits. Either way the emission reorders local (3.4), so the choice is only which order
+   the random start draws in; rstanarm's keeps the state readable beside its Stan files.
 3. The scale through a logistic weight (3.1): the gradient needs w_k anyway, and it stays finite where tau^2 L^2
    overflows. Alternative: rstanarm's sqrt(c2 L^2 / (c2 + tau^2 L^2)), the same value wherever both are finite.
 4. Empty shrinkage segments at K = 0. Alternative: rstanarm's prior-only global and caux.
@@ -506,6 +617,11 @@ numbers are the dec-B645 run's; S2 rechecks them against its record before NEWS 
 12. NEWS without the inferred mechanism of 0.0-13's hs failure. Alternative: name it ("BART was handed the
     parametric mean read from the wrong rows"), once S1's read-back test reproduces it on 0.0-13's accessor
     arithmetic.
+13. hs_plus with two globals (section 2). rstanarm declares four (`hs = 4` sizes `global`) and reads only
+    global[1] and global[2] (common_functions.stan `hsplus_prior`, priors_glm.stan); the other two carry no prior,
+    an improper flat direction on the positive line that nothing reads. Dropping them leaves every read quantity's
+    posterior rstanarm's and makes ours proper. Alternative: four, as rstanarm and 0.0-13: an improper target that
+    WALNUTS would have to adapt over two coordinates drifting without bound, for raw rows nobody can use.
 
 ## For the maintainer
 
@@ -524,16 +640,40 @@ Not settled by dec-B645, met by a user; options and costs, not decided here.
    (a) As now. (b) After every fit, warn when a coefficient's rank-normalized R-hat exceeds 1.01 or its bulk ESS is
    under 400 (Vehtari et al. 2021), about 40 R lines without a new dependency; a new warning on fits of every family.
    (c) The same check for the shrinkage families only, a rule that reads differently across sibling calls.
-3. A binary fit's default laplace and lasso scale. stan4bart sets coefficient prior scales with `link = "identity"`;
-   rstanarm uses the family's link and, for probit, multiplies the default 2.5 by dnorm(0)/dlogis(0), about 1.6. A
-   user moving a probit model from rstanarm meets a different default scale. This already holds for normal,
-   student_t and cauchy. (a) Keep. (b) Use the family's link as rstanarm does: every binary fit's default coefficient
-   prior moves, a default-prior change that dec-B559 would want a study for.
+3. A binary fit's coefficient prior scales. stan4bart sets them with `link = "identity"`; rstanarm passes the
+   family's link to `set_prior_scale`, which under probit multiplies the scale by dnorm(0)/dlogis(0), about 1.6,
+   whether the user gave it or the default 2.5 stood (`if (isTRUE(link == "probit")) scale <- scale * dnorm(0) /
+   dlogis(0)`, after the NULL default is filled). It is called for normal, student_t, cauchy, laplace, lasso and
+   product_normal, whose beta takes scale^num_normals, so the factor enters there to that power; not for hs or
+   hs_plus. A user moving a probit model from rstanarm with the same prior call gets a different prior under every
+   family but hs and hs_plus, as already holds for normal, student_t and cauchy. (a) Keep, help saying so. (b) Apply
+   rstanarm's factor under probit: every binary fit's coefficient prior moves, user-given scales included, a
+   default-prior change that dec-B559 would want a study for.
 4. Where the constructors come from. stan4bart exports none, so `hs()` needs rstanarm attached (a large install), or
    a hand-built list. (a) Keep, help naming rstanarm. (b) Export stan4bart's own copies (R/priors.R and
    R/rstanarm_functions.R both hold unexported ones; the second, collated later, wins): masks rstanarm's when both
    are attached, and the copies carry pre-2.21.1 defaults (`autoscale = TRUE` in R/priors.R, against rstanarm's
    current FALSE), which would then reach users. (c) Document the list form.
+5. The leapfrog message on correct horseshoe fits. `print` and `summary` emit "parametric sampler tuning looks
+   poor (mean leapfrog steps per transition = ...); consider increasing warmup." when any chain's sampling-phase
+   mean exceeds 30 (R/generics.R). A horseshoe's funnel routinely needs more steps than that, and more warmup does
+   not reduce them, so a correct hs or hs_plus fit may tell its user to do something that does not help. 5.5
+   records mean_leapfrog per family, which sizes this. (a) Keep: no cost, a misleading line on some correct fits.
+   (b) Scale the threshold by family from 5.5's figures: a few R lines, a rule that reads differently across sibling
+   calls. (c) Word it as geometry ("many steps per transition; the posterior may be hard to sample, see
+   adapt_delta"), one threshold for all: a string change, the message no longer prescribing warmup. Recommendation:
+   (c), decided once 5.5's figures exist.
+6. QR = TRUE with a shrinkage prior. As in rstanarm, the prior then applies to the coefficients of the rotated
+   design Q, not to the user's columns (stan4bart_fit.R copies rstanarm's block), so hs no longer shrinks the user's
+   coefficients one by one; rstanarm says so in its QR help and `prior_summary` and does not warn. stan4bart's help
+   calls QR "sampler-agnostic" and says nothing of it. (a) Help says so, in rstanarm's words: a few Rd lines. (b) A
+   warning when QR is TRUE under codes 3-7: a new warning rstanarm does not give. (c) Refuse the combination: departs
+   from rstanarm, which accepts it. Recommendation: (a).
+7. hs_plus's raw rows. Under `save_raw_parameters = TRUE` an hs_plus fit stores global.1 and global.2 (Calls made
+   13); 0.0-13 stored global.1 to global.4, the last two flat and meaningless. Only a save_raw user who read those
+   rows by name meets it, and 0.0-13's hs_plus answers were wrong anyway. (a) Two rows, as drawn; NEWS need not say
+   it. (b) Four, the last two filled from a flat draw we would have to invent: no posterior meaning. Recommendation:
+   (a).
 
 ## Out of scope
 
@@ -541,6 +681,31 @@ Not settled by dec-B645, met by a user; options and costs, not decided here.
   (stan4bart's `ok_dists` does not list it, nor rstanarm's `stan_glmer`'s coefficient prior).
 - Any change to the default prior, to ridge_move, to the warmup or the step-size seed.
 - The duplicate constructor copies in R/priors.R and R/rstanarm_functions.R (item 4).
+
+## Critique round 1
+
+Blind critique of 8365e50: ACCEPT WITH CHANGES. Each change and where it is answered; all were made.
+
+1. hs_plus's globals (A): two drawn, ours, against rstanarm's four of which two are flat and unread (section 1, the
+   paragraph after hs_plus; section 2, segment list and "Ours"; Calls made 13). Dimension 4K + 3; Context's 0.0-13
+   count corrected to 4K + 5; raw names global.1-2 (3.4; For the maintainer 7); the oracle omits the two flat
+   terms (5.2); the rstanarm reference read on compared quantities, with its hs_plus adaptation recorded (5.5).
+2. The stable log-weight branch (B): restated, direct form below, mirror above (3.1); an FD point at a - gam above
+   709 asserting s = sqrt(c2) (5.1); the derivation's FD script rerun: worst 9.4e-9, s = sqrt(c2) at a - gam =
+   1599 where the direct form gives 0 (note after 3.3); a value mutant for it (S1).
+3. The value oracle (C, D): scope is the family's terms against the flat-prior target at the same beta; rule
+   relative, spread / max(1, max |value|) below 1e-12; written in S0 by someone other than the engine implementer,
+   seeded from the critique's translation, and checked once against rstan::log_prob (5.2; S0).
+4. The comparison's limits (C): a wrong gradient cannot fail it, nor a prior error under about 0.1 sd (5.5, "What
+   5.5 cannot catch"); criteria read on compared quantities and why; adapt_delta 0.999 before doubling; a family with
+   no compared cell goes to the maintainer; power stated at 50% (0.10 sd) and 90% (0.13 sd) (5.5).
+5. NEWS (E): binary hs and hs_plus run on 0.0-13 (both aborted the session; Context and section 7), each line worded
+   by what was run, the continuous numbers as coefficients simulated at zero (section 7).
+6. Value mutants (S1); a Verification section with commands and expected lines (section 8); weighted and nc = 3
+   fits in the bit-for-bit check, 40 fits (5.4).
+7. For the maintainer: the leapfrog message (item 5), QR = TRUE (item 6), hs_plus's raw rows (item 7); item 3
+   corrected (rstanarm's probit factor applies to every scale it sets, user-given or default, product_normal's
+   included, to the power num_normals). Also Calls made 2's emission clause corrected (critique section 3).
 
 ## Landing note
 
