@@ -33,7 +33,7 @@
 # time; VD's uncommitted one-liner alone (the `= {}`) makes the skip
 # deterministic but does NOT restore output - the structSize assignment is
 # the load-bearing half. On the fixed build all chains mix cleanly at
-# DEFAULT stan_args across every tier; chain_health() below is retained as a
+# DEFAULT parametric arguments across every tier; chain_health() below is retained as a
 # cheap guard (record aborts if chains die), not as a survival filter.
 
 suppressMessages(library(stan4bart))
@@ -163,12 +163,12 @@ build_tier_data <- function(cfg) {
 
 # ---- MCMC control -----------------------------------------------------------
 
-## One control for every tier: DEFAULT stan_args (on the structSize-fixed
+## One control for every tier: DEFAULT parametric arguments (on the structSize-fixed
 ## build all tiers mix cleanly without tuning - see the module docstring),
 ## 8 chains x 3000 kept draws = 24000 retained draws per summary, long
 ## enough that the batch-means MCSEs make the C2/C3 k=4 tolerance sharp.
 CONTROL <- list(chains = 8L, cores = 8L, warmup = 1000L, iter = 4000L,
-                n.trees = 50L, stan_args = NULL)
+                n.trees = 50L)
 
 control_for <- function(cfg) CONTROL
 
@@ -190,7 +190,7 @@ fit_tier <- function(tier_data, control, mcmc_seed) {
                          chains = control$chains, warmup = control$warmup,
                          iter = control$iter, seed = mcmc_seed,
                          bart_args = list(n.trees = control$n.trees),
-                         stan_args = control$stan_args, keep_fits = TRUE)
+                         keep_fits = TRUE)
   } else if (tier_data$shape == "nc2") {
     stan4bart::stan4bart(y ~ bart(X1 + X2 + X3 + X4 + X5) + Xfix + (1 + Xr1 | g), data,
                          weights = weights_vec,
@@ -198,7 +198,7 @@ fit_tier <- function(tier_data, control, mcmc_seed) {
                          chains = control$chains, warmup = control$warmup,
                          iter = control$iter, seed = mcmc_seed,
                          bart_args = list(n.trees = control$n.trees),
-                         stan_args = control$stan_args, keep_fits = TRUE)
+                         keep_fits = TRUE)
   } else if (tier_data$shape == "nc3") {
     stan4bart::stan4bart(y ~ bart(X1 + X2 + X3 + X4 + X5) + Xfix + (1 + Xr1 + Xr2 | g), data,
                          weights = weights_vec,
@@ -206,14 +206,14 @@ fit_tier <- function(tier_data, control, mcmc_seed) {
                          chains = control$chains, warmup = control$warmup,
                          iter = control$iter, seed = mcmc_seed,
                          bart_args = list(n.trees = control$n.trees),
-                         stan_args = control$stan_args, keep_fits = TRUE)
+                         keep_fits = TRUE)
   } else if (tier_data$shape == "binary") {
     stan4bart::stan4bart(y ~ bart(X1 + X2 + X3 + X4 + X5) + Xfix + (1 + Xr1 | g) + (1 | g2), data,
                          cores = control$cores, verbose = -1L,
                          chains = control$chains, warmup = control$warmup,
                          iter = control$iter, seed = mcmc_seed,
                          bart_args = list(n.trees = control$n.trees),
-                         stan_args = control$stan_args, keep_fits = TRUE)
+                         keep_fits = TRUE)
   } else {
     stop("unknown tier shape: ", tier_data$shape)
   }

@@ -193,7 +193,7 @@ SEEDS <- c(20260913L, 20260914L, 20260915L)
 
 ## stan4bart's own defaults: chains = 4, iter = 2000 with warmup = iter %/% 2,
 ## so 1000 warmup and 1000 kept per chain, 4000 kept draws in all; bart_args
-## and stan_args left alone (n.trees is dbarts's default 75). `cores` is the
+## and the parametric arguments left alone (n.trees is dbarts's default 75). `cores` is the
 ## one argument set away from its default (getOption("mc.cores", 1)) - it
 ## divides the same chains across cores and changes wall time only.
 CHAINS <- 4L
@@ -207,10 +207,12 @@ CORES <- 4L
 ## UNEVALUATED call, so a formula held in a variable silently fails to strip
 ## the bart() term and model.frame() then tries to call dbarts::bart() for real.
 fit_case <- function(data, mcmc_seed, ridge_move = TRUE) {
+  # the ridge move is switched by an unexported option
+  op <- options(stan4bart.ridge_move = ridge_move)
+  on.exit(options(op))
   stan4bart::stan4bart(y ~ bart(X1 + X2 + X3 + X4 + X5) + Xfix + (1 | g), data,
                        cores = CORES, chains = CHAINS, iter = ITER,
-                       verbose = -1L, seed = mcmc_seed,
-                       stan_args = list(ridge_move = ridge_move))
+                       verbose = -1L, seed = mcmc_seed)
 }
 
 ## The three monitored scalars. The group sd is the square root of the single

@@ -93,13 +93,15 @@ ess  <- function(x) tryCatch(posterior::ess_basic(as.numeric(x)),
 ## reformulate() is not recognized as the bart component.
 fit_one <- function(d, skip_stan, seed, iter, warmup, n.trees,
                     ridge_move = TRUE) {
+  # the ridge move is switched by an unexported option
+  op <- options(stan4bart.ridge_move = ridge_move)
+  on.exit(options(op), add = TRUE)
   set.seed(seed)
   tm <- system.time(fit <- stan4bart(
     y ~ bart(x1 + x2 + x3 + x4 + x5 + x6 + x7 + x8 + x9 + x10) + (1 | g),
     data = d$df, iter = iter, warmup = warmup, chains = 1L, cores = 1L,
     verbose = -1L, skip = c(bart = 1L, stan = skip_stan),
-    bart_args = list(n.trees = n.trees),
-    stan_args = list(ridge_move = ridge_move)))
+    bart_args = list(n.trees = n.trees)))
   Sigma <- extract(fit, type = "Sigma")[["g"]]
   tau <- sqrt(as.numeric(Sigma[1L, 1L, ]))
   ranef <- t(extract(fit, type = "ranef")[["g"]][1L, , , drop = TRUE])

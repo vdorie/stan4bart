@@ -20,7 +20,7 @@ restore output - the constructor must also set
 `current.structSize = sizeof(dbarts_results);`. Both land in the commit
 these baselines are named after; on the fixed build the full testthat suite
 is green (including the NOT_CRAN accuracy tests) and every chain in every
-tier mixes cleanly at default `stan_args`.
+tier mixes cleanly at the default parametric arguments.
 
 ## R/record-posterior-baselines.R - the C0(b) distributional oracle
 
