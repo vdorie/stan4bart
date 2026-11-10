@@ -1216,8 +1216,8 @@ local({
 
   # under a prior of a stated scale it fits: BART's own warning for a constant
   # response stands, no range is installed, and a restore installs none
-  seen <- observe(tryCatch(fit_short(y ~ x + bart(u), flat, stan_args = list(
-    prior_aux = stan4bart:::exponential(1, autoscale = FALSE))), error = conditionMessage))
+  seen <- observe(tryCatch(fit_short(y ~ x + bart(u), flat,
+    prior_aux = exponential(1, autoscale = FALSE)), error = conditionMessage))
   expect_inherits(seen$value, "stan4bartFit")
   expect_true(any(startsWith(seen$warned, "response values are indistinguishable")))
   if (inherits(seen$value, "stan4bartFit")) {

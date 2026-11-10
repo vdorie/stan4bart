@@ -24,12 +24,29 @@ stan4bart <-
            callback = NULL,
            stan_args = NULL,
            bart_args = NULL,
-           bart_range = c("mixed", "lm", "response"))
+           bart_range = c("mixed", "lm", "response"),
+           prior = normal(0, 2.5, autoscale = TRUE),
+           prior_aux = exponential(autoscale = TRUE),
+           prior_covariance = decov(1, 1, 1, 1),
+           QR = FALSE,
+           adapt_delta = 0.8,
+           init_r = 2)
 {
   call <- match.call(expand.dots = TRUE)
   store <- match.arg(store)
   bart_range <- resolve_bart_range(bart_range)
   mc <- match.call(expand.dots = FALSE)
+  # read as written, where a prior constructor resolves with nothing
+  # attached; the promises themselves are never forced
+  parametric_exprs <- c(
+    if (!missing(prior)) list(prior = substitute(prior)),
+    if (!missing(prior_aux)) list(prior_aux = substitute(prior_aux)),
+    if (!missing(prior_covariance)) list(prior_covariance = substitute(prior_covariance)),
+    if (!missing(QR)) list(QR = substitute(QR)),
+    if (!missing(adapt_delta)) list(adapt_delta = substitute(adapt_delta)),
+    if (!missing(init_r)) list(init_r = substitute(init_r)),
+    if (!missing(stan_args)) list(stan_args = substitute(stan_args)))
+  parametric <- resolve_parametric_args(parametric_exprs, parent.frame())
   if (!is.null(data)) {
     data <- as.data.frame(data)
     data <- drop_redundant_dims(data)
@@ -234,7 +251,7 @@ stan4bart <-
                                  save_warmup,
                                  callback,
                                  callbackEnv,
-                                 stan_args,
+                                 parametric,
                                  bart_args)
   
   samples <- package_samples(chain_results, colnames(bartData@x), store)
@@ -251,13 +268,13 @@ stan4bart <-
     result$par_names <- list(diagnostic = diagnostic_names, upar = upar_names, tpar = tpar_names)
     
     if (as.integer(verbose) >= 0L)
-      check_sampler_diagnostics(result, stan_args, length(upar_names))
+      check_sampler_diagnostics(result, parametric, length(upar_names))
   }
   
   result
 }
 
-check_sampler_diagnostics <- function(object, stan_args, n_upars)
+check_sampler_diagnostics <- function(object, parametric, n_upars)
 {
   # NUTS diagnostics (divergent transitions, max-treedepth transitions, low
   # E-BFMI) have no WALNUTS analog: the vendored ChainHandler concept

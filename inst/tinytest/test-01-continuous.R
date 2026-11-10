@@ -122,12 +122,14 @@ local({
   expect_equal(unname(rbind(warmup, sample)), unname(both))
 })
 
-# save_raw_parameters restores the raw unconstrained rows
+# the internal option stan4bart.save_raw_parameters restores the raw
+# unconstrained rows
 local({
+  op <- options(stan4bart.save_raw_parameters = TRUE)
+  on.exit(options(op))
   fit_raw <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1 | g.2), df,
                        cores = 1, verbose = -1L, chains = 2, warmup = 7, iter = 13,
-                       bart_args = list(n.trees = 11), seed = 0,
-                       stan_args = list(save_raw_parameters = TRUE))
+                       bart_args = list(n.trees = 11), seed = 0)
   raw_rows <- dimnames(fit_raw$stan)$parameters
   expect_true(any(startsWith(raw_rows, "z_beta.")))
   expect_true(all(c("accept_stat__", "divergent__") %in% raw_rows))
@@ -224,7 +226,7 @@ if (at_home() && requireNamespace("lme4", quietly = TRUE)) {
                         verbose = -1L,
                         test = df.test,
                         cores = 4,
-                        stan_args = list(QR = TRUE))
+                        QR = TRUE)
 
   bart_fitted <- fitted(bart_fit, sample = "test")
   bart_rmse <- sqrt(mean((df.test$y - bart_fitted)^2)) / sd(df.train$y)

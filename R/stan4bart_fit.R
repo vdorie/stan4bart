@@ -199,22 +199,10 @@ stan4bart_fit <-
     stop("'link' must be 'probit' if family is 'binomial'") 
   
   
-  if (is.null(stan_args))
-    stan_args <- list()
-  warn_ignored_nuts_args(stan_args)
-  if (is.null(stan_args[["prior_covariance"]]))
-    stan_args$prior_covariance <- decov()
+  # stan_args is the resolved parametric arguments (resolve_parametric_args),
+  # defaults filled in; a NULL prior or prior_aux is the flat prior
   decov <- stan_args[["prior_covariance"]]
-  if (is.null(stan_args[["prior"]]))
-    stan_args$prior <- default_prior_coef_gaussian()
-  #if (is.null(stan_args[["prior_intercept"]]))
-  #  stan_args$prior_intercept <- default_prior_intercept_gaussian()
-  if (!is.null(stan_args[["prior_intercept"]]))
-    warning("intercepts for BART models are redundantly parameterized and not included")
-  if (is.null(stan_args[["prior_aux"]]))
-    stan_args$prior_aux <- exponential(autoscale = TRUE)
-  
-  
+
   x <- object$X
   y <- object$y
   data.bart   <- object$bartData
@@ -334,8 +322,6 @@ stan4bart_fit <-
       stan_args$prior_scale_for_aux <- ss * stan_args$prior_scale_for_aux
   }
   
-  if (is.null(stan_args[["QR"]]))
-    stan_args[["QR"]] <- FALSE
   if (!stan_args$QR && stan_args$prior_dist > 0L && stan_args$prior_autoscale) {
     min_prior_scale <- 1e-12
     stan_args$prior_scale <-
@@ -693,24 +679,24 @@ stan4bart_fit <-
   
   # The random-effect scale's ridge move: on by default, an off switch for
   # measuring what it buys.
-  ridge_move <- stan_args[["ridge_move"]]
+  ridge_move <- getOption("stan4bart.ridge_move")
   if (is.null(ridge_move)) {
     ridge_move <- TRUE
   } else if (!is.logical(ridge_move) || length(ridge_move) != 1L ||
              is.na(ridge_move)) {
-    stop("'ridge_move' must be TRUE or FALSE")
+    stop("option 'stan4bart.ridge_move' must be TRUE or FALSE")
   }
 
   control.stan <- list(
     init_r = stan_args[["init_r"]] %ORifNULL% 2.0,
     skip = skip.stan,
     ridge_move = as.integer(ridge_move),
-    adapt_gamma = stan_args[["adapt_gamma"]],
+    adapt_gamma = NULL,
     adapt_delta = stan_args[["adapt_delta"]],
-    adapt_kappa = stan_args[["adapt_kappa"]],
+    adapt_kappa = NULL,
     # opt-in raw unconstrained rows for funnel forensics; default off, so the
     # stored parametric draw is only the transformed block consumers read
-    save_raw_parameters = as.integer(isTRUE(stan_args[["save_raw_parameters"]]))
+    save_raw_parameters = as.integer(isTRUE(getOption("stan4bart.save_raw_parameters")))
   )
 
   control.common <- nlist(iter, warmup, verbose, refresh, is_binary = is_bernoulli,

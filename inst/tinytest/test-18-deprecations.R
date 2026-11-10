@@ -30,18 +30,18 @@ fit_call <- function(...) {
 # shrinkage-family coefficient priors are refused with an informative error
 local({
   msg <- "not supported by the gradient-based sampler"
-  expect_error(fit_call(stan_args = list(prior = stan4bart:::hs())), msg)
-  expect_error(fit_call(stan_args = list(prior = stan4bart:::hs_plus())), msg)
-  expect_error(fit_call(stan_args = list(prior = stan4bart:::lasso())), msg)
-  expect_error(fit_call(stan_args = list(prior = stan4bart:::laplace())), msg)
-  expect_error(fit_call(stan_args = list(prior = stan4bart:::product_normal())), msg)
+  expect_error(fit_call(prior = hs()), msg)
+  expect_error(fit_call(prior = hs_plus()), msg)
+  expect_error(fit_call(prior = lasso()), msg)
+  expect_error(fit_call(prior = laplace()), msg)
+  expect_error(fit_call(prior = product_normal()), msg)
 })
 
 # supported coefficient priors are unaffected
 local({
-  expect_inherits(fit_call(stan_args = list(prior = stan4bart:::normal())), "stan4bartFit")
-  expect_inherits(fit_call(stan_args = list(prior = stan4bart:::student_t())), "stan4bartFit")
-  expect_inherits(fit_call(stan_args = list(prior = stan4bart:::cauchy())), "stan4bartFit")
+  expect_inherits(fit_call(prior = normal()), "stan4bartFit")
+  expect_inherits(fit_call(prior = student_t()), "stan4bartFit")
+  expect_inherits(fit_call(prior = cauchy()), "stan4bartFit")
 })
 
 # NUTS control args are accepted with a deprecation warning, not ignored silently
@@ -58,28 +58,28 @@ local({
 
 # loop-level and init_r args do not warn
 local({
-  expect_silent(fit_call(stan_args = list(init_r = 1.5)))
+  expect_silent(fit_call(init_r = 1.5))
 })
 
 # adapt_delta is a live WALNUTS control, not a deprecated no-op
 local({
   # validated to the open interval (0, 1)
-  expect_error(fit_call(stan_args = list(adapt_delta = 0)),   "adapt_delta")
-  expect_error(fit_call(stan_args = list(adapt_delta = 1)),   "adapt_delta")
-  expect_error(fit_call(stan_args = list(adapt_delta = 1.5)), "adapt_delta")
+  expect_error(fit_call(adapt_delta = 0),   "adapt_delta")
+  expect_error(fit_call(adapt_delta = 1),   "adapt_delta")
+  expect_error(fit_call(adapt_delta = 1.5), "adapt_delta")
 
   # a live control no longer warns
-  expect_silent(fit_call(stan_args = list(adapt_delta = 0.9)))
+  expect_silent(fit_call(adapt_delta = 0.9))
 
   # the value reaches the sampler: different acceptance-rate targets tune a
   # different frozen step size and move the draws, while an explicit default
   # matches an unset fit bit for bit (the mapped WarmupConfig target is 0.8
   # in both).
   seeded <- function(...) fit_call(seed = 12345L, ...)
-  fit_lo      <- seeded(stan_args = list(adapt_delta = 0.6))
-  fit_hi      <- seeded(stan_args = list(adapt_delta = 0.95))
+  fit_lo      <- seeded(adapt_delta = 0.6)
+  fit_hi      <- seeded(adapt_delta = 0.95)
   fit_unset   <- seeded()
-  fit_default <- seeded(stan_args = list(adapt_delta = 0.8))
+  fit_default <- seeded(adapt_delta = 0.8)
 
   expect_false(isTRUE(all.equal(fit_lo$adaptation$step_size,
                                 fit_hi$adaptation$step_size)))
