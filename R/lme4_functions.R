@@ -188,6 +188,14 @@ glFormula <- function(formula, data = NULL, subset, weights,
     # before it.
     if (length(attr(bartterms, "term.labels")) == 0L)
       stop("no bart component detected in formula; consider using rstanarm package instead")
+    # a bart() part whose every column holds one value on the rows kept has
+    # no cut point to split on and would act as one more intercept
+    constant_cols <- constant_bart_columns(
+      bartfr[, setdiff(seq_along(bartfr), attr(bartterms, "response")), drop = FALSE])
+    if (!is.null(constant_cols))
+      stop("no bart component detected in formula: every bart() predictor holds one value on the rows kept (",
+           paste0("'", constant_cols, "'", collapse = ", "),
+           "); consider using rstanarm package instead")
     bartData <- dbarts::dbartsData(bartform, bartfr, factors = "categorical")
 
     X <- model.matrix(fixedform, fixedfr, contrasts)
@@ -224,6 +232,29 @@ glFormula <- function(formula, data = NULL, subset, weights,
       result$wmsgs <- c(Nlev = wmsgNlev, Zdims = wmsgZdims, Zrank = wmsgZrank)
     
     result
+}
+
+# The names of the columns of a bart() model frame when every one holds a
+# single value, else NULL; an offset is no predictor, and a matrix-valued
+# term counts per column.
+constant_bart_columns <- function(frame) {
+  labels <- character(0L)
+  constant <- logical(0L)
+  for (j in seq_along(frame)) {
+    name <- names(frame)[j]
+    if (grepl("^offset\\(", name)) next
+    column <- frame[[j]]
+    if (is.matrix(column)) {
+      sub <- if (is.null(colnames(column))) seq_len(ncol(column)) else colnames(column)
+      labels <- c(labels, paste0(name, sub))
+      constant <- c(constant, vapply(seq_len(ncol(column)), function(k)
+        length(unique(column[, k])) <= 1L, logical(1L)))
+    } else {
+      labels <- c(labels, name)
+      constant <- c(constant, length(unique(column)) <= 1L)
+    }
+  }
+  if (length(constant) > 0L && all(constant)) labels else NULL
 }
 
 getMerControls <- function() {

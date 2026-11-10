@@ -165,3 +165,31 @@ local({
     expect_error(stan4bart(formula, df, iter = 0L), "no bart component detected")
   }
 })
+
+# a bart() part whose every column holds one value on the rows kept is refused
+# in the same words, with a clause naming the columns; one column that varies
+# keeps the part
+local({
+  df$cst <- 1
+  df$cst2 <- 2
+  df$f1 <- factor("a")
+  for (formula in list(
+    y ~ X1 + (1 | g.1) + bart(cst),
+    y ~ X1 + (1 | g.1) + bart(cst + cst2),
+    y ~ X1 + (1 | g.1) + bart(f1)
+  )) {
+    glCall$formula <- formula
+    expect_error(eval(glCall), "no bart component detected in formula: every bart\\(\\) predictor holds one value")
+  }
+  glCall$formula <- y ~ X1 + (1 | g.1) + bart(cst + cst2)
+  expect_error(eval(glCall), "'cst', 'cst2'")
+  glCall$formula <- y ~ X1 + (1 | g.1) + bart(cst + X2)
+  expect_silent(eval(glCall))
+  # a column constant only on the rows kept
+  df$cst <- NULL
+  df$X3 <- c(rep(1, 50), rnorm(nrow(df) - 50L))
+  glCall$formula <- y ~ X1 + (1 | g.1) + bart(X3)
+  expect_silent(eval(glCall))
+  df$X1[51:100] <- NA
+  expect_error(eval(glCall), "holds one value")
+})

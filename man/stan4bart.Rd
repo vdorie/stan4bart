@@ -53,7 +53,9 @@ stan4bart(formula,
   a symbolic call to \code{bart()} will be used to create the non-parametric
   component. Terms that use the \code{\link[lme4]{lmer}}-style grouping syntax
   will be added as parametric, hierarchical varying intercepts and slopes. All
-  other terms will be added as fixed effects.}
+  other terms will be added as fixed effects. A formula whose \code{bart()}
+  columns each hold one value on the rows kept has no non-parametric
+  component and is refused, naming the columns: no tree can split on them.}
   \item{data}{an optional data frame containing the variables in the formula.
   Its use is strongly encouraged.}
   \item{subset, weights, na.action, offset, contrasts}{optional components
