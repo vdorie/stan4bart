@@ -200,7 +200,10 @@ stan4bart_fit <-
   
   
   # stan_args is the resolved parametric arguments (resolve_parametric_args),
-  # defaults filled in; a NULL prior or prior_aux is the flat prior
+  # defaults filled in; a NULL prior or prior_aux is the flat prior. Called
+  # direct, with none, it takes the defaults.
+  if (is.null(stan_args))
+    stan_args <- resolve_parametric_args(list(), baseenv())
   decov <- stan_args[["prior_covariance"]]
 
   x <- object$X
