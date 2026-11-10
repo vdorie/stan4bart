@@ -196,7 +196,7 @@ glFormula <- function(formula, data = NULL, subset, weights,
       stop("no bart component detected in formula: every bart() predictor holds one value on the rows kept (",
            paste0("'", constant_cols, "'", collapse = ", "),
            "); consider using rstanarm package instead")
-    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "categorical")
+    bartData <- dbarts::dbartsData(bartform, bartfr, factors = "categorical", keep.data = FALSE)
 
     X <- model.matrix(fixedform, fixedfr, contrasts)
     # drop intercept, offset; the contrasts each factor was coded by stay on
