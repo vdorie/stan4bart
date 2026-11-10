@@ -438,7 +438,7 @@ sampling-only move clears the bar at the default `skip` on every seed, so warmup
 adaptation is not what holds the scale back and the vendored tree keeps its one
 patch.
 
-The move is **on by default**. `stan_args = list(ridge_move = FALSE)` turns it
+The move is **on by default**. `options(stan4bart.ridge_move = FALSE)` turns it
 off, which is how the two columns above were measured and is the only reason to
 reach for it. `skip`'s `"stan"` element stays where it was, default 1, as the
 escape hatch for anything the move does not reach.

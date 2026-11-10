@@ -7,8 +7,11 @@
       \item Requires \pkg{dbarts} (>= 1.0-0) and a C++20 compiler. Results
             differ from earlier versions, including under a fixed seed.
       \item Stan is no longer used. The parametric component is drawn with the
-            WALNUTS sampler from the Walnutpie library, so the name \code{stan_args} is kept but
-            configures that sampler. The NUTS tuning arguments
+            WALNUTS sampler from the Walnutpie library. The priors, \code{QR},
+            \code{adapt_delta} and \code{init_r} are now arguments of
+            \code{stan4bart()}, named as in \pkg{rstanarm}; \code{stan_args}
+            is deprecated and routes its entries to them with a warning.
+            The NUTS tuning arguments
             (\code{adapt_gamma}, \code{adapt_kappa}, \code{adapt_t0},
             \code{adapt_init_buffer}, \code{adapt_term_buffer},
             \code{adapt_window}, \code{stepsize}, \code{stepsize_jitter},

@@ -54,7 +54,7 @@
   warmup floor: if `iter` is shortened below the default, keep `warmup` at or
   above roughly 100 for large-`n` fits with many random-effect levels.
 
-* `stan_args$adapt_delta` is a live control again, mapped to WALNUTS'
+* `adapt_delta` (an argument of `stan4bart()`) is a live control again, mapped to WALNUTS'
   step-size acceptance-rate target (the analog of Stan's `adapt_delta`),
   validated to `(0, 1)`. Its default (0.8) reproduces prior behavior exactly
   - an unset or explicit-0.8 fit is bit-identical to earlier builds - so this
@@ -92,8 +92,8 @@
 * Two opt-ins restore the old behavior: `save_warmup = TRUE` stores the full
   per-draw warmup under `warmup` (and re-enables the `include_warmup = TRUE`
   accessors; on a default fit they now error informatively), and
-  `stan_args = list(save_raw_parameters = TRUE)` restores the raw unconstrained
-  rows (funnel forensics). The stored draws themselves are unchanged - the
+  the unexported option `stan4bart.save_raw_parameters = TRUE` restores the raw
+  unconstrained rows (funnel forensics). The stored draws themselves are unchanged - the
   sampler path is untouched - so posterior summaries are identical to prior
   releases regardless of the storage flags.
 
@@ -119,9 +119,32 @@
   considered and rejected: storage semantics should not depend on data size.
   See `docs/plans/bart-train-recompute.md`.
 
+## Arguments
+
+* The parametric part's settings are arguments of `stan4bart()`, named and
+  meant as in rstanarm: `prior`, `prior_aux`, `prior_covariance` and `QR`, and
+  the sampler's `adapt_delta` and `init_r`. They follow the existing
+  arguments, so no positional call changes. A prior constructor (`normal()`,
+  `student_t()`, `cauchy()`, `exponential()`, `decov()`, ...) is written in
+  the argument and needs nothing attached, as `k = chi(2, Inf)` does in
+  `bart_args`; only a name called there is bound, so a value of the same name
+  in the caller is untouched. As in rstanarm, `prior = NULL` and
+  `prior_aux = NULL` give a flat prior.
+
+* `stan_args` is deprecated, kept for one release. Each entry named `prior`,
+  `prior_aux`, `prior_covariance`, `QR`, `adapt_delta` or `init_r` is used as
+  the argument of that name, with one warning a session naming them; an
+  entry also given as an argument is an error. The ignored names below keep
+  their warning. A name `stan_args` never accepted (a typo such as
+  `adapt_deta`) is now an error naming the accepted ones, where it was
+  silently dropped. `ridge_move` and `save_raw_parameters` were never in a
+  release and are no longer settings of any argument: they are the unexported
+  options `stan4bart.ridge_move` and `stan4bart.save_raw_parameters`, for
+  measurement and debugging.
+
 ## Deprecated
 
-* The NUTS-specific `stan_args` controls - `adapt_gamma`,
+* The NUTS-specific `stan_args` entries - `adapt_gamma`,
   `adapt_kappa`, `adapt_t0`, `adapt_init_buffer`, `adapt_term_buffer`,
   `adapt_window`, `stepsize`, `stepsize_jitter`, and `max_treedepth` - have
   no analog under WALNUTS. They are still accepted (a script that sets one
@@ -242,7 +265,7 @@
 
 * The shrinkage coefficient prior families (`hs`, `hs_plus`, `lasso`,
   `laplace`, `product_normal`) are no longer supported for
-  `stan_args$prior`. Supplying one now raises an informative error at fit
+  `prior`. Supplying one now raises an informative error at fit
   setup ("prior families hs, hs_plus, lasso, laplace, and product_normal are
   not supported by the gradient-based sampler; use normal, student_t, or
   cauchy"); previously this reached the sampler and crashed the R session
@@ -333,8 +356,8 @@
   clears the dbarts hand-off bar - lag-1 below 0.8 and ESS at least 100 per 1000
   - in eight of twelve fits, where before it cleared it in none. Posterior means
   are unmoved within Monte Carlo error. This is a draw-moving change for every
-  model with a random-effect block; `stan_args = list(ridge_move = FALSE)`
-  restores the previous behavior, which is how the comparison above was
+  model with a random-effect block; the unexported option
+  `stan4bart.ridge_move = FALSE` restores the previous behavior, which is how the comparison above was
   measured. `skip` remains the escape hatch for what the move does not reach -
   notably the residual standard deviation, which pays the BART-versus-parametric
   alternation whether or not there is a random-effect block.

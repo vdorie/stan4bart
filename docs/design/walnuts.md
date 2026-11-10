@@ -215,7 +215,7 @@ for the shrinkage families from reaching that throw: the R surface's
 `handle_glm_prior` (R/rstanarm_functions.R) still accepts `hs`/`hs_plus`/`lasso`/
 `laplace`/`product_normal` (`ok_dists`, stan4bart_fit.R:132-133, unchanged - this
 list is shared rstanarm-derived code, not narrowed), so a user passing
-`stan_args = list(prior = hs())` reached `ParametricModel::finalize()`'s throw
+`prior = hs()` reached `ParametricModel::finalize()`'s throw
 uncaught across the `.Call` boundary - `libc++abi: terminating due to uncaught
 exception ...`, a hard process abort, not a catchable R error (verified directly
 before landing this fix). C5 adds `refuse_shrinkage_prior()` (R/stan4bart_fit.R),
@@ -280,7 +280,7 @@ diagnostic rows are dropped. In place of full warmup the fit carries an
 WALNUTS tuned and the prior build discarded, captured at `freeze()` via the
 `on_warmup_complete` handler hook), a warmup-end snapshot, and a thinned warmup
 trace of the monitored scalars. Two opt-ins restore prior behavior:
-`save_warmup = TRUE` and `stan_args = list(save_raw_parameters = TRUE)`. The
+`save_warmup = TRUE` and `options(stan4bart.save_raw_parameters = TRUE)`. The
 sampler path is untouched, so the stored draws are bit-for-bit what a
 full-storage build would have produced (verified by the distributional-
 equivalence gate, which passes unchanged). The full research record - the

@@ -207,7 +207,7 @@ lag-1 autocorrelation goes from 0.963 to 0.090 and ESS from 7.0 to 526 per 1000
 kept draws, at a wall-time ratio of 1.01 on the bartCause configuration. The
 derivation as implemented, the corrections it makes to the design's formula, and
 the full bar are in docs/design/re-scale-and-grouped-cost.md, section 6. It is
-on by default; `stan_args = list(ridge_move = FALSE)` turns it off.
+on by default; `options(stan4bart.ridge_move = FALSE)` turns it off.
 
 **`skip` stays the escape hatch, and its default stays 1.** Nothing above about
 its cost has changed - a WALNUTS transition is 0.079 ms against a 0.19 ms BART

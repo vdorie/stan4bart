@@ -24,7 +24,7 @@ mixing and not about a fit going wrong.
 
 Every fit uses the package defaults: four chains, iter 2000 with warmup at half
 of that, so 1000 warmup and 1000 kept draws per chain and 4000 kept draws in
-all, with `bart_args` and `stan_args` untouched. The one argument set away from
+all, with `bart_args` and the parametric arguments untouched. The one argument set away from
 its default is `cores`, raised to four, which divides the same chains across
 processes and changes wall time only. Effective sample size and R-hat are
 computed in the script rather than taken from a dependency: the multi-chain

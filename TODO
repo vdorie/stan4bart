@@ -8,7 +8,7 @@ docs/design/dbarts-capability-adoption.md. An item graduates to its own
 docs/plans/<item>.md when it is picked up.
 
 items
-  shrinkage-priors: stan_args$prior takes every family rstanarm's
+  shrinkage-priors: the `prior` argument takes every family rstanarm's
     coefficient prior takes (dbarts dec-B645, VD 2026-11-07): hs,
     hs_plus, lasso, laplace and product_normal drawn under WALNUTS with
     their latent scales (local, global and slab scales; the mixing scales;

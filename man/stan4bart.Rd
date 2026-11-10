@@ -45,7 +45,13 @@ stan4bart(formula,
           callback = NULL,
           stan_args = NULL,
           bart_args = NULL,
-          bart_range = c("mixed", "lm", "response"))
+          bart_range = c("mixed", "lm", "response"),
+          prior = normal(0, 2.5, autoscale = TRUE),
+          prior_aux = exponential(autoscale = TRUE),
+          prior_covariance = decov(1, 1, 1, 1),
+          QR = FALSE,
+          adapt_delta = 0.8,
+          init_r = 2)
 }
 \arguments{
   \item{formula}{a \code{\link{formula}} object, or one that can be coerced to
@@ -179,10 +185,44 @@ stan4bart(formula,
   \item{callback}{A function that will be called at each iteration, accepting
   three arguments: \code{yhat.train}, \code{yhat.test}, \code{stan_pars}.
   See details for more information.}
-  \item{stan_args}{optional list, specifying further arguments to the
-  parametric (gradient-sampled) component. See details below.}
+  \item{stan_args}{deprecated; its entries are now arguments of
+  \code{stan4bart} of the same names (\code{prior}, \code{prior_aux},
+  \code{prior_covariance}, \code{QR}, \code{adapt_delta}, \code{init_r}).
+  Given, each entry is used as the argument and a warning, once per session,
+  names the arguments; an entry also given as an argument is an error, and a
+  name that was never one is refused. It will be removed in a future release.}
   \item{bart_args}{optional list, specifying further arguments to BART. See
   details below.}
+  \item{prior}{the prior on the fixed effect coefficients, as in
+  \code{stan_glmer} of the \code{rstanarm} package. One of
+  \code{normal(location = 0, scale = NULL, autoscale = TRUE)},
+  \code{student_t(df = 1, location = 0, scale = NULL, autoscale = TRUE)} or
+  \code{cauchy(location = 0, scale = NULL, autoscale = TRUE)}; the default is
+  \code{normal(0, 2.5, autoscale = TRUE)}. \code{NULL} is a flat prior. The
+  shrinkage families (\code{hs}, \code{hs_plus}, \code{lasso},
+  \code{laplace}, \code{product_normal}) are not supported by the
+  gradient-based sampler and raise an error. The constructor is written in the
+  argument and needs nothing attached, as \code{k = chi(2, Inf)} does in
+  \code{bart_args}; a name is bound only where it is called.}
+  \item{prior_aux}{the prior on the residual standard deviation (continuous
+  responses only): \code{exponential(rate = 1, autoscale = TRUE)}, the default,
+  \code{normal}, \code{student_t} or \code{cauchy}, as in \code{rstanarm};
+  \code{NULL} is a flat prior.}
+  \item{prior_covariance}{the prior on the random effect covariance matrices:
+  \code{decov(regularization = 1, concentration = 1, shape = 1, scale = 1)},
+  the default and the only choice.}
+  \item{QR}{logical, default \code{FALSE}: whether to fit the fixed effects on
+  a QR decomposition of their design matrix, mapped back after sampling. It
+  needs two or more fixed predictors, and changes how the \code{prior} is read
+  as well as the sampler's geometry, as in \code{rstanarm}.}
+  \item{adapt_delta}{the acceptance rate the parametric sampler's step size is
+  tuned to, a value in \eqn{(0, 1)}, default \code{0.8}. A higher value
+  gives a smaller step size and more gradient evaluations per transition, and
+  is the setting to raise if the parametric block shows divergences; a lower
+  value takes larger, cheaper steps.}
+  \item{init_r}{half-width of the interval, centered at zero, that the
+  parametric sampler's initial position is drawn from uniformly, on the
+  unconstrained scale; at least zero, default \code{2}.}
   \item{bart_range}{for a continuous response, the range of values the BART
   component is calibrated to: a pair of numbers \code{c(lower, upper)}, or
   the name of an estimate, one of \code{"mixed"}, \code{"lm"}, or
@@ -337,71 +377,39 @@ stan4bart(formula,
     handled per \code{sample_new_levels} in \code{\link{extract}}.
   }
   \subsection{Additional Arguments}{
-    The \code{stan_args} and \code{bart_args} arguments to \code{stan4bart} can
-    be used to pass further arguments to the parametric and BART components
-    respectively. \code{stan_args} is named for historical reasons - the
-    parametric component was originally sampled with Stan's NUTS; it is now
-    sampled with a gradient-based WALNUTS sampler driven by a hand-derived
-    analytic log-posterior gradient, and \code{stan_args} configures that
-    sampler and its priors. \code{bart_args} is similar to
+    The parametric part of the model is configured by \code{prior},
+    \code{prior_aux}, \code{prior_covariance}, \code{QR}, \code{adapt_delta}
+    and \code{init_r}, which follow \code{rstanarm}'s names and meanings, and
+    the BART part by \code{bart_args}. \code{stan4bart} no longer uses Stan:
+    the parametric component is sampled by a gradient-based WALNUTS sampler
+    driven by a hand-derived analytic log-posterior gradient. The prior
+    constructors (\code{normal}, \code{student_t}, \code{cauchy},
+    \code{exponential}, \code{decov}) are written inside the argument that
+    takes them; see the help page for \code{stan_glmer} in the \code{rstanarm}
+    package for what each means. There is no prior on an intercept: BART
+    carries it. \code{bart_args} is similar to
     \code{\link[dbarts]{bart}}, but not identical, as \code{stan4bart}
     constructs its own model internally.
 
-    Prior- and model-related \code{stan_args} include:
-    \itemize{
-      \item \code{prior_covariance} - always a \code{decov()} prior on the
-      random effect covariance.
-      \item \code{prior} - the fixed effect coefficient prior; supports
-      \code{normal}, \code{student_t}, and \code{cauchy}. The shrinkage
-      families (\code{hs}, \code{hs_plus}, \code{lasso}, \code{laplace},
-      \code{product_normal}) are not supported by the gradient-based sampler
-      and raise an error if supplied.
-      \item \code{prior_aux} - the residual sd prior (continuous responses
-      only); supports \code{normal}, \code{student_t}, \code{cauchy}, and
-      \code{exponential}.
-      \item \code{prior_intercept} - accepted for backwards compatibility, but
-      a warning is raised and it is dropped; BART already carries the
-      intercept.
-      \item \code{QR} - whether to use a QR decomposition of the fixed effect
-      design matrix; sampler-agnostic.
-      \item \code{init_r} - half-width of the uniform interval the sampler's
-      initial unconstrained position is drawn from.
-      \item \code{adapt_delta} - the WALNUTS step-size acceptance-rate target, a
-      value in \eqn{(0, 1)} (default \code{0.8}); the analog of Stan's
-      \code{adapt_delta}. A higher value targets a smaller step size, so warmup
-      spends more gradient evaluations per transition but tracks the posterior
-      geometry more finely; a lower value takes larger, cheaper steps.
-      \item \code{ridge_move} - logical, default \code{TRUE}. The
-      random-effect scale is drawn once per sweep by an exact slice move along
-      the curve that rescales a grouping factor's standard deviation and
-      divides that factor's standardized effects by the same amount, which
-      leaves the linear predictor and the likelihood untouched. It is the one
-      direction the gradient-based sampler cannot travel, and it is what the
-      random-effect standard deviation's mixing depends on. Set \code{FALSE}
-      to sample without it, e.g. to measure what it buys; there is no other
-      reason to.
-      \item \code{save_raw_parameters} - logical, default \code{FALSE}. When
-      \code{FALSE} the stored parametric draw is only the transformed block
-      every consumer reads (\code{beta}, \code{b}, \code{theta_L}, and
-      \code{aux}) plus the two live diagnostics (\code{lp__}, \code{stepsize__});
-      the raw unconstrained rows (\code{z_beta}, \code{z_b}, \code{z_T},
-      \code{rho}, \code{zeta}, \code{tau}, \code{aux_unscaled}) and the five
-      constant-zero placeholder diagnostic rows are dropped. Set \code{TRUE} to
-      restore the full historical Stan-layout rows, e.g. as funnel coordinates
-      for forensics on the decov covariance prior.
-    }
-    See the help page for \code{stan_glmer} in the \code{rstanarm} package for
-    the prior constructors (\code{normal}, \code{student_t}, \code{cauchy},
-    \code{exponential}, \code{decov}).
+    Two settings of the sampler are for measurement and debugging and are not
+    arguments. The option \code{stan4bart.ridge_move} (default \code{TRUE})
+    switches the exact slice move that draws the random-effect scale once per
+    sweep along the curve that rescales a grouping factor's standard
+    deviation; the option \code{stan4bart.save_raw_parameters} (default
+    \code{FALSE}), when \code{TRUE}, keeps the raw unconstrained rows of the
+    stored parametric draw and its placeholder diagnostic rows.
 
-    The remaining \code{stan_args} - \code{adapt_gamma},
-    \code{adapt_kappa}, \code{adapt_t0}, \code{adapt_init_buffer},
-    \code{adapt_term_buffer}, \code{adapt_window}, \code{stepsize},
-    \code{stepsize_jitter}, and \code{max_treedepth} - configured Stan's NUTS
-    adaptation and have no analog under WALNUTS. They are still accepted so
-    that existing scripts do not error, but are ignored, and a warning naming
-    each supplied argument is raised at fit time; they are deprecated and will
-    be removed in a future release.
+    Until 0.0-13 these entries were given as one list, \code{stan_args}. It is
+    deprecated and used as the arguments: each entry named \code{prior},
+    \code{prior_aux}, \code{prior_covariance}, \code{QR},
+    \code{adapt_delta} or \code{init_r} goes to the argument of that name, with
+    one warning a session naming them. \code{prior_intercept},
+    \code{adapt_gamma}, \code{adapt_kappa}, \code{adapt_t0},
+    \code{adapt_init_buffer}, \code{adapt_term_buffer}, \code{adapt_window},
+    \code{stepsize}, \code{stepsize_jitter} and \code{max_treedepth}
+    configured Stan and have no analog under WALNUTS; they are accepted so that
+    existing scripts do not error, are ignored, and a warning names each one
+    supplied. Any other name is an error that names the accepted ones.
 
     BART arguments include:
     \itemize{
