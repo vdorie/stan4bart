@@ -85,6 +85,8 @@ local({
   expect_inherits(fit_call(QR = TRUE), "stan4bartFit")
   expect_inherits(fit_call(prior = NULL), "stan4bartFit")
   expect_inherits(fit_call(prior_aux = NULL), "stan4bartFit")
+  # the covariance prior has no flat spelling
+  expect_error(fit_call(prior_covariance = NULL), "'prior_covariance' can't be NULL")
 })
 
 # each stan_args entry routes to its argument, and the fit is the same one

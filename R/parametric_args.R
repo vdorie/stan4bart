@@ -51,6 +51,9 @@ resolve_parametric_args <- function(exprs, env) {
     adapt_delta = if (given("adapt_delta")) read("adapt_delta") else NULL)
   explicit <- vapply(names(stan_args_homes), given, logical(1L))
 
+  if (given("prior_covariance") && is.null(result$prior_covariance))
+    stop("'prior_covariance' can't be NULL", call. = FALSE)
+
   if (given("stan_args")) {
     legacy <- read("stan_args")
     if (!is.null(legacy)) {

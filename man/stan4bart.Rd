@@ -198,7 +198,7 @@ stan4bart(formula,
   \code{normal(location = 0, scale = NULL, autoscale = TRUE)},
   \code{student_t(df = 1, location = 0, scale = NULL, autoscale = TRUE)} or
   \code{cauchy(location = 0, scale = NULL, autoscale = TRUE)}; the default is
-  \code{normal(0, 2.5, autoscale = TRUE)}. \code{NULL} is a flat prior. The
+  \code{normal(0, 2.5, autoscale = TRUE)}. \code{NULL} is a flat (improper) prior, as in \code{rstanarm}. The
   shrinkage families (\code{hs}, \code{hs_plus}, \code{lasso},
   \code{laplace}, \code{product_normal}) are not supported by the
   gradient-based sampler and raise an error. The constructor is written in the
@@ -207,7 +207,7 @@ stan4bart(formula,
   \item{prior_aux}{the prior on the residual standard deviation (continuous
   responses only): \code{exponential(rate = 1, autoscale = TRUE)}, the default,
   \code{normal}, \code{student_t} or \code{cauchy}, as in \code{rstanarm};
-  \code{NULL} is a flat prior.}
+  \code{NULL} is a flat (improper) prior, as in \code{rstanarm}.}
   \item{prior_covariance}{the prior on the random effect covariance matrices:
   \code{decov(regularization = 1, concentration = 1, shape = 1, scale = 1)},
   the default and the only choice.}

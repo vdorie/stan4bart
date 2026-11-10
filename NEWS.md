@@ -92,7 +92,7 @@
 * Two opt-ins restore the old behavior: `save_warmup = TRUE` stores the full
   per-draw warmup under `warmup` (and re-enables the `include_warmup = TRUE`
   accessors; on a default fit they now error informatively), and
-  the unexported option `stan4bart.save_raw_parameters = TRUE` restores the raw
+  the option `stan4bart.save_raw_parameters = TRUE` restores the raw
   unconstrained rows (funnel forensics). The stored draws themselves are unchanged - the
   sampler path is untouched - so posterior summaries are identical to prior
   releases regardless of the storage flags.
@@ -138,8 +138,7 @@
   their warning. A name `stan_args` never accepted (a typo such as
   `adapt_deta`) is now an error naming the accepted ones, where it was
   silently dropped. `ridge_move` and `save_raw_parameters` were never in a
-  release and are no longer settings of any argument: they are the unexported
-  options `stan4bart.ridge_move` and `stan4bart.save_raw_parameters`, for
+  release and are no longer settings of any argument: they are the options `stan4bart.ridge_move` and `stan4bart.save_raw_parameters`, for
   measurement and debugging.
 
 ## Deprecated
@@ -356,7 +355,7 @@
   clears the dbarts hand-off bar - lag-1 below 0.8 and ESS at least 100 per 1000
   - in eight of twelve fits, where before it cleared it in none. Posterior means
   are unmoved within Monte Carlo error. This is a draw-moving change for every
-  model with a random-effect block; the unexported option
+  model with a random-effect block; the option
   `stan4bart.ridge_move = FALSE` restores the previous behavior, which is how the comparison above was
   measured. `skip` remains the escape hatch for what the move does not reach -
   notably the residual standard deviation, which pays the BART-versus-parametric
