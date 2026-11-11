@@ -65,6 +65,14 @@ local({
   out <- capture.output(print(summary(moved)))
   expect_true(grepl("y1 sd [0-9.]+\\*,", grep("^R-hat: ", out, value = TRUE)))
   expect_true("* over 1.1: the chains disagree" %in% out)
+  # a failure computing a quantity leaves it NA with the reason, the others stand
+  bad <- stan4bart:::mvbart_mixing(fit$Sigma, fit$train[, 1L, , , drop = FALSE], fit$y, fit$outcome.names)
+  expect_equal(names(bad), c("y1 sd", "y2 sd", "y1 fit", "y2 fit"))
+  expect_true(is.na(bad[["y2 fit"]]))
+  expect_true(nzchar(attr(bad, "reasons")[["y2 fit"]]))
+  expect_equal(bad[c("y1 sd", "y2 sd", "y1 fit")], fit$mixing[c("y1 sd", "y2 sd", "y1 fit")])
+  moved$mixing <- bad
+  expect_true(any(grepl("^NA: could not be checked \\(.+\\)$", capture.output(print(summary(moved))))))
 })
 
 # every Sigma draw is symmetric and positive definite

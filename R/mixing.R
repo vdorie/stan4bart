@@ -70,14 +70,30 @@ fit_rmse_draws <- function(object, block_cells)
   sqrt(sums / n_rows)
 }
 
-# R-hat of the per-draw RMSE. NA where it cannot be computed, and where
-# computing it fails, as for want of memory: a check never loses a fit.
+# split_rhat of 'draws', evaluated here: NA with the error's message as its
+# "reason" attribute where computing the draws or the R-hat fails, as for want
+# of memory, so a check never loses a fit.
+guarded_rhat <- function(draws)
+  tryCatch(split_rhat(draws),
+           error = function(e) structure(NA_real_, reason = conditionMessage(e)))
+
+# R-hat of the per-draw RMSE, guarded.
 fit_rhat <- function(object, block_cells)
 {
-  tryCatch({
+  guarded_rhat({
     n_draws <- bart_sample_chain_dims(object)
-    split_rhat(matrix(fit_rmse_draws(object, block_cells), n_draws[1L], n_draws[2L]))
-  }, error = function(e) NA_real_)
+    matrix(fit_rmse_draws(object, block_cells), n_draws[1L], n_draws[2L])
+  })
+}
+
+# Sets result[name] to a guarded R-hat, keeping the reason of a failure in the
+# "reasons" attribute of the vector.
+set_rhat <- function(result, name, rhat)
+{
+  result[name] <- rhat
+  if (!is.null(attr(rhat, "reason")))
+    attr(result, "reasons") <- c(attr(result, "reasons"), structure(attr(rhat, "reason"), names = name))
+  result
 }
 
 # Named vector of the R-hats of a fit's checked quantities: "sigma" unless
@@ -105,7 +121,7 @@ fit_mixing <- function(object, block_cells = 2e6)
 
   # the response and the expected value
   if (!is.null(object$bart_train) || bart_needs_recompute(object, "train"))
-    result["fit"] <- fit_rhat(object, block_cells)
+    result <- set_rhat(result, "fit", fit_rhat(object, block_cells))
   result
 }
 
@@ -120,7 +136,10 @@ format_mixing <- function(mixing, n_chains)
     if (any(flagged))
       sprintf("* over %.1f: the %s disagree", mixing_rhat_bar,
               if (n_chains > 1L) "chains" else "halves of the chain"),
-    if (anyNA(mixing)) "NA: could not be checked")
+    if (anyNA(mixing))
+      paste0("NA: could not be checked",
+             if (length(reasons <- unique(attr(mixing, "reasons"))))
+               paste0(" (", paste(reasons, collapse = "; "), ")")))
 }
 
 # The R-hats of an mvbart fit: each outcome's residual standard deviation (the
@@ -130,15 +149,15 @@ mvbart_mixing <- function(Sigma, train, y, outcome_names)
 {
   q <- length(outcome_names)
   d <- dim(Sigma)[3L:4L]
-  sds <- numeric(q)
-  names(sds) <- paste(outcome_names, "sd")
-  fits <- numeric(q)
-  names(fits) <- paste(outcome_names, "fit")
-  for (k in seq_len(q)) {
-    sds[k] <- split_rhat(matrix(sqrt(Sigma[k, k, , ]), d[1L], d[2L]))
-    resid <- train[, k, , ] - y[, k]
-    dim(resid) <- c(nrow(y), prod(d))
-    fits[k] <- split_rhat(matrix(sqrt(colMeans(resid^2)), d[1L], d[2L]))
-  }
-  c(sds, fits)
+  result <- numeric()
+  for (k in seq_len(q))
+    result <- set_rhat(result, paste(outcome_names[k], "sd"),
+                       guarded_rhat(matrix(sqrt(Sigma[k, k, , ]), d[1L], d[2L])))
+  for (k in seq_len(q))
+    result <- set_rhat(result, paste(outcome_names[k], "fit"), guarded_rhat({
+      resid <- train[, k, , ] - y[, k]
+      dim(resid) <- c(nrow(y), prod(d))
+      matrix(sqrt(colMeans(resid^2)), d[1L], d[2L])
+    }))
+  result
 }

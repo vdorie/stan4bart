@@ -45,8 +45,8 @@
   \code{\link{stan4bart}}): one compact line such as
   \code{R-hat: sigma 1.00, g sd 1.01, fit 1.00}, with a star after each over
   1.1 and a line \code{* over 1.1: the chains disagree} when there is one,
-  and \code{NA: could not be checked} when a value is \code{NA}. \code{print}
-  is unchanged.
+  and \code{NA: could not be checked}, with the reason when a computation
+  failed, when a value is \code{NA}. \code{print} is unchanged.
 }
 \value{
   \code{print.stan4bartFit} and \code{print.summary.stan4bartFit} return

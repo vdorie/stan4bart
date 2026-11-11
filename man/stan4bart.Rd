@@ -122,8 +122,8 @@ stan4bart(formula,
   the named elements \code{"bart"} for BART and \code{"stan"} for the
   parametric part (the name is kept from earlier releases, which ran it in
   Stan) are used, and any other name is an error. If not named, BART is the
-  first skip element and the parametric part is the second. This argument does not impact the number of \code{iter}s
-  returned, unlike a conventional \dQuote{thinning} parameter. The parametric
+  first skip element and the parametric part is the second. This argument does
+  not impact the number of \code{iter}s returned, unlike a conventional \dQuote{thinning} parameter. The parametric
   element applies to the sampling phase only; warmup keeps one parametric
   transition per sweep so that the parametric block cannot outrun the
   still-growing forest and park the response mean in the random intercepts.
@@ -573,7 +573,8 @@ stan4bart(formula,
     compared, such as one with fewer than four draws per chain, is not
     checked. \code{fit} is summed in blocks of rows, as \code{fitted} streams,
     so its memory stays bounded; if computing it fails, as for want of memory,
-    it is left unchecked (\code{NA}) and the fit is returned.
+    it is left unchecked (\code{NA}, with the reason in \code{summary}) and the
+    fit is returned.
   }
 }
 \value{

@@ -177,8 +177,9 @@
   a star after each over 1.1 and the line "* over 1.1: the chains
   disagree". No warning is issued. The in-sample error is summed in blocks
   of rows, as `fitted()` does, so its memory stays bounded, and is left
-  unchecked (`NA`, said in `summary()`) if computing it fails. Fixed effects, group effects and trees
-  are not checked, being redundantly parameterized or many.
+  unchecked (`NA`, with the reason said in `summary()`) if computing it
+  fails. Fixed effects, group effects and trees are not checked, being
+  redundantly parameterized or many.
 
 * `residuals()` works on a `stan4bart` fit, returning the response residuals
   on the training rows: the observed response less `fitted(type = "ev")`.

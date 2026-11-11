@@ -36,6 +36,9 @@ expect_identical(format_mixing(c(sigma = 3.3, "g sd" = 1.02, fit = 1.01), 4L),
 expect_identical(format_mixing(c(sigma = 1.5, "g sd" = 2.5, fit = NA), 1L),
                  c("R-hat: sigma 1.50*, g sd 2.50*, fit NA", "* over 1.1: the halves of the chain disagree",
                    "NA: could not be checked"))
+expect_identical(format_mixing(structure(c(sigma = 1.5, fit = NA), reasons = c(fit = "out of memory")), 4L),
+                 c("R-hat: sigma 1.50*, fit NA", "* over 1.1: the chains disagree",
+                   "NA: could not be checked (out of memory)"))
 
 set.seed(1)
 n <- 200
@@ -160,7 +163,11 @@ expect_equal(mixing[c("sigma", "g sd")], fit$mixing[c("sigma", "g sd")])
 broken$mixing <- mixing
 out <- capture.output(print(summary(broken)))
 expect_true(grepl("fit NA", grep("^R-hat: ", out, value = TRUE)))
-expect_true("NA: could not be checked" %in% out)
+reason <- attr(mixing, "reasons")[["fit"]]
+expect_true(nzchar(reason))
+expect_true(paste0("NA: could not be checked (", reason, ")") %in% out)
+# the reason is the failure's own message
+expect_identical(reason, tryCatch(stan4bart:::fit_rmse_draws(broken, 2e6), error = conditionMessage))
 
 # keep_fits = FALSE keeps no draws: nothing is checked and nothing is stored
 fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args, list(keep_fits = FALSE)))
