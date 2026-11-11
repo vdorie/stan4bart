@@ -1251,7 +1251,8 @@ summary.stan4bartFit <- function(object, ...)
                    c("step_size", "mean_leapfrog", "mean_leapfrog_warmup"),
                    names(object$adaptation))],
                  range.bart = object$range.bart, range.route = object$range.route,
-                 range.fallback = object$range.fallback)
+                 range.fallback = object$range.fallback,
+                 mixing = object$mixing)
   class(result) <- "summary.stan4bartFit"
   result
 }
@@ -1268,6 +1269,8 @@ print.summary.stan4bartFit <- function(x, ...)
         x$range.route,
         if (!is.null(x$range.fallback)) paste0("; the response's own: ", x$range.fallback),
         ")\n", sep = "")
+  if (length(x$mixing) > 0L)
+    cat("R-hat: ", paste(names(x$mixing), formatC(x$mixing, digits = 2L, format = "f"), collapse = ", "), "\n", sep = "")
   if (!is.null(x$adaptation$mean_leapfrog)) {
     cat("\nmean leapfrog steps per transition, by chain:\n")
     cat("  warmup:   ", paste(round(x$adaptation$mean_leapfrog_warmup, 1), collapse = ", "), "\n", sep = "")

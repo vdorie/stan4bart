@@ -270,6 +270,9 @@ stan4bart <-
     if (as.integer(verbose) >= 0L)
       check_sampler_diagnostics(result, parametric, length(upar_names))
   }
+
+  result$mixing <- fit_mixing(result)
+  warn_if_not_mixed(result$mixing, length(chain_results))
   
   result
 }

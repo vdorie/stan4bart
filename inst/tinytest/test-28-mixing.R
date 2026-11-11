@@ -1,0 +1,97 @@
+# end-of-fit mixing check: split rank-normalized R-hat of sigma, each group sd
+# and the in-sample fit
+
+split_rhat <- stan4bart:::split_rhat
+fit_mixing <- stan4bart:::fit_mixing
+warn_if_not_mixed <- stan4bart:::warn_if_not_mixed
+
+# the helper against posterior::rhat (1.7.0), computed once on these matrices;
+# built from sin and cos so that no random stream is involved
+pin <- function(n, m, f) outer(seq_len(n), seq_len(m), f)
+cases <- list(
+  agree     = list(pin(40, 4, function(i, j) sin(i * 1.7 + j * 2.3) + cos(i * i * 0.37 + j)), 0.9944477630),
+  shifted   = list(pin(41, 3, function(i, j) sin(i * 0.9 + j) + (j == 2) * 0.8), 1.1527850310),
+  trend     = list(pin(30, 2, function(i, j) sin(i * 1.3 + j * 5) + 0.05 * i), 1.1479243606),
+  one_chain = list(pin(24, 1, function(i, j) sin(i * 2.1) + cos(i * i * 0.11)), 0.9770982846),
+  scale     = list(pin(20, 4, function(i, j) (1 + 3 * (j == 4)) * sin(i * 1.9 + j * 7.1)), 1.3763920699),
+  heavy     = list(pin(21, 3, function(i, j) exp(sin(i * 3.3 + j)) * ifelse(i %% 7 == 0, 40, 1)), 1.0474392455),
+  ties      = list(pin(16, 3, function(i, j) round(sin(i * 1.1 + j) * 3)), 0.9710777520))
+for (nm in names(cases))
+  expect_equal(split_rhat(cases[[nm]][[1L]]), cases[[nm]][[2L]], tolerance = 1e-8, info = nm)
+
+# posterior returns NA for a constant quantity and for draws it cannot split
+expect_true(is.na(split_rhat(matrix(2, 10, 3))))
+expect_true(is.na(split_rhat(matrix(c(1, 2, 3), 3, 1))))
+expect_true(is.na(split_rhat(cbind(c(1:9, NA), 1:10))))
+
+# the warning: one, naming the worst quantity and its value
+expect_silent(warn_if_not_mixed(c(sigma = 1.09, "g sd" = 1.1, fit = NA), 4L))
+w <- tryCatch(warn_if_not_mixed(c(sigma = 3.3, "g sd" = 1.02, fit = 1.01), 4L), warning = conditionMessage)
+expect_equal(w, "chains disagree on sigma (R-hat 3.30); the fit is unreliable. See summary().")
+w <- tryCatch(warn_if_not_mixed(c(sigma = 1.5, "g sd" = 2.5, fit = 1.2), 4L), warning = conditionMessage)
+expect_equal(w, "chains disagree on g sd (R-hat 2.50), the worst of 3 quantities over 1.1; the fit is unreliable. See summary().")
+w <- tryCatch(warn_if_not_mixed(c(sigma = 1.01, fit = 1.4), 1L), warning = conditionMessage)
+expect_equal(w, "the halves of the chain disagree on the overall fit (R-hat 1.40); the fit is unreliable. See summary().")
+
+set.seed(1)
+n <- 200
+d <- data.frame(g = sample(10, n, TRUE), x1 = rnorm(n), xb = runif(n))
+d$y <- 1 + 2 * d$x1 + sin(3 * d$xb) + rnorm(10)[d$g] * 0.7 + rnorm(n) * 0.5
+d$z <- as.integer(d$y > 1.5)
+args <- list(data = d, cores = 2L, verbose = -1L, seed = 3L, iter = 300L, warmup = 150L,
+             bart_args = list(n.trees = 25L))
+
+# a healthy fit is silent, carries the three kinds of quantity, and summary()
+# prints them on one line
+fit <- NULL
+expect_silent(fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args)))
+expect_equal(names(fit$mixing), c("sigma", "g sd", "fit"))
+expect_true(all(fit$mixing < 1.1))
+out <- capture.output(print(summary(fit)))
+line <- grep("^R-hat: ", out, value = TRUE)
+expect_equal(length(line), 1L)
+expect_equal(line, paste0("R-hat: ", paste(names(fit$mixing), formatC(fit$mixing, digits = 2L, format = "f"), collapse = ", ")))
+expect_false(any(grepl("R-hat", capture.output(print(fit)))))
+
+# a fit with no grouping factor has no group sd; a binary fit has no sigma
+fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb)), args))
+expect_equal(names(fit$mixing), c("sigma", "fit"))
+fit <- do.call(stan4bart, c(list(z ~ x1 + bart(xb) + (1 | g)), args))
+expect_equal(names(fit$mixing), c("g sd", "fit"))
+
+# one chain is checked too, by comparing its halves
+fit <- NULL
+expect_silent(fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(args) != "cores"],
+                                         list(chains = 1L))))
+expect_true(all(is.finite(fit$mixing)))
+
+# warmup draws are never read: the check is the same with them saved
+fit_w <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(args) != "cores"],
+                              list(chains = 1L, save_warmup = TRUE)))
+expect_equal(fit_w$mixing, fit$mixing)
+
+# a planted disagreement warns once, naming the quantity: the same fit with
+# one chain's sigma draws moved apart
+fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args))
+sigma_row <- match("aux.1", dimnames(fit$stan)[[1L]])
+fit$stan[sigma_row, , 1L] <- fit$stan[sigma_row, , 1L] + 5
+mixing <- fit_mixing(fit)
+expect_true(mixing[["sigma"]] > 1.1)
+expect_true(all(mixing[c("g sd", "fit")] < mixing[["sigma"]]))
+w <- tryCatch(warn_if_not_mixed(mixing, 4L), warning = conditionMessage)
+expect_true(startsWith(w, "chains disagree on sigma (R-hat "))
+expect_true(endsWith(w, "the fit is unreliable. See summary()."))
+
+# chains started apart under a wide prior that is not autoscaled: the fit
+# warns once, whatever verbose says
+for (verbose in c(-1L, 0L)) {
+  warnings <- character()
+  withCallingHandlers(
+    do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g), prior = quote(normal(0, 1000))),
+                         modifyList(args, list(verbose = verbose)))),
+    warning = function(cond) {
+      warnings <<- c(warnings, conditionMessage(cond))
+      invokeRestart("muffleWarning")
+    })
+  expect_equal(sum(grepl("^chains disagree on ", warnings)), 1L, info = verbose)
+}
