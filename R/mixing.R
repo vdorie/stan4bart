@@ -46,8 +46,10 @@ split_rhat <- function(x)
   x <- as.matrix(x)
   if (nrow(x) < 4L || !all(is.finite(x)) || max(x) - min(x) < .Machine$double.eps)
     return(NA_real_)
-  max(plain_rhat(normal_scores(split_halves(x))),
-      plain_rhat(normal_scores(split_halves(abs(x - median(x))))))
+  result <- max(plain_rhat(normal_scores(split_halves(x))),
+                plain_rhat(normal_scores(split_halves(abs(x - median(x))))))
+  # a folded column that is constant has no within-chain variance: 0 / 0
+  if (is.nan(result)) NA_real_ else result
 }
 
 # Named vector of the R-hats of a fit's checked quantities: "sigma" unless

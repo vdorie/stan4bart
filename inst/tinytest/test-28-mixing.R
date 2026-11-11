@@ -1,6 +1,8 @@
 # end-of-fit mixing check: split rank-normalized R-hat of sigma, each group sd
 # and the in-sample fit
 
+# the switch is restored when the file ends
+warn_before <- get("warn", envir = stan4bart:::mixing_state)
 assign("warn", TRUE, envir = stan4bart:::mixing_state)
 split_rhat <- stan4bart:::split_rhat
 fit_mixing <- stan4bart:::fit_mixing
@@ -24,6 +26,9 @@ for (nm in names(cases))
 expect_true(is.na(split_rhat(matrix(2, 10, 3))))
 expect_true(is.na(split_rhat(matrix(c(1, 2, 3), 3, 1))))
 expect_true(is.na(split_rhat(cbind(c(1:9, NA), 1:10))))
+# two-valued columns have no variance left once folded: NA, never NaN
+for (two in list(matrix(rep(c(0, 1), each = 8), 16, 1), cbind(rep(0, 8), rep(1, 8)), matrix(rep(c(0, 1), 4), 8, 2)))
+  expect_identical(split_rhat(two), NA_real_)
 
 # the warning: one, naming the worst quantity and its value
 expect_silent(warn_if_not_mixed(c(sigma = 1.09, "g sd" = 1.1, fit = NA), 4L))
@@ -100,3 +105,5 @@ for (verbose in c(-1L, 0L)) {
 # keep_fits = FALSE keeps no draws: nothing is checked and nothing is stored
 fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args, list(keep_fits = FALSE)))
 expect_null(fit$mixing)
+
+assign("warn", warn_before, envir = stan4bart:::mixing_state)
