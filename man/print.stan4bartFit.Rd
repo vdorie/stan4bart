@@ -57,7 +57,8 @@
   mean prediction over a subgroup or a contrast between two subgroups, mix far
   better, so read R-hat on the estimand you report. \code{extract} with
   \code{combine_chains = FALSE} gives each chain's draws of the expected
-  value; the example computes R-hat of a contrast of subgroup means with them.
+  value; the example computes R-hat of a contrast of subgroup means with them,
+  by a short function of its own (\code{posterior::rhat} computes it too).
 }
 \value{
   \code{print.stan4bartFit} and \code{print.summary.stan4bartFit} return
@@ -91,7 +92,15 @@ ev <- extract(fit, "ev", combine_chains = FALSE)
 group <- df$xb > 0.5
 contrast <- apply(ev[group, , , drop = FALSE], 2:3, mean) -
   apply(ev[!group, , , drop = FALSE], 2:3, mean)
-if (requireNamespace("posterior", quietly = TRUE))
-  posterior::rhat(contrast) # rhat() takes samples by chains
+# split R-hat of a samples-by-chains matrix: each chain cut in two, then the
+# between-chain and within-chain variances compared (posterior::rhat adds rank
+# normalization, which matters for heavy tails)
+split.rhat <- function(x) {
+  h <- nrow(x) \%/\% 2L
+  x <- cbind(x[seq_len(h), ], x[h + seq_len(h), ])
+  W <- mean(apply(x, 2L, var))
+  sqrt(((h - 1) / h * W + var(colMeans(x))) / W)
+}
+split.rhat(contrast)
 }
 }
