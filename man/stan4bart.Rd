@@ -547,6 +547,20 @@ stan4bart(formula,
     and \code{\link{load}ed} in a way that the sampler can be restarted. This
     feature may be added in the future.
   }
+  \subsection{Mixing check}{
+    After each fit, the split rank-normalized R-hat (Vehtari et al., 2021, as
+    \code{posterior::rhat}) is computed for \code{sigma} (not for a binary
+    response), for the standard deviations of each grouping factor's random
+    effects, and for \code{fit}: each draw's in-sample root mean squared
+    difference between the expected value and the response (on the probability
+    scale for a binary response). Fixed effects, individual group effects and
+    trees are not checked. If one exceeds 1.1 a single warning names the
+    worst, with its value, and says how many are over; \code{summary} prints
+    all of them on one line. A single chain is checked by comparing its halves.
+    Only the saved draws are read, never warmup, and a quantity that cannot be
+    compared, such as one with fewer than four draws per chain, is not
+    checked.
+  }
 }
 \value{
   Returns a list assigned class \code{stan4bartFit}. Has components below, some
@@ -592,6 +606,9 @@ stan4bart(formula,
   \item{\code{callback}}{samples returned by an optional callback function}
   
   Other items:
+  \item{\code{mixing}}{named vector of the split R-hats of the checked
+  quantities: \code{sigma}, one \dQuote{\var{group} sd} per grouping factor
+  term, and \code{fit}; \code{NA} for one that could not be computed}
   \item{\code{warmup}}{a list of warmup samples, containing the same objects in
   the results subsection; present only when \code{save_warmup = TRUE}}
   \item{\code{adaptation}}{present when warmup was run and \code{save_warmup} is

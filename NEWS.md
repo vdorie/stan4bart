@@ -165,6 +165,15 @@
 
 ## New features
 
+* A fit is checked for mixing when it finishes: the split rank-normalized
+  R-hat (Vehtari et al., 2021) of `sigma`, of each grouping factor's
+  standard deviations, and of the in-sample RMSE of the expected value
+  against the response, one chain included (its halves are compared). When
+  one exceeds 1.1 a single warning names the worst, e.g. "chains disagree on
+  sigma (R-hat 3.30); the fit is unreliable. See summary().", and
+  `summary()` prints all of them on one line. Fixed effects, group effects
+  and trees are not checked, being redundantly parameterized or many.
+
 * `residuals()` works on a `stan4bart` fit, returning the response residuals
   on the training rows: the observed response less `fitted(type = "ev")`.
   It is the counterpart of dbarts's retired `residuals.rbart`, so a

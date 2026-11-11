@@ -39,8 +39,11 @@
 
   \code{summary} additionally returns an object of class
   \code{summary.stan4bartFit}, printed by \code{print.summary.stan4bartFit},
-  giving the formula, family, chain/sample counts, and the per-chain warmup
-  and sampling mean leapfrog counts.
+  giving the formula, family, chain/sample counts, the per-chain warmup
+  and sampling mean leapfrog counts, and the fit's R-hats, which are the
+  numbers behind the warning \code{stan4bart} issues when chains disagree (see
+  \dQuote{Mixing check} in \code{\link{stan4bart}}): one compact line such as
+  \code{R-hat: sigma 1.00, g sd 1.01, fit 1.00}. \code{print} is unchanged.
 }
 \value{
   \code{print.stan4bartFit} and \code{print.summary.stan4bartFit} return
