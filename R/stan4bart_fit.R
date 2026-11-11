@@ -342,11 +342,11 @@ stan4bart_fit <-
     coef_prior_scale(stan_args$prior_scale, stan_args$prior_dist > 0L && stan_args$prior_autoscale,
                      ss, xtemp, stan_args$QR)
   # The sampler measures each coefficient in the smaller of its prior's scale
-  # and the default prior's, the latter alone under a flat prior, from a zero
-  # that moves from the prior's location toward zero by the ratio of the two:
-  # it starts within init_r of that zero in those units, so they must be of
-  # the order of the posterior spread, which a prior wider than the default
-  # does not bound.
+  # and the default prior's, the latter alone under a flat prior, from an
+  # origin that moves from the prior's location toward zero by the ratio of
+  # the two. It starts within init_r units of that origin, so the units must
+  # be of the order of the posterior spread, which a prior wider than the
+  # default does not bound.
   default_prior <- default_prior_coef_gaussian()
   coef_coordinate_scale <-
     coef_prior_scale(rep_len(default_prior$scale, ncol(xtemp)), default_prior$autoscale,
