@@ -209,7 +209,12 @@ stan4bart(formula,
   \code{bart_args}; a name is bound only where it is called. Passed on through
   a wrapper's \code{...}, it is read where the wrapper's caller wrote it, so a
   local variable there is found, as it is for \code{prior_aux},
-  \code{prior_covariance} and \code{bart_args}.}
+  \code{prior_covariance} and \code{bart_args}. For a binary response
+  \code{stan4bart} does not apply \code{rstanarm}'s probit factor
+  (\code{dnorm(0) / dlogis(0) = 1.596}): the \code{normal}, \code{student_t}
+  and \code{cauchy} priors read their scales with the identity link, as
+  written, so the same call is about 1.6 times narrower than in
+  \code{rstanarm}.}
   \item{prior_aux}{the prior on the residual standard deviation (continuous
   responses only): \code{exponential(rate = 1, autoscale = TRUE)}, the default,
   \code{normal}, \code{student_t} or \code{cauchy}, as in \code{rstanarm};
