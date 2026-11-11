@@ -275,6 +275,11 @@
 
 ## Bug fixes
 
+* A coefficient prior many orders of magnitude wider than the posterior, such
+  as `normal(0, 1e8, autoscale = FALSE)`, now gives the fixed effects a flat
+  prior gives; chains could stay far from the posterior. A flat prior fits
+  whatever the units of its columns.
+
 * A variable that enters `bart()` only inside a transform, as in
   `bart(log(v) + f)` or `bart(I(v^2))`, now fits; it used to stop with
   "object 'v' not found". So does a transformed response such as `log(y)`.
