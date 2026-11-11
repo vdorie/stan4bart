@@ -66,8 +66,8 @@ fit <- stan4bart(y ~ bart(. - g.1 - g.2 - X4 - z) + X4 + z + (1 + X4 | g.1) + (1
                  cores = 1, seed = 0,
                  verbose = 1)
 
-samples.mu.train <- extract(fit)
-samples.mu.test  <- extract(fit, sample = "test")
+samples.mu.train <- dbarts::extract(fit)
+samples.mu.test  <- dbarts::extract(fit, sample = "test")
 
 # Individual conditional treatment effects
 samples.icate <- (samples.mu.train - samples.mu.test) * (2 * testData$z - 1)
@@ -79,7 +79,7 @@ cate.int <- c(cate - 1.96 * sd(samples.cate), cate + 1.96 * sd(samples.cate))
 # Samples of the posterior predictive distribution are used in calculating
 # the counterfactuals for SATE and for calculating the response under
 # the observed treatment condition when estimating PATE.
-samples.ppd.test <- extract(fit, type = "ppd", sample = "test")
+samples.ppd.test <- dbarts::extract(fit, type = "ppd", sample = "test")
 
 # Individual sample treatment effects
 samples.ite <- (testData$y - samples.ppd.test) * (2 * testData$z - 1)
@@ -89,7 +89,7 @@ sate <- mean(samples.sate)
 sate.int <- c(sate - 1.96 * sd(samples.sate), sate + 1.96 * sd(samples.sate))
 
 # Population average treatment effect
-samples.ppd.train <- extract(fit, type = "ppd", sample = "train")
+samples.ppd.train <- dbarts::extract(fit, type = "ppd", sample = "train")
 samples.pate <- apply((samples.ppd.train - samples.ppd.test) * (2 * testData$z - 1), 2, mean)
 pate <- mean(samples.pate)
 pate.int <- c(pate - 1.96 * sd(samples.pate), pate + 1.96 * sd(samples.pate))
