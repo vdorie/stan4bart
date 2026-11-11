@@ -184,6 +184,15 @@ local({
   expect_error(fit_call(stan_args = list(save_raw_parameters = TRUE)),
                "unrecognized name: 'save_raw_parameters'")
   expect_error(fit_call(stan_args = list(a = 1, b = 2)), "unrecognized names: 'a', 'b'")
+  # the message says of each group what is true of it: six are arguments now,
+  # ten are ignored
+  msg <- tryCatch(fit_call(stan_args = list(adapt_deta = 0.9)), error = conditionMessage)
+  expect_identical(msg, paste0(
+    "stan_args has unrecognized name: 'adapt_deta'; it accepts 'prior', 'prior_aux', ",
+    "'prior_covariance', 'QR', 'adapt_delta', 'init_r', which are now arguments of stan4bart(), and ",
+    "'prior_intercept', 'adapt_gamma', 'adapt_kappa', 'adapt_t0', 'adapt_init_buffer', ",
+    "'adapt_term_buffer', 'adapt_window', 'stepsize', 'stepsize_jitter', 'max_treedepth', ",
+    "which are ignored"))
   expect_error(fit_call(stan_args = 3), "must be a named list")
   expect_error(fit_call(stan_args = list(1)), "must be a named list")
 })

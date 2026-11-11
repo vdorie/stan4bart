@@ -67,13 +67,14 @@ resolve_parametric_args <- function(exprs, values) {
       names_legacy <- names(legacy)
       if (anyDuplicated(names_legacy))
         stop("stan_args names '", names_legacy[anyDuplicated(names_legacy)], "' twice", call. = FALSE)
-      accepted <- c(names(stan_args_homes), stan_args_ignored)
-      unknown <- setdiff(names_legacy, accepted)
+      unknown <- setdiff(names_legacy, c(names(stan_args_homes), stan_args_ignored))
       if (length(unknown) > 0L)
         stop("stan_args has unrecognized name", if (length(unknown) > 1L) "s" else "", ": ",
              paste0("'", unknown, "'", collapse = ", "), "; it accepts ",
-             paste0("'", accepted, "'", collapse = ", "),
-             ", which are now arguments of stan4bart()", call. = FALSE)
+             paste0("'", names(stan_args_homes), "'", collapse = ", "),
+             ", which are now arguments of stan4bart(), and ",
+             paste0("'", stan_args_ignored, "'", collapse = ", "),
+             ", which are ignored", call. = FALSE)
       both <- intersect(names_legacy, names(stan_args_homes)[explicit])
       if (length(both) > 0L)
         stop(paste0("'", both, "' is given both as an argument of stan4bart() and in stan_args; ",
