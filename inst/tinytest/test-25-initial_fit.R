@@ -104,7 +104,6 @@ if (has_lme4) local({
   expect_identical(fit$range.route, "mixed")
   expect_null(fit$range.fallback)
   expect_identical(fit$range.info, route$info)
-  expect_identical(fit$state.bart$data@sigma, route$sigma)
   expect_identical(suppressMessages(capture.output(print(summary(fit))))[5L],
                    paste0("BART response range: ", format(route$range[1L], digits = 6L), " to ",
                           format(route$range[2L], digits = 6L), " (mixed)"))
@@ -612,7 +611,6 @@ local({
     expect_identical(made[-first], rep_len(pair[2L], n - 1L), info = name)
 
     data <- dbarts::dbartsData(y ~ x)
-    data@sigma <- 1
     if (!is.null(w)) data@weights <- w
     control <- dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L, n.thin = 1L,
                                      n.threads = 1L, updateState = FALSE)
@@ -637,7 +635,6 @@ local({
   for (positive in list(9L, integer())) {
     w <- replace(numeric(n), positive, 2)
     data <- dbarts::dbartsData(y ~ x)
-    data@sigma <- 1
     data@weights <- w
     control <- dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L, n.thin = 1L,
                                      n.threads = 1L, updateState = FALSE)
@@ -751,7 +748,6 @@ local({
   x <- matrix(runif(n * 2L), n)
   y <- 10 * x[, 1L] + rnorm(n)
   data <- dbarts::dbartsData(y ~ x)
-  data@sigma <- 1
   control <- dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L, n.thin = 1L,
                                    n.threads = 1L, updateState = FALSE)
   spec <- dbarts::dbartsSpec(data = data, control = control, family = gaussian(sigma = fixed(1)))

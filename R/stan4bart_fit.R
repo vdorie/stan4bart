@@ -597,7 +597,6 @@ stan4bart_fit <-
          if (length(unknown_bart_args) > 1L) "s" else "", ": ",
          paste0("'", unknown_bart_args, "'", collapse = ", "), call. = FALSE)
 
-  data.bart@sigma <- sigma_init
   control_call <- quote(dbarts::dbartsControl(n.chains = 1L, n.samples = 1L, n.burn = 0L,
                                               n.thin = skip.bart, n.threads = 1L,
                                               updateState = FALSE))
