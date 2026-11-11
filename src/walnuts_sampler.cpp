@@ -146,6 +146,10 @@ ParametricModel buildParametricModel(SEXP dataExpr) {
   pm.prior_mean  = getEigenVec(dataExpr, "prior_mean");
   pm.prior_df    = getEigenVec(dataExpr, "prior_df");
   pm.coef_coordinate_scale = getEigenVec(dataExpr, "coef_coordinate_scale");
+  if (pm.prior_scale.size() != pm.K || pm.prior_mean.size() != pm.K ||
+      pm.prior_df.size() != pm.K || pm.coef_coordinate_scale.size() != pm.K)
+    Rf_error("stan data fields 'prior_scale', 'prior_mean', 'prior_df' and "
+             "'coef_coordinate_scale' must each hold one value per coefficient");
 
   if (!pm.is_binary) {
     pm.prior_dist_for_aux  = getIntElt(dataExpr, "prior_dist_for_aux");

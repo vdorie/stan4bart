@@ -19,25 +19,28 @@ including its quirks. The free (unconstrained) position vector, in continuous.st
   zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!is_binary) ]
 ```
 
-The coefficients' coordinates are an affine map of continuous.stan's `z_beta`: with
-`r = coef_coordinate_scale / prior_scale`,
-`z_beta = r * u_beta - (1 - r) * prior_mean / prior_scale`, so
-`beta = coef_coordinate_scale * u_beta + r * prior_mean` under a normal prior, and
-`beta = coef_coordinate_scale * u_beta` under a flat one. The constant Jacobian leaves
-the target as it was. `stan4bart_fit` sets `coef_coordinate_scale` to the smaller of
-the prior's scale and the default prior's (`2.5` sd(y)/sd(x), autoscaled as the
-default is), the default's alone under a flat prior. The shrunken location matters
-for a wide prior centered away from the estimate: `normal(500, 1e4)` started within
-`init_r` coordinate units of 500 stays there, as the wide prior at zero did. The sampler starts each coordinate uniformly
-within `init_r` of zero and seeds its mass from the gradient there, so `z_beta`
-measured in prior scales fails under a prior much wider than the posterior: with
-`normal(0, 1000)` on a coefficient whose posterior sd is 0.025 the start lies 1e4 to
-1e5 posterior sds out, at a log density near -1e9, where no leapfrog step clears the
-Hamiltonian error bound within the step halvings and trajectory doublings allowed;
-the chain crawls or stays where it started. Stan's NUTS reached the posterior from
-there at 1e3 and 1e4 (at 15 to 160 times the cost), not reliably at 1e8. At the
-default prior and anything narrower the two scales are equal and every draw is as
-it was.
+The coefficients' coordinates are an affine map of continuous.stan's `z_beta`, so the
+constant Jacobian leaves the target as it was. `stan4bart_fit` sets
+`coef_coordinate_scale` to the smaller of the prior's scale and the default prior's
+(`2.5` sd(y)/sd(x), autoscaled as the default is, and stated in the QR basis when
+`QR = TRUE`), the default's alone under a flat prior. Where the two are equal the map
+is the identity and every draw is as it was. Where the coordinate scale is the smaller,
+`u_beta = 0` is `beta = 0` and a unit of `u_beta` there is `coef_coordinate_scale`
+units of `beta`: `z_beta = r * u_beta + z0` with `z0` the family's preimage of
+`-prior_mean / prior_scale` (`CFt` inverted by Newton for student_t and cauchy) and
+`r = coef_coordinate_scale / (prior_scale * dCFt(z0))`, `dCFt = 1` for the normal.
+Under a flat prior `beta = coef_coordinate_scale * u_beta`.
+
+The sampler starts each coordinate uniformly within `init_r` of zero and seeds its
+mass from the gradient there, so `z_beta`, measured in prior scales from the prior's
+location, fails under a prior much wider than the posterior: with `normal(0, 1000)`
+on a coefficient whose posterior sd is 0.025 the start lies 1e4 to 1e5 posterior sds
+out, where no leapfrog step clears the Hamiltonian error bound within the step
+halvings and trajectory doublings allowed, and the chain crawls or stays where it
+started. A wide prior centered away from the estimate, `normal(500, 20)` or
+`cauchy(500, 1e3)`, fails the same way from its location, hence the origin at zero.
+Stan's NUTS reached the posterior from such starts at 1e3 and 1e4 (at 15 to 160
+times the cost), not reliably at 1e8.
 
 Transforms (parametric_model.hpp:246-266): `rho = inv_logit(rho_free)`,
 `zeta = exp(zeta_free)`, `tau = exp(tau_free)` (all per-block/per-element), and for

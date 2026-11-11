@@ -24,14 +24,14 @@
 ///     zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!binary) ]
 ///
 /// The coefficients' coordinates are an affine map of continuous.stan's
-/// z_beta: with r = coef_coordinate_scale / prior_scale,
-/// z_beta = r * u_beta - (1 - r) * prior_mean / prior_scale, so that
-/// beta = coef_coordinate_scale * u_beta + r * prior_mean under a normal prior
-/// and beta = coef_coordinate_scale * u_beta under a flat one. The constant
-/// Jacobian leaves the target unchanged; see coef_coordinate_scale.
+/// z_beta, so the constant Jacobian leaves the target unchanged. Where the
+/// coordinate scale equals the prior scale the map is the identity. Where it
+/// is narrower, u_beta = 0 is beta = 0 and a unit of u_beta there is
+/// coef_coordinate_scale units of beta, for every prior family; under a flat
+/// prior beta = coef_coordinate_scale * u_beta. See coef_coordinate_scale.
 
 #include <cassert>    // assert
-#include <cmath>      // std::exp, std::log, std::sqrt
+#include <cmath>      // std::exp, std::log, std::sqrt, std::pow, std::fabs
 #include <cstring>    // std::memcpy
 #include <stdexcept>  // std::invalid_argument
 #include <string>     // std::string, std::to_string
@@ -60,6 +60,25 @@ inline double dCFt(double z, double df) {
          + (25.0 * z4 + 48.0 * z2 + 3.0) / (96.0 * df2)
          + (21.0 * z6 + 95.0 * z4 + 51.0 * z2 - 15.0) / (384.0 * df3)
          + (711.0 * z8 + 5432.0 * z6 + 7410.0 * z4 - 5760.0 * z2 - 945.0) / (92160.0 * df4);
+}
+
+/// \brief Solves CFt(z, df) == t for z by Newton's method.
+///
+/// CFt is increasing for the degrees of freedom a prior takes in practice; far
+/// from zero it grows as its z^9 term, whose root seeds the iteration so that
+/// it does not crawl in from |t|. Returns false, leaving z unspecified, when
+/// the iteration does not settle on a finite root.
+inline bool solveCFt(double t, double df, double& z) {
+  const double at = std::fabs(t);
+  z = at <= 1.0 ? t
+                : std::copysign(std::fmin(at, std::pow(at * 92160.0 * df * df * df * df / 79.0, 1.0 / 9.0)), t);
+  for (int iter = 0; iter < 200; ++iter) {
+    const double step = (CFt(z, df) - t) / dCFt(z, df);
+    if (!std::isfinite(step)) return false;
+    z -= step;
+    if (std::fabs(step) <= 1e-14 * (1.0 + std::fabs(z))) return true;
+  }
+  return false;
 }
 
 /// \brief The parametric target. Conditioning data (X, y, weights, offset_,
@@ -95,20 +114,16 @@ struct ParametricModel {
   Eigen::VectorXd prior_df;       // K (student_t/cauchy df)
 
   /// \brief The change in each coefficient per unit of its sampler
-  ///        coordinate (K).
+  ///        coordinate, at the coordinate's origin (K).
   ///
   /// The sampler starts each coordinate within init_r of zero and seeds its
   /// mass from the gradient there, so a coordinate must be measured in units
-  /// on the order of the coefficient's posterior spread and its zero must lie
-  /// within a few of those units of the posterior. z_beta itself is measured
-  /// in prior scales from the prior's location: under a prior far wider than
-  /// the posterior the start lies tens of thousands of posterior standard
-  /// deviations out, at a log density near -1e9 where no step clears the
-  /// Hamiltonian error bound, and the chain never arrives. The caller passes
-  /// the prior scale, or a smaller one when the prior is wide; the origin then
-  /// moves from the prior's location toward zero by the same ratio. Equal to
-  /// the prior scale it leaves every value of the z_beta parameterization bit
-  /// for bit.
+  /// of the order of the coefficient's posterior spread, from an origin
+  /// within a few of those units of the posterior. z_beta, measured in prior
+  /// scales from the prior's location, meets neither under a prior much wider
+  /// than the posterior. The caller passes the prior scale, which keeps the
+  /// z_beta parameterization bit for bit, or a smaller scale, which also puts
+  /// the origin at beta = 0.
   Eigen::VectorXd coef_coordinate_scale;
 
   // --- residual sd (aux) prior ---
@@ -140,7 +155,7 @@ struct ParametricModel {
 
   // The affine map z_beta = dz_beta_du_ * u_beta - z_beta_shift_ per
   // coefficient (K), precomputed; under a flat prior z_beta is beta itself.
-  // The shift is exactly zero where the ratio is one.
+  // The shift is exactly zero where the coordinate scale is the prior scale.
   Eigen::VectorXd dz_beta_du_, z_beta_shift_;
 
   /// \brief Per-grouping-factor forward cache + reverse-pass adjoints for the
@@ -205,8 +220,6 @@ struct ParametricModel {
         prior_dist_for_aux != 2 && prior_dist_for_aux != 3)
       throw std::invalid_argument("parametric_model: unsupported aux prior_dist");
 
-    assert(coef_coordinate_scale.size() == K &&
-           "finalize: coef_coordinate_scale must hold one scale per coefficient");
     dz_beta_du_.resize(K);
     z_beta_shift_.setZero(K);
     for (int k = 0; k < K; ++k) {
@@ -215,8 +228,21 @@ struct ParametricModel {
         continue;
       }
       const double r = coef_coordinate_scale[k] / prior_scale[k];
-      dz_beta_du_[k] = r;
-      if (r != 1.0) z_beta_shift_[k] = (1.0 - r) * (prior_mean[k] / prior_scale[k]);
+      if (!(r < 1.0)) {
+        dz_beta_du_[k] = r;
+        continue;
+      }
+      // beta = 0 at z0, where the family's map takes z0 to -prior_mean /
+      // prior_scale; beta's change per unit of z_beta there is
+      // prior_scale * slope.
+      const double target = -prior_mean[k] / prior_scale[k];
+      double z0 = target, slope = 1.0;
+      if (prior_dist == 2 && solveCFt(target, prior_df[k], z0))
+        slope = dCFt(z0, prior_df[k]);
+      else
+        z0 = target;
+      dz_beta_du_[k] = r / slope;
+      z_beta_shift_[k] = -z0;
     }
 
     off_u_beta = 0;
