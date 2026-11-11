@@ -205,7 +205,10 @@ stan4bart(formula,
   \code{laplace}, \code{product_normal}) are not supported by the
   gradient-based sampler and raise an error. The constructor is written in the
   argument and needs nothing attached, as \code{k = chi(2, Inf)} does in
-  \code{bart_args}; a name is bound only where it is called.}
+  \code{bart_args}; a name is bound only where it is called. Passed on through
+  a wrapper's \code{...}, it is read where the wrapper's caller wrote it, so a
+  local variable there is found, as it is for \code{prior_aux},
+  \code{prior_covariance} and \code{bart_args}.}
   \item{prior_aux}{the prior on the residual standard deviation (continuous
   responses only): \code{exponential(rate = 1, autoscale = TRUE)}, the default,
   \code{normal}, \code{student_t} or \code{cauchy}, as in \code{rstanarm};
@@ -440,9 +443,10 @@ stan4bart(formula,
       \code{bart_args}, such as \code{interactions(max.order = 1)}, they
       resolve to the dbarts constructor whether or not \code{dbarts} is
       attached, and are evaluated in the caller's own frame, so a local
-      variable referenced inside the call is found. A specification
-      assembled beforehand, or passed on through a wrapper's \code{...},
-      has to be built with \code{dbarts::dbartsForests$...} instead
+      variable referenced inside the call is found, also where \code{bart_args}
+      is passed on through a wrapper's \code{...}. A specification
+      assembled beforehand has to be built with
+      \code{dbarts::dbartsForests$...} instead
       \item \code{k}, shorthand for \code{leaf.prior = normal(k = k)}. It is a
       value too, not an expression, so it does not see \code{dbarts}'s
       prior-evaluation environment; write the prior out in full when that

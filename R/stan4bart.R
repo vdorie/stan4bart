@@ -36,17 +36,30 @@ stan4bart <-
   store <- match.arg(store)
   bart_range <- resolve_bart_range(bart_range)
   mc <- match.call(expand.dots = FALSE)
-  # read as written, where a prior constructor resolves with nothing
-  # attached; the promises themselves are never forced
-  parametric_exprs <- c(
-    if (!missing(prior)) list(prior = substitute(prior)),
-    if (!missing(prior_aux)) list(prior_aux = substitute(prior_aux)),
-    if (!missing(prior_covariance)) list(prior_covariance = substitute(prior_covariance)),
-    if (!missing(QR)) list(QR = substitute(QR)),
-    if (!missing(adapt_delta)) list(adapt_delta = substitute(adapt_delta)),
-    if (!missing(init_r)) list(init_r = substitute(init_r)),
-    if (!missing(stan_args)) list(stan_args = substitute(stan_args)))
-  parametric <- resolve_parametric_args(parametric_exprs, parent.frame())
+  # The prior arguments and stan_args are read as written, where a prior
+  # constructor resolves with nothing attached, and evaluated where they were
+  # written: one a wrapper forwarded through its dots is walked back to the
+  # call that wrote it. The promises themselves are never forced.
+  caller <- parent.frame()
+  given <- c(prior = !missing(prior), prior_aux = !missing(prior_aux),
+             prior_covariance = !missing(prior_covariance), stan_args = !missing(stan_args))
+  promised <- list(prior = substitute(prior), prior_aux = substitute(prior_aux),
+                   prior_covariance = substitute(prior_covariance),
+                   stan_args = substitute(stan_args))
+  parametric_exprs <- list()
+  for (name in names(given)[given]) {
+    found <- recover_forwarded_argument(mc[[name]], caller)
+    # a reference the walk could not resolve is read as the promise's expression
+    if (is_dots_reference(found$expr)) found$expr <- promised[[name]]
+    parametric_exprs[[name]] <- found
+  }
+  # these three take no constructor: plain values, so a local the wrapper's
+  # caller named is found wherever the promise was made
+  parametric_values <- c(
+    if (!missing(QR)) list(QR = QR),
+    if (!missing(adapt_delta)) list(adapt_delta = adapt_delta),
+    if (!missing(init_r)) list(init_r = init_r))
+  parametric <- resolve_parametric_args(parametric_exprs, parametric_values)
   if (!is.null(data)) {
     data <- as.data.frame(data)
     data <- drop_redundant_dims(data)
@@ -194,9 +207,12 @@ stan4bart <-
   # whole bart_args list in it, so an unconditional binding would also shadow
   # a caller's own 'fixed' or 'normal' passed as a value. In call position a
   # prior name has no competing reading.
-  defn_env <- new.env(parent = parent.frame())
+  # bart_args as written, where it was written: forwarded through a wrapper's
+  # dots it is walked back to the call that wrote it.
+  bart_args_written <- recover_forwarded_argument(mc[["bart_args"]], caller)
+  defn_env <- new.env(parent = bart_args_written$env)
   for (prior_name in intersect(names(dbarts::dbartsPriors),
-                               called_names(mc[["bart_args"]])))
+                               called_names(bart_args_written$expr)))
     assign(prior_name, function(...) match.call(), envir = defn_env)
   # TODO: the same local-variable hazard applies to the priors above - a
   # quoted call captured here is only evaluated later by dbartsSpec, with
@@ -212,10 +228,10 @@ stan4bart <-
   # $blocks (the real constructors, not a quoting stand-in), so the call is
   # built right here, in the user's own frame, as a value.
   for (forest_name in intersect(c("interactions", "blocks"),
-                                called_names(mc[["bart_args"]])))
+                                called_names(bart_args_written$expr)))
     assign(forest_name, dbarts::dbartsForests[[forest_name]], envir = defn_env)
 
-  bart_args <- eval(mc[["bart_args"]], envir = defn_env)
+  bart_args <- eval(bart_args_written$expr, envir = defn_env)
 
   # store = "trees" recomputes the BART fits on demand from the kept trees
   # instead of retaining the n x draws x chains bart_train/bart_test blocks, so

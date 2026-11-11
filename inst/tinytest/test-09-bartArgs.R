@@ -151,6 +151,25 @@ fit.literal <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
                          bart_args = list(n.trees = 3))
 expect_equal(fit.shadowed$bart_train, fit.literal$bart_train)
 
+# a wrapper that forwards its dots: bart_args is read where its caller wrote
+# it, so a prior constructor in it resolves and a local of that caller is found,
+# through one and two layers
+wrapDots <- function(...)
+  stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
+            cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6, ...)
+wrapTwice <- function(...) wrapDots(...)
+fitForwarded <- function(w) {
+  nt <- 3
+  set.seed(21)
+  w(bart_args = list(n.trees = nt, k = chi(2, Inf)))
+}
+set.seed(21)
+fit.chi <- stan4bart(y ~ bart(X1 + X2 + X3) + X4 + z + (1 | g.1), df,
+                     cores = 1, verbose = -1L, chains = 1, warmup = 3, iter = 6,
+                     bart_args = list(n.trees = 3, k = chi(2, Inf)))
+for (w in list(wrapDots, wrapTwice))
+  expect_equal(fitForwarded(w)$bart_train, fit.chi$bart_train)
+
 # bart_args$seed reaches dbarts::dbartsControl and pins the BART draws. The
 # same seed twice is not enough on its own - fitWith sets R's seed, so two
 # runs would agree even if 'seed' were dropped before dbarts saw it. Two

@@ -69,6 +69,46 @@ local({
   expect_error(fit_call(prior = exponential()), "prior distribution should be one of")
 })
 
+# a wrapper forwarding its dots: the prior arguments are read where the
+# wrapper's caller wrote them, with the constructors bound, so a local of that
+# caller is found, and the plain arguments are values, so are its locals, one
+# named for a function included; the fit is the one the literals fit
+local({
+  wrap1 <- function(...) fit_call(...)
+  wrap2 <- function(...) wrap1(...)
+  literal <- fit_call(prior = normal(0, 1.5), prior_aux = exponential(rate = 2),
+                      prior_covariance = decov(2, 1, 1, 1), QR = TRUE,
+                      adapt_delta = 0.9, init_r = 1)
+  expect_false(identical(literal$stan, fit_call()$stan))
+  with_locals <- function(call_it) {
+    s <- 1.5; rate <- 2; reg <- 2; ad <- 0.9; ir <- 1
+    qr <- TRUE
+    call_it(prior = normal(0, s), prior_aux = exponential(rate = rate),
+            prior_covariance = decov(reg, 1, 1, 1), QR = qr,
+            adapt_delta = ad, init_r = ir)
+  }
+  for (layers in list(fit_call, wrap1, wrap2))
+    expect_identical(with_locals(layers)$stan, literal$stan)
+  # a prior held in a local of the caller, by name
+  literal_prior <- fit_call(prior = normal(0, 1.5))
+  with_named <- function(call_it) {
+    p <- stan4bart:::normal(0, 1.5)
+    call_it(prior = p)
+  }
+  for (layers in list(fit_call, wrap2))
+    expect_identical(with_named(layers)$stan, literal_prior$stan)
+  # stan_args forwarded the same way
+  with_stan_args <- function(call_it) {
+    s <- 1.5
+    call_it(stan_args = list(prior = normal(0, s)))
+  }
+  for (layers in list(fit_call, wrap2)) {
+    reset_session()
+    seen <- catch(with_stan_args(layers))
+    expect_identical(seen$value$stan, literal_prior$stan)
+  }
+})
+
 # the defaults are the ones stan_args took: naming them is the same fit
 local({
   fit_unset <- fit_call()

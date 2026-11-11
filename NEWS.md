@@ -128,7 +128,11 @@
   `student_t()`, `cauchy()`, `exponential()`, `decov()`, ...) is written in
   the argument and needs nothing attached, as `k = chi(2, Inf)` does in
   `bart_args`; only a name called there is bound, so a value of the same name
-  in the caller is untouched. As in rstanarm, `prior = NULL` and
+  in the caller is untouched. An argument a wrapper passes on through its
+  `...` is read where the wrapper's caller wrote it, so a local variable of
+  that caller is found, in the priors and in `bart_args` (where
+  `k = chi(2, Inf)` forwarded this way now resolves); `adapt_delta`,
+  `init_r` and `QR` are plain values. As in rstanarm, `prior = NULL` and
   `prior_aux = NULL` give a flat prior.
 
 * `stan_args` is deprecated, kept for one release. Each entry named `prior`,

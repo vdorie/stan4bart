@@ -29,16 +29,20 @@ stan_args_ignored <- c("prior_intercept", "adapt_gamma", "adapt_kappa",
                        "adapt_window", "stepsize", "stepsize_jitter",
                        "max_treedepth")
 
-# Reads the parametric arguments from 'exprs', the expressions of those the
-# call supplied (substitute() of each, so an argument a wrapper forwarded in
-# its dots is still the expression written), the deprecated stan_args among
-# them, evaluated in 'env', the caller's frame. Returns what the fit
-# reads: prior, prior_aux, prior_covariance, QR, init_r, adapt_delta, and the
-# two internal switches. An argument the call does not name takes the default
-# rstanarm has for it; NULL for prior or prior_aux is rstanarm's flat prior.
-resolve_parametric_args <- function(exprs, env) {
-  given <- function(name) name %in% names(exprs)
-  read <- function(name) eval_parametric_arg(exprs[[name]], env)
+# Reads the parametric arguments. 'exprs' holds, for each of prior, prior_aux,
+# prior_covariance and the deprecated stan_args the call supplied, the expression
+# as written and the environment it was written in (a wrapper's forwarded one
+# is already walked back to its writer), evaluated there with the constructors
+# bound; 'values' holds the plain ones the call supplied, QR, init_r and
+# adapt_delta, as their values. Returns what the fit reads: prior, prior_aux,
+# prior_covariance, QR, init_r, adapt_delta, and the two internal switches. An
+# argument the call does not name takes the default rstanarm has for it; NULL
+# for prior or prior_aux is rstanarm's flat prior.
+resolve_parametric_args <- function(exprs, values) {
+  given <- function(name) name %in% c(names(exprs), names(values))
+  read <- function(name)
+    if (name %in% names(values)) values[[name]]
+    else eval_parametric_arg(exprs[[name]]$expr, exprs[[name]]$env)
 
   # a NULL prior or prior_aux stays an entry: it is the flat prior, not a
   # missing name
