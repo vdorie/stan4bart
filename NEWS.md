@@ -173,9 +173,10 @@
   R-hat (Vehtari et al., 2021) of `sigma`, of each grouping factor's
   standard deviations, and of the in-sample RMSE of the expected value
   against the response, one chain included (its halves are compared). They
-  are stored in `fit$mixing`, and `summary()` prints them on one line, with
-  a star after each over 1.1 and the line "* over 1.1: the chains
-  disagree". No warning is issued. The in-sample error is summed in blocks
+  are stored in `fit$mixing`, and `summary()` prints them on one line as
+  values, with no star, bar or note: at the defaults BART's chains routinely
+  disagree on these quantities, so `?summary.stan4bartFit` says to read
+  R-hat on the estimand you report. No warning is issued. The in-sample error is summed in blocks
   of rows, as `fitted()` does, so its memory stays bounded, and is left
   unchecked (`NA`, with the reason said in `summary()`) if computing it
   fails. Fixed effects, group effects and trees are not checked, being
@@ -215,8 +216,8 @@
   independent BART per outcome. Composed from existing machinery - no engine
   support was required. Results are `mvbartFit` objects with a `print`
   method and a `summary` that prints the R-hats of each outcome's residual
-  standard deviation and in-sample fit, flagged over 1.1 as a `stan4bart` fit's
-  are (stored in `fit$mixing`); see `?mvbart`.
+  standard deviation and in-sample fit, as values like a `stan4bart` fit's
+  (stored in `fit$mixing`); see `?mvbart`.
 
 * Tracking dbarts 1.0-0 retiring `resid.prior` onto the family object: the
   BART component's fixed unit residual variance is now set with `family =

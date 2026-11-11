@@ -27,18 +27,16 @@ expect_true(is.na(split_rhat(cbind(c(1:9, NA), 1:10))))
 for (two in list(matrix(rep(c(0, 1), each = 8), 16, 1), cbind(rep(0, 8), rep(1, 8)), matrix(rep(c(0, 1), 4), 8, 2)))
   expect_identical(split_rhat(two), NA_real_)
 
-# the summary's lines: a star on a value over 1.1 and a line saying what it
-# means, nothing more when none is over; an NA is said to be unchecked
-expect_identical(format_mixing(c(sigma = 1.09, "g sd" = 1.1, fit = 1.0), 4L),
+# the summary's line: each value as it is, with no star and no key whatever its
+# size; an NA is said to be unchecked
+expect_identical(format_mixing(c(sigma = 1.09, "g sd" = 1.1, fit = 1.0)),
                  "R-hat: sigma 1.09, g sd 1.10, fit 1.00")
-expect_identical(format_mixing(c(sigma = 3.3, "g sd" = 1.02, fit = 1.01), 4L),
-                 c("R-hat: sigma 3.30*, g sd 1.02, fit 1.01", "* over 1.1: the chains disagree"))
-expect_identical(format_mixing(c(sigma = 1.5, "g sd" = 2.5, fit = NA), 1L),
-                 c("R-hat: sigma 1.50*, g sd 2.50*, fit NA", "* over 1.1: the halves of the chain disagree",
-                   "NA: could not be checked"))
-expect_identical(format_mixing(structure(c(sigma = 1.5, fit = NA), reasons = c(fit = "out of memory")), 4L),
-                 c("R-hat: sigma 1.50*, fit NA", "* over 1.1: the chains disagree",
-                   "NA: could not be checked (out of memory)"))
+expect_identical(format_mixing(c(sigma = 3.3, "g sd" = 1.02, fit = 1.01)),
+                 "R-hat: sigma 3.30, g sd 1.02, fit 1.01")
+expect_identical(format_mixing(c(sigma = 1.5, "g sd" = 2.5, fit = NA)),
+                 c("R-hat: sigma 1.50, g sd 2.50, fit NA", "NA: could not be checked"))
+expect_identical(format_mixing(structure(c(sigma = 1.5, fit = NA), reasons = c(fit = "out of memory"))),
+                 c("R-hat: sigma 1.50, fit NA", "NA: could not be checked (out of memory)"))
 
 set.seed(1)
 n <- 200
@@ -65,8 +63,8 @@ expect_true(all(fit$mixing < 1.1))
 out <- capture.output(print(summary(fit)))
 line <- grep("^R-hat: ", out, value = TRUE)
 expect_equal(length(line), 1L)
-expect_equal(line, format_mixing(fit$mixing, 4L)[1L])
-expect_false(any(grepl("over 1.1", out)))
+expect_equal(line, format_mixing(fit$mixing)[1L])
+expect_false(any(grepl("\\*|over 1", out)))
 expect_false(any(grepl("R-hat", capture.output(print(fit)))))
 
 # a fit with no grouping factor has no group sd; a binary fit has no sigma
@@ -86,8 +84,8 @@ fit_w <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(
                               list(chains = 1L, save_warmup = TRUE)))
 expect_equal(fit_w$mixing, fit$mixing)
 
-# a planted disagreement is flagged by summary(): the same fit with one chain's
-# sigma draws moved apart
+# a planted disagreement is printed as a value, with no star and no key: the
+# same fit with one chain's sigma draws moved apart
 fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args))
 sigma_row <- match("aux.1", dimnames(fit$stan)[[1L]])
 fit$stan[sigma_row, , 1L] <- fit$stan[sigma_row, , 1L] + 5
@@ -96,14 +94,14 @@ expect_true(fit$mixing[["sigma"]] > 1.1)
 expect_true(all(fit$mixing[c("g sd", "fit")] < fit$mixing[["sigma"]]))
 out <- capture.output(print(summary(fit)))
 line <- grep("^R-hat: ", out, value = TRUE)
-expect_true(grepl("sigma [0-9.]+\\*,", line))
-expect_false(grepl("g sd [0-9.]+\\*", line))
-expect_true("* over 1.1: the chains disagree" %in% out)
+expect_true(grepl(sprintf("sigma %.2f,", fit$mixing[["sigma"]]), line, fixed = TRUE))
+expect_false(grepl("*", line, fixed = TRUE))
+expect_false(any(grepl("over 1", out)))
 # print() of the fit says nothing of it
 expect_false(any(grepl("R-hat|over 1.1", capture.output(print(fit)))))
 
 # a real fit too short to mix raises no warning, whatever verbose says; its
-# R-hats are stored, and its summary flags them
+# R-hats are stored, and its summary prints them
 for (verbose in c(-1L, 0L)) {
   warnings <- character()
   short <- withCallingHandlers(
@@ -118,7 +116,8 @@ for (verbose in c(-1L, 0L)) {
   expect_true(any(short$mixing > 1.1), info = verbose)
 }
 out <- capture.output(print(summary(short)))
-expect_true("* over 1.1: the chains disagree" %in% out)
+expect_false(any(grepl("\\*|over 1", out)))
+expect_true(grepl(sprintf("sigma %.2f", short$mixing[["sigma"]]), grep("^R-hat: ", out, value = TRUE), fixed = TRUE))
 
 # the fit quantity is summed in blocks of rows: the per-draw RMSE is the
 # unblocked computation on the whole block of expected values to rounding, and

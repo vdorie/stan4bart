@@ -327,6 +327,6 @@ print.summary.mvbartFit <- function(x, ...)
   cat("  draws:     ", x$n.samples, " x ", x$n.chains, " chain(s), ", x$n.burn,
       " burn-in\n", sep = "")
   if (length(x$mixing) > 0L)
-    cat(format_mixing(x$mixing, x$n.chains), sep = "\n")
+    cat(format_mixing(x$mixing), sep = "\n")
   invisible(x)
 }

@@ -1285,7 +1285,7 @@ print.summary.stan4bartFit <- function(x, ...)
         if (!is.null(x$range.fallback)) paste0("; the response's own: ", x$range.fallback),
         ")\n", sep = "")
   if (length(x$mixing) > 0L)
-    cat(format_mixing(x$mixing, if (!is.null(x$dim)) x$dim[2L] else 2L), sep = "\n")
+    cat(format_mixing(x$mixing), sep = "\n")
   if (!is.null(x$adaptation$mean_leapfrog)) {
     cat("\nmean leapfrog steps per transition, by chain:\n")
     cat("  warmup:   ", paste(round(x$adaptation$mean_leapfrog_warmup, 1), collapse = ", "), "\n", sep = "")

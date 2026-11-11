@@ -43,10 +43,21 @@
   and sampling mean leapfrog counts, and the fit's R-hats, which are the
   numbers of the mixing check (see \dQuote{Mixing check} in
   \code{\link{stan4bart}}): one compact line such as
-  \code{R-hat: sigma 1.00, g sd 1.01, fit 1.00}, with a star after each over
-  1.1 and a line \code{* over 1.1: the chains disagree} when there is one,
-  and \code{NA: could not be checked}, with the reason when a computation
-  failed, when a value is \code{NA}. \code{print} is unchanged.
+  \code{R-hat: sigma 1.00, g sd 1.01, fit 1.00}, each value as it is, with no
+  star, bar or note, and \code{NA: could not be checked}, with the reason
+  when a computation failed, when a value is \code{NA}. \code{print} is
+  unchanged.
+
+  R-hat compares each chain's spread with the spread of the chains pooled, so
+  a value above 1 says the chains disagree, not that pooling them is wrong. At
+  the defaults BART's chains routinely disagree on \code{sigma}, on the
+  standard deviations of the random effects, on the in-sample error and on a
+  single row's prediction, so values above 1 there are expected, and no
+  single bar says whether a fit is usable. Averaged estimands, such as the
+  mean prediction over a subgroup or a contrast between two subgroups, mix far
+  better, so read R-hat on the estimand you report. \code{extract} with
+  \code{combine_chains = FALSE} gives each chain's draws of the expected
+  value; the example computes R-hat of a contrast of subgroup means with them.
 }
 \value{
   \code{print.stan4bartFit} and \code{print.summary.stan4bartFit} return
@@ -60,4 +71,27 @@
 }
 \seealso{
   \code{\link{stan4bart}}
+}
+\examples{
+\donttest{
+# R-hat of the estimand reported: the difference between the mean expected
+# value of two subgroups, one value per draw and chain
+set.seed(1)
+n <- 200L
+df <- data.frame(g = sample(10L, n, replace = TRUE), x1 = rnorm(n),
+                 xb = runif(n))
+df$y <- 3 * sin(pi * df$xb) + df$x1 + rnorm(df$g[1:10])[df$g] + rnorm(n)
+
+fit <- stan4bart(y ~ x1 + bart(xb) + (1 | g), df, chains = 2L, iter = 300L,
+                 warmup = 150L, verbose = -1, bart_args = list(n.trees = 25L))
+summary(fit)
+
+# observations by samples by chains
+ev <- extract(fit, "ev", combine_chains = FALSE)
+group <- df$xb > 0.5
+contrast <- apply(ev[group, , , drop = FALSE], 2:3, mean) -
+  apply(ev[!group, , , drop = FALSE], 2:3, mean)
+if (requireNamespace("posterior", quietly = TRUE))
+  posterior::rhat(contrast) # rhat() takes samples by chains
+}
 }

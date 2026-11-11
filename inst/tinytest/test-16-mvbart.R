@@ -44,7 +44,7 @@ expect_true(all(is.finite(fit$test)))
 expect_true(all(is.finite(fit$mMax)))
 
 # the R-hats: each outcome's residual sd and fit, stored, and printed by
-# summary on one line, flagged over 1.1 as stan4bart's are
+# summary on one line, as values like stan4bart's
 expect_equal(names(fit$mixing), c("y1 sd", "y2 sd", "y1 fit", "y2 fit"))
 expect_true(all(is.finite(fit$mixing)))
 split_rhat <- stan4bart:::split_rhat
@@ -56,15 +56,16 @@ local({
   expect_inherits(s, "summary.mvbartFit")
   out <- capture.output(print(s))
   expect_equal(grep("^R-hat: ", out, value = TRUE),
-               stan4bart:::format_mixing(fit$mixing, 2L)[1L])
-  # a planted disagreement is starred, with the line that says what it means
+               stan4bart:::format_mixing(fit$mixing)[1L])
+  # a planted disagreement is printed as a value, with no star and no key
   moved <- fit
   moved$Sigma[1L, 1L, , 1L] <- moved$Sigma[1L, 1L, , 1L] + 5
   moved$mixing <- stan4bart:::mvbart_mixing(moved$Sigma, moved$train, moved$y, moved$outcome.names)
   expect_true(moved$mixing[["y1 sd"]] > 1.1)
   out <- capture.output(print(summary(moved)))
-  expect_true(grepl("y1 sd [0-9.]+\\*,", grep("^R-hat: ", out, value = TRUE)))
-  expect_true("* over 1.1: the chains disagree" %in% out)
+  expect_true(grepl(sprintf("y1 sd %.2f,", moved$mixing[["y1 sd"]]),
+                    grep("^R-hat: ", out, value = TRUE), fixed = TRUE))
+  expect_false(any(grepl("\\*|over 1", out)))
   # a failure computing a quantity leaves it NA with the reason, the others stand
   bad <- stan4bart:::mvbart_mixing(fit$Sigma, fit$train[, 1L, , , drop = FALSE], fit$y, fit$outcome.names)
   expect_equal(names(bad), c("y1 sd", "y2 sd", "y1 fit", "y2 fit"))

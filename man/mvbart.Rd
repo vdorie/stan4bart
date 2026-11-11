@@ -144,8 +144,8 @@ mvbart(formula,
   et al., 2021) of each outcome's residual standard deviation, \dQuote{\var{y} sd},
   and of its in-sample fit, \dQuote{\var{y} fit}, the draw-by-draw root mean
   squared difference between the forest's fit and the response. A single chain
-  is checked by comparing its halves. \code{summary} prints them on one line
-  and flags each over 1.1, where the chains disagree.}
+  is checked by comparing its halves. \code{summary} prints them on one line,
+  as values with no flag.}
   \item{\code{call}, \code{formula}, \code{terms}}{the matched call, formula, and
   model terms.}
 }

@@ -567,8 +567,9 @@ stan4bart(formula,
     difference between the expected value and the response (on the probability
     scale for a binary response). Fixed effects, individual group effects and
     trees are not checked. No warning is issued; \code{summary} prints all of
-    them on one line and flags each over 1.1, where the chains disagree. A
-    single chain is checked by comparing its halves.
+    them on one line, as values with no flag (see
+    \code{\link{summary.stan4bartFit}} for how to read them). A single chain
+    is checked by comparing its halves.
     Only the saved draws are read, never warmup, and a quantity that cannot be
     compared, such as one with fewer than four draws per chain, is not
     checked. \code{fit} is summed in blocks of rows, as \code{fitted} streams,

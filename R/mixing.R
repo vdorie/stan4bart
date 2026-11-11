@@ -5,9 +5,6 @@
 # effects are redundantly parameterized with the BART component and group
 # effects are many, so neither is checked.
 
-# R-hat above which summary() flags a quantity as not mixed.
-mixing_rhat_bar <- 1.1
-
 # Each chain cut in two, the middle draw of an odd length dropped.
 split_halves <- function(x)
 {
@@ -125,17 +122,12 @@ fit_mixing <- function(object, block_cells = 2e6)
   result
 }
 
-# The R-hat line of a summary, its quantities each followed by a star when over
-# the bar, and the lines that explain what a star or an NA says.
-format_mixing <- function(mixing, n_chains)
+# The R-hat line of a summary, each quantity followed by its value as it is,
+# and the line that says what an NA says.
+format_mixing <- function(mixing)
 {
-  flagged <- !is.na(mixing) & mixing > mixing_rhat_bar
-  values <- paste0(ifelse(is.na(mixing), "NA", formatC(mixing, digits = 2L, format = "f")),
-                   ifelse(flagged, "*", ""))
+  values <- ifelse(is.na(mixing), "NA", formatC(mixing, digits = 2L, format = "f"))
   c(paste0("R-hat: ", paste(names(mixing), values, collapse = ", ")),
-    if (any(flagged))
-      sprintf("* over %.1f: the %s disagree", mixing_rhat_bar,
-              if (n_chains > 1L) "chains" else "halves of the chain"),
     if (anyNA(mixing))
       paste0("NA: could not be checked",
              if (length(reasons <- unique(attr(mixing, "reasons"))))
