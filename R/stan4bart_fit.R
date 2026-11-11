@@ -516,6 +516,10 @@ stan4bart_fit <-
   warmup <- as.integer(warmup)
   if (!is.numeric(skip) || length(skip) < 1L || length(skip) > 2L || any(skip <= 0))
     stop("'skip' must be one or two positive integers")
+  unknown <- setdiff(names(skip)[nzchar(names(skip))], c("bart", "stan"))
+  if (length(unknown) > 0L)
+    stop("'skip' has unrecognized name", if (length(unknown) > 1L) "s" else "", ": ",
+         paste0("'", unknown, "'", collapse = ", "), "; it accepts 'bart' and 'stan'", call. = FALSE)
   if (!is.null(names(skip)) && any(c("bart", "stan") %in% names(skip))) {
     skip.bart <- if ("bart" %in% names(skip)) skip[["bart"]] else 1L
     skip.stan <- if ("stan" %in% names(skip)) skip[["stan"]] else 1L

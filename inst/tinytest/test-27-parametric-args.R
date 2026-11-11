@@ -213,3 +213,17 @@ local({
   fit_raw <- fit_call()
   expect_true(any(startsWith(dimnames(fit_raw$stan)$parameters, "z_beta.")))
 })
+
+# skip names the BART and the parametric element; a misspelled name is refused,
+# as stan_args refuses one, where it was dropped and the element took its default
+local({
+  expect_error(fit_call(skip = c(bart = 1, stam = 8)),
+               "'skip' has unrecognized name: 'stam'; it accepts 'bart' and 'stan'")
+  expect_error(fit_call(skip = c(parametric = 2, bart = 1)),
+               "'skip' has unrecognized name: 'parametric'")
+  expect_error(fit_call(skip = c(a = 1, b = 2)), "'skip' has unrecognized names: 'a', 'b'")
+  expect_inherits(fit_call(skip = c(bart = 1, stan = 2)), "stan4bartFit")
+  expect_inherits(fit_call(skip = c(stan = 2)), "stan4bartFit")
+  expect_inherits(fit_call(skip = c(1, 2)), "stan4bartFit")
+  expect_inherits(fit_call(skip = 2), "stan4bartFit")
+})

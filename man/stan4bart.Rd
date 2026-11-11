@@ -119,9 +119,10 @@ stan4bart(formula,
   \code{summary} warn when it looks poor.}
   \item{skip}{one or two positive integers. Every \code{skip} sample will be
   kept, while every other sample will be discarded. If argument is length two,
-  an attempt will be made to use he named element \code{"bart"} for BART and
-  \code{"stan"} for Stan. If not named, BART is the first skip element and Stan
-  is the second. This argument does not impact the number of \code{iter}s
+  the named elements \code{"bart"} for BART and \code{"stan"} for the
+  parametric part (the name is kept from earlier releases, which ran it in
+  Stan) are used, and any other name is an error. If not named, BART is the
+  first skip element and the parametric part is the second. This argument does not impact the number of \code{iter}s
   returned, unlike a conventional \dQuote{thinning} parameter. The parametric
   element applies to the sampling phase only; warmup keeps one parametric
   transition per sweep so that the parametric block cannot outrun the
