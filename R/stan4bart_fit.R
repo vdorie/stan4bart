@@ -342,17 +342,15 @@ stan4bart_fit <-
     coef_prior_scale(stan_args$prior_scale, stan_args$prior_dist > 0L && stan_args$prior_autoscale,
                      ss, xtemp, stan_args$QR)
   # The sampler measures each coefficient in the smaller of its prior's scale
-  # and the default prior's, the latter alone under a flat prior, from an
-  # origin that moves from the prior's location toward zero by the ratio of
-  # the two. It starts within init_r units of that origin, so the units must
-  # be of the order of the posterior spread, which a prior wider than the
-  # default does not bound.
+  # and the default prior's, the latter alone under a flat prior, and, where
+  # that is the default's, from beta = 0. It starts within init_r units of
+  # that origin, so the units must be of the order of the posterior spread,
+  # which a prior wider than the default does not bound. The default's scale
+  # is stated in the basis the coefficients are sampled in, below under QR.
   default_prior <- default_prior_coef_gaussian()
-  coef_coordinate_scale <-
+  default_coef_scale <-
     coef_prior_scale(rep_len(default_prior$scale, ncol(xtemp)), default_prior$autoscale,
                      ss, xtemp, stan_args$QR)
-  if (stan_args$prior_dist > 0L)
-    coef_coordinate_scale <- pmin(stan_args$prior_scale, coef_coordinate_scale)
   stan_args$prior_scale_for_intercept <- 
     min(.Machine$double.xmax, stan_args$prior_scale_for_intercept)
   
@@ -370,7 +368,12 @@ stan4bart_fit <-
     xtemp <- Q * scale_factor
     colnames(xtemp) <- cn
     xbar <- c(xbar %*% R_inv)
+    # The default's scale assumes the autoscaled basis, whose columns have
+    # standard deviation one; these have abs(scale_factor) / sqrt(n - 1).
+    default_coef_scale <- default_coef_scale * (sqrt(nrow(xtemp) - 1L) / abs(scale_factor))
   }
+  coef_coordinate_scale <- if (stan_args$prior_dist > 0L)
+    pmin(stan_args$prior_scale, default_coef_scale) else default_coef_scale
     
   if (length(weights) > 0L && all(weights == 1)) weights <- double()
   if (length(offset)  > 0L && all(offset  == 0)) offset  <- double()
