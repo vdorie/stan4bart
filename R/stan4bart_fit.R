@@ -160,6 +160,20 @@ refuse_shrinkage_prior <- function(prior) {
   }
 }
 
+# A coefficient prior's scales as the parametric sampler takes them: an
+# autoscaled prior is stated in units of the response, for a continuous one,
+# and, without QR, per unit of its column, a column of one value counting as
+# one unit.
+coef_prior_scale <- function(scale, autoscale, ss, x, QR)
+{
+  if (autoscale) {
+    if (!is.null(ss)) scale <- ss * scale
+    if (!QR)
+      scale <- pmax(1e-12, scale / apply(x, 2L, function(x_j) if (length(unique(x_j)) == 1L) 1 else sd(x_j)))
+  }
+  as.array(pmin(.Machine$double.xmax, scale))
+}
+
 stan4bart_fit <-
   function(object,
            family,
@@ -308,6 +322,7 @@ stan4bart_fit <-
            "the model must have an intercept")
   }
   
+  ss <- NULL
   if (is_gaussian) {
     ss <- sd(y)
     # A constant response fits with BART's own warning under a residual prior
@@ -317,32 +332,25 @@ stan4bart_fit <-
     if (stan_args$prior_dist_for_aux > 0L && stan_args$prior_autoscale_for_aux && !isTRUE(ss > 0))
       stop("the response is constant: the prior on the residual standard deviation is scaled ",
            "by the response's standard deviation, which is zero", call. = FALSE)
-    if (stan_args$prior_dist > 0L && stan_args$prior_autoscale) 
-      stan_args$prior_scale <- ss * stan_args$prior_scale
     if (stan_args$prior_dist_for_intercept > 0L && stan_args$prior_autoscale_for_intercept) 
       stan_args$prior_scale_for_intercept <- ss * stan_args$prior_scale_for_intercept
     if (stan_args$prior_dist_for_aux > 0L && stan_args$prior_autoscale_for_aux)
       stan_args$prior_scale_for_aux <- ss * stan_args$prior_scale_for_aux
   }
   
-  if (!stan_args$QR && stan_args$prior_dist > 0L && stan_args$prior_autoscale) {
-    min_prior_scale <- 1e-12
-    stan_args$prior_scale <-
-      pmax(min_prior_scale, stan_args$prior_scale / 
-             apply(xtemp, 2L, FUN = function(x) {
-               num.categories <- length(unique(x))
-               x.scale <- 1
-               if (num.categories == 1) {
-                 x.scale <- 1
-               } else {
-                 x.scale <- sd(x)
-               }
-               return(x.scale)
-            }))
-  }
-  
-  stan_args$prior_scale <- 
-    as.array(pmin(.Machine$double.xmax, stan_args$prior_scale))
+  stan_args$prior_scale <-
+    coef_prior_scale(stan_args$prior_scale, stan_args$prior_dist > 0L && stan_args$prior_autoscale,
+                     ss, xtemp, stan_args$QR)
+  # The sampler measures each coefficient in the smaller of its prior's scale
+  # and the default prior's, the latter alone under a flat prior: it starts
+  # within init_r of zero in those units, so they must be of the order of the
+  # posterior spread, which a prior wider than the default does not bound.
+  default_prior <- default_prior_coef_gaussian()
+  coef_coordinate_scale <-
+    coef_prior_scale(rep_len(default_prior$scale, ncol(xtemp)), default_prior$autoscale,
+                     ss, xtemp, stan_args$QR)
+  if (stan_args$prior_dist > 0L)
+    coef_coordinate_scale <- pmin(stan_args$prior_scale, coef_coordinate_scale)
   stan_args$prior_scale_for_intercept <- 
     min(.Machine$double.xmax, stan_args$prior_scale_for_intercept)
   
@@ -452,6 +460,7 @@ stan4bart_fit <-
     data.stan$len_regularization <- 0L
   }
   
+  data.stan$coef_coordinate_scale <- as.array(coef_coordinate_scale)
   data.stan$X <- xtemp
   data.stan$y <- y
   data.stan$weights <- weights

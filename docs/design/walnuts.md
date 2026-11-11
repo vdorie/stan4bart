@@ -15,9 +15,25 @@ including its quirks. The free (unconstrained) position vector, in continuous.st
 `parameters` declaration order:
 
 ```
-[ z_beta(K), z_b(q), z_T(len_z_T), rho_free(len_rho),
+[ u_beta(K), z_b(q), z_T(len_z_T), rho_free(len_rho),
   zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!is_binary) ]
 ```
+
+The coefficients' coordinates are continuous.stan's `z_beta` rescaled by a constant,
+`z_beta = u_beta * coef_coordinate_scale / prior_scale`; under a flat prior
+`beta = coef_coordinate_scale * u_beta`. The constant Jacobian leaves the target as it
+was. `stan4bart_fit` sets `coef_coordinate_scale` to the smaller of the prior's scale
+and the default prior's (`2.5` sd(y)/sd(x), autoscaled as the default is), the
+default's alone under a flat prior. The sampler starts each coordinate uniformly
+within `init_r` of zero and seeds its mass from the gradient there, so `z_beta`
+measured in prior scales fails under a prior much wider than the posterior: with
+`normal(0, 1000)` on a coefficient whose posterior sd is 0.025 the start lies 1e4 to
+1e5 posterior sds out, at a log density near -1e9, where no leapfrog step clears the
+Hamiltonian error bound within the step halvings and trajectory doublings allowed;
+the chain crawls or stays where it started. Stan's NUTS reached the posterior from
+there at 1e3 and 1e4 (at 15 to 160 times the cost), not reliably at 1e8. At the
+default prior and anything narrower the two scales are equal and every draw is as
+it was.
 
 Transforms (parametric_model.hpp:246-266): `rho = inv_logit(rho_free)`,
 `zeta = exp(zeta_free)`, `tau = exp(tau_free)` (all per-block/per-element), and for
@@ -39,7 +55,7 @@ The log-density (parametric_model.hpp:382-556; parameter-independent constants
 dropped so the value matches Stan's `log_prob` up to a constant, not exactly):
 Gaussian likelihood `-N*log(actual_aux) - 0.5*lambda*sum_i w_i*(y_i-eta_i)^2` with
 `lambda = 1/actual_aux^2`, `eta = offset_ + X*beta + Z*b` (Z sparse, CSR); Normal(0,1)
-priors on `z_beta`/`z_b`/`z_T`; Beta(a1,a2) onion-regularization priors on `rho`;
+priors on `z_beta` (under a normal or student_t prior)/`z_b`/`z_T`; Beta(a1,a2) onion-regularization priors on `rho`;
 Gamma priors on `zeta`/`tau`; the matching logit/log constraint Jacobians added by
 hand exactly where Stan's `transformed parameters` block would add them
 automatically. **The weighted-normalizer quirk**: the likelihood's normalizing term

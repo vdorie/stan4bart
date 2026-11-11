@@ -20,8 +20,14 @@
 ///
 /// Free (unconstrained) position vector, in continuous.stan's `parameters`
 /// declaration order (the same order Stan's log_prob reads):
-///   [ z_beta(K), z_b(q), z_T(len_z_T), rho_free(len_rho),
+///   [ u_beta(K), z_b(q), z_T(len_z_T), rho_free(len_rho),
 ///     zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!binary) ]
+///
+/// The coefficients' coordinates are continuous.stan's z_beta rescaled by a
+/// constant: z_beta = u_beta * coef_coordinate_scale / prior_scale, so that
+/// beta = prior_mean + coef_coordinate_scale * u_beta under a normal prior and
+/// beta = coef_coordinate_scale * u_beta under a flat one. The constant
+/// Jacobian leaves the target unchanged; see coef_coordinate_scale.
 
 #include <cassert>    // assert
 #include <cmath>      // std::exp, std::log, std::sqrt
@@ -87,6 +93,20 @@ struct ParametricModel {
   Eigen::VectorXd prior_mean;     // K
   Eigen::VectorXd prior_df;       // K (student_t/cauchy df)
 
+  /// \brief The change in each coefficient, near its prior location, per unit
+  ///        of its sampler coordinate (K).
+  ///
+  /// The sampler starts each coordinate within init_r of zero and seeds its
+  /// mass from the gradient there, so a coordinate must be measured in units
+  /// on the order of the coefficient's posterior spread. z_beta itself is
+  /// measured in prior scales: under a prior far wider than the posterior the
+  /// start lies tens of thousands of posterior standard deviations out, at a
+  /// log density near -1e9 where no step clears the Hamiltonian error bound,
+  /// and the chain never arrives. The caller passes the prior scale, or a
+  /// smaller one when the prior is wide; equal to the prior scale it leaves
+  /// every value of the z_beta parameterization bit for bit.
+  Eigen::VectorXd coef_coordinate_scale;
+
   // --- residual sd (aux) prior ---
   int prior_dist_for_aux = 3;     // 0 none, 1 normal, 2 student_t, 3 exponential
   double prior_scale_for_aux = 1.0;
@@ -108,11 +128,15 @@ struct ParametricModel {
   std::vector<int> Zu;            // N + 1 row pointers
 
   // --- free-vector segment offsets (filled by finalize()) ---
-  int off_z_beta = 0, off_z_b = 0, off_z_T = 0, off_rho = 0;
+  int off_u_beta = 0, off_z_b = 0, off_z_T = 0, off_rho = 0;
   int off_zeta = 0, off_tau = 0, off_aux = 0, dim_ = 0;
 
   // Beta-onion prior shapes for each rho entry (len_rho), precomputed.
   Eigen::VectorXd rho_a1, rho_a2;
+
+  // d z_beta / d u_beta per coefficient (K), precomputed; under a flat prior
+  // z_beta is beta itself.
+  Eigen::VectorXd dz_beta_du_;
 
   /// \brief Per-grouping-factor forward cache + reverse-pass adjoints for the
   ///        make_theta_L / make_b construction. Held across eval() calls so its
@@ -142,7 +166,7 @@ struct ParametricModel {
   ///        (buffer reuse only; the arithmetic and its order are unchanged).
   ///        Sizes are call-invariant; buffers are sized on first use.
   mutable Eigen::VectorXd rho_, zeta_, tau_;              // len_rho, len_conc, t
-  mutable Eigen::VectorXd beta_, dbeta_dz_;               // K
+  mutable Eigen::VectorXd z_beta_, beta_, dbeta_dz_;      // K
   mutable Eigen::VectorXd b_, eta_, g_eta_, g_beta_;      // q, N, N, K
   mutable Eigen::VectorXd g_b_, g_z_b_;                   // q
   mutable Eigen::VectorXd g_rho_, g_zeta_, g_tau_chain_, g_zT_chain_;
@@ -176,8 +200,15 @@ struct ParametricModel {
         prior_dist_for_aux != 2 && prior_dist_for_aux != 3)
       throw std::invalid_argument("parametric_model: unsupported aux prior_dist");
 
-    off_z_beta = 0;
-    off_z_b    = off_z_beta + K;
+    assert(coef_coordinate_scale.size() == K &&
+           "finalize: coef_coordinate_scale must hold one scale per coefficient");
+    dz_beta_du_.resize(K);
+    for (int k = 0; k < K; ++k)
+      dz_beta_du_[k] = prior_dist == 0 ? coef_coordinate_scale[k]
+                                       : coef_coordinate_scale[k] / prior_scale[k];
+
+    off_u_beta = 0;
+    off_z_b    = off_u_beta + K;
     off_z_T    = off_z_b + q;
     off_rho    = off_z_T + len_z_T;
     off_zeta   = off_rho + len_rho;
@@ -313,7 +344,7 @@ struct ParametricModel {
     grad.setZero();
     logp = 0.0;
 
-    const double* z_beta_p  = par.data() + off_z_beta;
+    const double* u_beta_p  = par.data() + off_u_beta;
     const double* z_b_p     = par.data() + off_z_b;
     const double* z_T_p     = par.data() + off_z_T;
     const double* rho_f_p   = par.data() + off_rho;
@@ -340,14 +371,17 @@ struct ParametricModel {
       actual_aux = aux;
     }
 
-    // --- beta = transform(z_beta) ---
-    beta_.resize(K); dbeta_dz_.resize(K);
+    // --- z_beta = u_beta * dz_beta_du_, beta = transform(z_beta) ---
+    z_beta_.resize(K); beta_.resize(K); dbeta_dz_.resize(K);
+    Eigen::VectorXd& z_beta = z_beta_;
     Eigen::VectorXd& beta = beta_;
     Eigen::VectorXd& dbeta_dz = dbeta_dz_;
     for (int k = 0; k < K; ++k) {
-      if (prior_dist == 1) { beta[k] = z_beta_p[k] * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = prior_scale[k]; }
-      else if (prior_dist == 2) { beta[k] = CFt(z_beta_p[k], prior_df[k]) * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = dCFt(z_beta_p[k], prior_df[k]) * prior_scale[k]; }
-      else { beta[k] = z_beta_p[k]; dbeta_dz[k] = 1.0; }
+      const double z = u_beta_p[k] * dz_beta_du_[k];
+      z_beta[k] = z;
+      if (prior_dist == 1) { beta[k] = z * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = prior_scale[k]; }
+      else if (prior_dist == 2) { beta[k] = CFt(z, prior_df[k]) * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = dCFt(z, prior_df[k]) * prior_scale[k]; }
+      else { beta[k] = z; dbeta_dz[k] = 1.0; }
     }
 
     // --- forward make_theta_L: build lower-tri Cholesky factor T per block,
@@ -433,7 +467,7 @@ struct ParametricModel {
     if (constrained != nullptr) {
       int o = 0;
       if (save_raw) {
-        for (int k = 0; k < K; ++k)                  constrained[o++] = z_beta_p[k];
+        for (int k = 0; k < K; ++k)                  constrained[o++] = z_beta[k];
         for (int s = 0; s < q; ++s)                  constrained[o++] = z_b_p[s];
         for (int e = 0; e < len_z_T; ++e)            constrained[o++] = z_T_p[e];
         for (int j = 0; j < len_rho; ++j)            constrained[o++] = rho[j];
@@ -611,14 +645,14 @@ struct ParametricModel {
 
     // --- priors + Jacobians + constrain-backprop, writing the free-space grad ---
 
-    // z_beta
+    // z_beta ~ N(0,1) under a normal or student_t prior, then the chain to u_beta
     for (int k = 0; k < K; ++k) {
       double g = g_beta[k] * dbeta_dz[k];
       if (prior_dist == 1 || prior_dist == 2) {
-        g += -z_beta_p[k];
-        logp += -0.5 * z_beta_p[k] * z_beta_p[k];
+        g += -z_beta[k];
+        logp += -0.5 * z_beta[k] * z_beta[k];
       }
-      grad[off_z_beta + k] = g;
+      grad[off_u_beta + k] = g * dz_beta_du_[k];
     }
 
     // z_b ~ N(0,1)

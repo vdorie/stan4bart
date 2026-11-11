@@ -25,12 +25,14 @@ C_grad <- function(d, par) .Call(stan4bart:::C_stan4bart_logdensity_grad, d, par
 build_stan_data <- function(N, X, y, blocks, is_binary,
                             weights = NULL,
                             prior_dist = 1L, prior_scale = NULL, prior_df = NULL,
+                            coef_coordinate_scale = NULL,
                             prior_dist_for_aux = 3L, prior_scale_for_aux = 1.0,
                             prior_mean_for_aux = 0.0, prior_df_for_aux = 0.0) {
   K <- ncol(X)
   t <- length(blocks)
   if (is.null(prior_scale)) prior_scale <- rep(2.5, K)
   if (is.null(prior_df))    prior_df    <- rep(3, K)
+  if (is.null(coef_coordinate_scale)) coef_coordinate_scale <- prior_scale
 
   if (t > 0L) {
     p <- vapply(blocks, function(b) as.integer(b$nc), integer(1))
@@ -80,6 +82,7 @@ build_stan_data <- function(N, X, y, blocks, is_binary,
     prior_mean = rep(0, K), prior_mean_for_intercept = 0.0,
     prior_mean_for_aux = as.numeric(prior_mean_for_aux),
     prior_df = as.numeric(prior_df), prior_df_for_intercept = 1.0,
+    coef_coordinate_scale = as.numeric(coef_coordinate_scale),
     prior_df_for_aux = as.numeric(prior_df_for_aux),
     global_prior_df = 1.0, global_prior_scale = 1.0, slab_df = 1.0, slab_scale = 1.0,
     num_normals = integer(0),
@@ -109,7 +112,7 @@ gen_point <- function(d, seed) {
   p <- d$p; t <- d$t
   len_rho <- sum(p) - t
   len_z_T <- sum(vapply(p, function(pi) if (pi >= 3L) (pi - 2L) * (pi - 1L) else 0L, integer(1)))
-  c(rnorm(d$K, 0, 0.7),                # z_beta
+  c(rnorm(d$K, 0, 0.7),                # u_beta
     rnorm(d$q, 0, 0.7),                # z_b
     rnorm(len_z_T, 0, 1.0),           # z_T
     rnorm(len_rho, 0, 0.9),           # rho_free
@@ -147,6 +150,16 @@ make_fixtures <- function() {
     nc_mixed    = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc2, nc1b), FALSE)),
     binary      = list(is_binary = TRUE,  data = build_stan_data(N, X, yl, list(nc2, nc1b), TRUE)),
     studentt_beta = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc2), FALSE, prior_dist = 2L)),
+    # coefficient coordinates measured in other than the prior's scale, as
+    # under a wide prior, and under a flat one
+    normal_beta_coord = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc1), FALSE,
+                                                                       prior_scale = c(1e3, 1e8),
+                                                                       coef_coordinate_scale = c(2.5, 0.7))),
+    studentt_beta_coord = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc1), FALSE,
+                                                                         prior_dist = 2L, prior_scale = c(40, 1e4),
+                                                                         coef_coordinate_scale = c(2.5, 3))),
+    flat_beta   = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc1), FALSE, prior_dist = 0L,
+                                                                 coef_coordinate_scale = c(2.5, 0.4))),
     normal_aux  = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc2), FALSE,
                                                                  prior_dist_for_aux = 1L,
                                                                  prior_scale_for_aux = 1.5,
@@ -186,7 +199,7 @@ local({
       rel <- abs(fd - g) / pmax(abs(g), 1)
       worst <- max(worst, max(rel))
     }
-    cat(sprintf("  FD [%-13s] dim=%2d worst rel err = %.2e\n", nm, dim, worst))
+    cat(sprintf("  FD [%-19s] dim=%2d worst rel err = %.2e\n", nm, dim, worst))
     expect_true(worst < fd_tol)
     worst_overall <- max(worst_overall, worst)
   }

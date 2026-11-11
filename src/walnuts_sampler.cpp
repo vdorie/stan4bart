@@ -145,6 +145,7 @@ ParametricModel buildParametricModel(SEXP dataExpr) {
   pm.prior_scale = getEigenVec(dataExpr, "prior_scale");
   pm.prior_mean  = getEigenVec(dataExpr, "prior_mean");
   pm.prior_df    = getEigenVec(dataExpr, "prior_df");
+  pm.coef_coordinate_scale = getEigenVec(dataExpr, "coef_coordinate_scale");
 
   if (!pm.is_binary) {
     pm.prior_dist_for_aux  = getIntElt(dataExpr, "prior_dist_for_aux");
