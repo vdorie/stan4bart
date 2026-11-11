@@ -2,6 +2,8 @@
 
 \alias{mvbart}
 \alias{print.mvbartFit}
+\alias{summary.mvbartFit}
+\alias{print.summary.mvbartFit}
 \alias{mvbartFit}
 
 \title{Multivariate BART for Correlated Outcomes (Seemingly-Unrelated Regressions)}
@@ -138,6 +140,12 @@ mvbart(formula,
   \item{\code{n.samples}, \code{n.burn}, \code{n.chains}}{sampler settings.}
   \item{\code{prior}}{the inverse-Wishart prior actually used, a list with
   \code{df} and \code{scale}.}
+  \item{\code{mixing}}{named vector of the split rank-normalized R-hats (Vehtari
+  et al., 2021) of each outcome's residual standard deviation, \dQuote{\var{y} sd},
+  and of its in-sample fit, \dQuote{\var{y} fit}, the draw-by-draw root mean
+  squared difference between the forest's fit and the response. A single chain
+  is checked by comparing its halves. \code{summary} prints them on one line
+  and flags each over 1.1, where the chains disagree.}
   \item{\code{call}, \code{formula}, \code{terms}}{the matched call, formula, and
   model terms.}
 }

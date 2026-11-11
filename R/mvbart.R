@@ -287,6 +287,7 @@ mvbart <-
                  y = Y, outcome.names = outcome.names,
                  n.samples = n.samples, n.burn = n.burn, n.chains = n.chains,
                  prior = list(df = nu0, scale = Psi0),
+                 mixing = mvbart_mixing(Sigma, train, Y, outcome.names),
                  call = call, formula = formula, terms = mt)
   class(result) <- "mvbartFit"
   result
@@ -307,5 +308,25 @@ print.mvbartFit <- function(x, ...) {
   Sbar <- apply(x$Sigma, c(1L, 2L), mean)
   cat("  posterior mean residual covariance Sigma:\n")
   print(round(Sbar, 4L))
+  invisible(x)
+}
+
+summary.mvbartFit <- function(object, ...)
+{
+  result <- list(outcome.names = object$outcome.names, n.samples = object$n.samples,
+                 n.burn = object$n.burn, n.chains = object$n.chains,
+                 mixing = object$mixing)
+  class(result) <- "summary.mvbartFit"
+  result
+}
+
+print.summary.mvbartFit <- function(x, ...)
+{
+  cat("mvbart fit (multivariate BART by composition)\n")
+  cat("  outcomes:  ", paste(x$outcome.names, collapse = ", "), "\n", sep = "")
+  cat("  draws:     ", x$n.samples, " x ", x$n.chains, " chain(s), ", x$n.burn,
+      " burn-in\n", sep = "")
+  if (length(x$mixing) > 0L)
+    cat(format_mixing(x$mixing, x$n.chains), sep = "\n")
   invisible(x)
 }

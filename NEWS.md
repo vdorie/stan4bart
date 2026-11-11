@@ -207,7 +207,9 @@
   which calibrates the joint predictive distribution better than one
   independent BART per outcome. Composed from existing machinery - no engine
   support was required. Results are `mvbartFit` objects with a `print`
-  method; see `?mvbart`.
+  method and a `summary` that prints the R-hats of each outcome's residual
+  standard deviation and in-sample fit, flagged over 1.1 as a `stan4bart` fit's
+  are (stored in `fit$mixing`); see `?mvbart`.
 
 * Tracking dbarts 1.0-0 retiring `resid.prior` onto the family object: the
   BART component's fixed unit residual variance is now set with `family =

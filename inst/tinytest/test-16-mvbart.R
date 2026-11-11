@@ -43,6 +43,30 @@ expect_true(all(is.finite(fit$train)))
 expect_true(all(is.finite(fit$test)))
 expect_true(all(is.finite(fit$mMax)))
 
+# the R-hats: each outcome's residual sd and fit, stored, and printed by
+# summary on one line, flagged over 1.1 as stan4bart's are
+expect_equal(names(fit$mixing), c("y1 sd", "y2 sd", "y1 fit", "y2 fit"))
+expect_true(all(is.finite(fit$mixing)))
+split_rhat <- stan4bart:::split_rhat
+expect_equal(fit$mixing[["y2 sd"]], split_rhat(sqrt(fit$Sigma[2L, 2L, , ])))
+rmse_y1 <- sqrt(colMeans((matrix(fit$train[, 1L, , ], 120L) - fit$y[, 1L])^2))
+expect_equal(fit$mixing[["y1 fit"]], split_rhat(matrix(rmse_y1, 120L, 2L)))
+local({
+  s <- summary(fit)
+  expect_inherits(s, "summary.mvbartFit")
+  out <- capture.output(print(s))
+  expect_equal(grep("^R-hat: ", out, value = TRUE),
+               stan4bart:::format_mixing(fit$mixing, 2L)[1L])
+  # a planted disagreement is starred, with the line that says what it means
+  moved <- fit
+  moved$Sigma[1L, 1L, , 1L] <- moved$Sigma[1L, 1L, , 1L] + 5
+  moved$mixing <- stan4bart:::mvbart_mixing(moved$Sigma, moved$train, moved$y, moved$outcome.names)
+  expect_true(moved$mixing[["y1 sd"]] > 1.1)
+  out <- capture.output(print(summary(moved)))
+  expect_true(grepl("y1 sd [0-9.]+\\*,", grep("^R-hat: ", out, value = TRUE)))
+  expect_true("* over 1.1: the chains disagree" %in% out)
+})
+
 # every Sigma draw is symmetric and positive definite
 S11 <- fit$Sigma[1L, 1L, , ]; S22 <- fit$Sigma[2L, 2L, , ]
 S12 <- fit$Sigma[1L, 2L, , ]; S21 <- fit$Sigma[2L, 1L, , ]
