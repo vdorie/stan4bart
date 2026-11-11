@@ -1,6 +1,7 @@
 # end-of-fit mixing check: split rank-normalized R-hat of sigma, each group sd
 # and the in-sample fit
 
+assign("warn", TRUE, envir = stan4bart:::mixing_state)
 split_rhat <- stan4bart:::split_rhat
 fit_mixing <- stan4bart:::fit_mixing
 warn_if_not_mixed <- stan4bart:::warn_if_not_mixed
@@ -95,3 +96,7 @@ for (verbose in c(-1L, 0L)) {
     })
   expect_equal(sum(grepl("^chains disagree on ", warnings)), 1L, info = verbose)
 }
+
+# keep_fits = FALSE keeps no draws: nothing is checked and nothing is stored
+fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args, list(keep_fits = FALSE)))
+expect_null(fit$mixing)

@@ -5,6 +5,12 @@
 # effects are redundantly parameterized with the BART component and group
 # effects are many, so neither is checked.
 
+# Whether a fit's warning is issued; the package's own tests, whose tiny fits
+# do not mix, hold it back by assigning FALSE here. The check itself always
+# runs.
+mixing_state <- new.env(parent = emptyenv())
+mixing_state$warn <- TRUE
+
 # R-hat above which a quantity is reported as not mixed.
 mixing_rhat_bar <- 1.1
 
@@ -50,6 +56,8 @@ split_rhat <- function(x)
 fit_mixing <- function(object)
 {
   result <- numeric()
+  # keep_fits = FALSE keeps no draws to read
+  if (is.null(object$stan)) return(result)
   if (!identical(object$family$family, "binomial"))
     result["sigma"] <- split_rhat(extract(object, "sigma", combine_chains = FALSE))
 

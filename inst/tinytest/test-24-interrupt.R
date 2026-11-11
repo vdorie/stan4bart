@@ -6,6 +6,7 @@
 # on the Nth poll without touching R's signal state. They are an internal
 # entry, so this file skips when the installed dbarts' entry takes another
 # number of arguments than the one it was written against.
+source(system.file("common", "quiet-mixing.R", package = "stan4bart"), local = TRUE)
 
 hooks <- tryCatch(
   get("C_dbarts_bartcore_setMonotoneCountHooks", asNamespace("dbarts")),

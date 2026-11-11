@@ -2,6 +2,7 @@
 # one pair fixed before sampling from a fit that holds the forest's columns
 # and shared by every chain, with the values the first sweep starts from; for
 # a binary response those values alone
+source(system.file("common", "quiet-mixing.R", package = "stan4bart"), local = TRUE)
 
 has_lme4 <- requireNamespace("lme4", quietly = TRUE)
 

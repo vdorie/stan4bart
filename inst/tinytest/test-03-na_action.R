@@ -1,4 +1,5 @@
 # stan4bart na.action
+source(system.file("common", "quiet-mixing.R", package = "stan4bart"), local = TRUE)
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 

@@ -271,8 +271,11 @@ stan4bart <-
       check_sampler_diagnostics(result, parametric, length(upar_names))
   }
 
-  result$mixing <- fit_mixing(result)
-  warn_if_not_mixed(result$mixing, length(chain_results))
+  mixing <- fit_mixing(result)
+  if (length(mixing) > 0L) {
+    result$mixing <- mixing
+    if (mixing_state$warn) warn_if_not_mixed(mixing, length(chain_results))
+  }
   
   result
 }
