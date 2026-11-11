@@ -44,13 +44,21 @@ n <- 200
 d <- data.frame(g = sample(10, n, TRUE), x1 = rnorm(n), xb = runif(n))
 d$y <- 1 + 2 * d$x1 + sin(3 * d$xb) + rnorm(10)[d$g] * 0.7 + rnorm(n) * 0.5
 d$z <- as.integer(d$y > 1.5)
+# without lme4 a fit with random effects warns that the BART response range or
+# the binary start is the plain one; that warning is not under test here
+fit_stan4bart <- function(...)
+  withCallingHandlers(stan4bart(...), warning = function(cond) {
+    if (startsWith(conditionMessage(cond), "lme4 is not installed"))
+      invokeRestart("muffleWarning")
+  })
+
 args <- list(data = d, cores = 2L, verbose = -1L, seed = 3L, iter = 300L, warmup = 150L,
              bart_args = list(n.trees = 25L))
 
 # a healthy fit is silent, carries the three kinds of quantity, and summary()
 # prints them on one line
 fit <- NULL
-expect_silent(fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args)))
+expect_silent(fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args)))
 expect_equal(names(fit$mixing), c("sigma", "g sd", "fit"))
 expect_true(all(fit$mixing < 1.1))
 out <- capture.output(print(summary(fit)))
@@ -60,25 +68,25 @@ expect_equal(line, paste0("R-hat: ", paste(names(fit$mixing), formatC(fit$mixing
 expect_false(any(grepl("R-hat", capture.output(print(fit)))))
 
 # a fit with no grouping factor has no group sd; a binary fit has no sigma
-fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb)), args))
+fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb)), args))
 expect_equal(names(fit$mixing), c("sigma", "fit"))
-fit <- do.call(stan4bart, c(list(z ~ x1 + bart(xb) + (1 | g)), args))
+fit <- do.call(fit_stan4bart, c(list(z ~ x1 + bart(xb) + (1 | g)), args))
 expect_equal(names(fit$mixing), c("g sd", "fit"))
 
 # one chain is checked too, by comparing its halves
 fit <- NULL
-expect_silent(fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(args) != "cores"],
+expect_silent(fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(args) != "cores"],
                                          list(chains = 1L))))
 expect_true(all(is.finite(fit$mixing)))
 
 # warmup draws are never read: the check is the same with them saved
-fit_w <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(args) != "cores"],
+fit_w <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(args) != "cores"],
                               list(chains = 1L, save_warmup = TRUE)))
 expect_equal(fit_w$mixing, fit$mixing)
 
 # a planted disagreement warns once, naming the quantity: the same fit with
 # one chain's sigma draws moved apart
-fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args))
+fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args))
 sigma_row <- match("aux.1", dimnames(fit$stan)[[1L]])
 fit$stan[sigma_row, , 1L] <- fit$stan[sigma_row, , 1L] + 5
 mixing <- fit_mixing(fit)
@@ -92,7 +100,7 @@ expect_true(endsWith(w, "the fit is unreliable. See summary()."))
 for (verbose in c(-1L, 0L)) {
   warnings <- character()
   withCallingHandlers(
-    do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)),
+    do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)),
                          modifyList(args, list(verbose = verbose, seed = 3L, iter = 12L, warmup = 2L,
                                                bart_args = list(n.trees = 5L))))),
     warning = function(cond) {
@@ -103,7 +111,7 @@ for (verbose in c(-1L, 0L)) {
 }
 
 # keep_fits = FALSE keeps no draws: nothing is checked and nothing is stored
-fit <- do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args, list(keep_fits = FALSE)))
+fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args, list(keep_fits = FALSE)))
 expect_null(fit$mixing)
 
 assign("warn", warn_before, envir = stan4bart:::mixing_state)
