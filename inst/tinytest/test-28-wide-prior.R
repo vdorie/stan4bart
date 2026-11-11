@@ -2,8 +2,8 @@
 # a flat prior fits whatever the units of its column. The forest's covariate is
 # unrelated to the response, so the fixed effects' posterior means sit near
 # least squares. The prior scales run from about 150 times the default's to
-# 1.6e7 times; the last fit measures x1 in thousandths, which makes its
-# coefficient 0.002.
+# 1.6e7 times, one centered far from the estimate; the last fit measures x1 in
+# thousandths, which makes its coefficient 0.002.
 
 local({
   set.seed(31)
@@ -21,6 +21,7 @@ local({
   fits <- list(
     normal_1e3    = fit_fixef(df, prior = normal(0, 1e3, autoscale = FALSE)),
     normal_1e8    = fit_fixef(df, prior = normal(0, 1e8, autoscale = FALSE)),
+    normal_500_1e4 = fit_fixef(df, prior = normal(500, 1e4, autoscale = FALSE)),
     student_t_1e4 = fit_fixef(df, prior = student_t(3, 0, 1e4, autoscale = FALSE)),
     cauchy_1e3    = fit_fixef(df, prior = cauchy(0, 1e3, autoscale = FALSE)),
     flat          = fit_fixef(df, prior = NULL),
