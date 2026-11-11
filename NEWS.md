@@ -293,9 +293,8 @@
 ## Bug fixes
 
 * A coefficient prior many orders of magnitude wider than the posterior, such
-  as `normal(0, 1e8, autoscale = FALSE)`, or one centered far from the
-  estimate, such as `normal(500, 20, autoscale = FALSE)`, now gives the fixed
-  effects a flat prior gives; chains could stay far from the posterior.
+  as `normal(0, 1e8, autoscale = FALSE)`, now fits as a flat prior does;
+  chains could stay far from the posterior.
 
 * A variable that enters `bart()` only inside a transform, as in
   `bart(log(v) + f)` or `bart(I(v^2))`, now fits; it used to stop with
