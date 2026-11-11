@@ -7,6 +7,7 @@
 # coordinate is not affine. One flat fit measures x1 in thousandths, which
 # makes its coefficient 0.002, and the QR fits measure x2 in ten-thousandths,
 # the column that sets their basis.
+source(system.file("common", "quiet-mixing.R", package = "stan4bart"), local = TRUE)
 
 local({
   set.seed(31)
