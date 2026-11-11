@@ -23,10 +23,11 @@
 ///   [ u_beta(K), z_b(q), z_T(len_z_T), rho_free(len_rho),
 ///     zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!binary) ]
 ///
-/// The coefficients' coordinates are continuous.stan's z_beta rescaled by a
-/// constant: z_beta = u_beta * coef_coordinate_scale / prior_scale, so that
-/// beta = prior_mean + coef_coordinate_scale * u_beta under a normal prior and
-/// beta = coef_coordinate_scale * u_beta under a flat one. The constant
+/// The coefficients' coordinates are an affine map of continuous.stan's
+/// z_beta: with r = coef_coordinate_scale / prior_scale,
+/// z_beta = r * u_beta - (1 - r) * prior_mean / prior_scale, so that
+/// beta = coef_coordinate_scale * u_beta + r * prior_mean under a normal prior
+/// and beta = coef_coordinate_scale * u_beta under a flat one. The constant
 /// Jacobian leaves the target unchanged; see coef_coordinate_scale.
 
 #include <cassert>    // assert
@@ -93,18 +94,21 @@ struct ParametricModel {
   Eigen::VectorXd prior_mean;     // K
   Eigen::VectorXd prior_df;       // K (student_t/cauchy df)
 
-  /// \brief The change in each coefficient, near its prior location, per unit
-  ///        of its sampler coordinate (K).
+  /// \brief The change in each coefficient per unit of its sampler
+  ///        coordinate (K).
   ///
   /// The sampler starts each coordinate within init_r of zero and seeds its
   /// mass from the gradient there, so a coordinate must be measured in units
-  /// on the order of the coefficient's posterior spread. z_beta itself is
-  /// measured in prior scales: under a prior far wider than the posterior the
-  /// start lies tens of thousands of posterior standard deviations out, at a
-  /// log density near -1e9 where no step clears the Hamiltonian error bound,
-  /// and the chain never arrives. The caller passes the prior scale, or a
-  /// smaller one when the prior is wide; equal to the prior scale it leaves
-  /// every value of the z_beta parameterization bit for bit.
+  /// on the order of the coefficient's posterior spread and its zero must lie
+  /// within a few of those units of the posterior. z_beta itself is measured
+  /// in prior scales from the prior's location: under a prior far wider than
+  /// the posterior the start lies tens of thousands of posterior standard
+  /// deviations out, at a log density near -1e9 where no step clears the
+  /// Hamiltonian error bound, and the chain never arrives. The caller passes
+  /// the prior scale, or a smaller one when the prior is wide; the origin then
+  /// moves from the prior's location toward zero by the same ratio. Equal to
+  /// the prior scale it leaves every value of the z_beta parameterization bit
+  /// for bit.
   Eigen::VectorXd coef_coordinate_scale;
 
   // --- residual sd (aux) prior ---
@@ -134,9 +138,10 @@ struct ParametricModel {
   // Beta-onion prior shapes for each rho entry (len_rho), precomputed.
   Eigen::VectorXd rho_a1, rho_a2;
 
-  // d z_beta / d u_beta per coefficient (K), precomputed; under a flat prior
-  // z_beta is beta itself.
-  Eigen::VectorXd dz_beta_du_;
+  // The affine map z_beta = dz_beta_du_ * u_beta - z_beta_shift_ per
+  // coefficient (K), precomputed; under a flat prior z_beta is beta itself.
+  // The shift is exactly zero where the ratio is one.
+  Eigen::VectorXd dz_beta_du_, z_beta_shift_;
 
   /// \brief Per-grouping-factor forward cache + reverse-pass adjoints for the
   ///        make_theta_L / make_b construction. Held across eval() calls so its
@@ -203,9 +208,16 @@ struct ParametricModel {
     assert(coef_coordinate_scale.size() == K &&
            "finalize: coef_coordinate_scale must hold one scale per coefficient");
     dz_beta_du_.resize(K);
-    for (int k = 0; k < K; ++k)
-      dz_beta_du_[k] = prior_dist == 0 ? coef_coordinate_scale[k]
-                                       : coef_coordinate_scale[k] / prior_scale[k];
+    z_beta_shift_.setZero(K);
+    for (int k = 0; k < K; ++k) {
+      if (prior_dist == 0) {
+        dz_beta_du_[k] = coef_coordinate_scale[k];
+        continue;
+      }
+      const double r = coef_coordinate_scale[k] / prior_scale[k];
+      dz_beta_du_[k] = r;
+      if (r != 1.0) z_beta_shift_[k] = (1.0 - r) * (prior_mean[k] / prior_scale[k]);
+    }
 
     off_u_beta = 0;
     off_z_b    = off_u_beta + K;
@@ -371,13 +383,13 @@ struct ParametricModel {
       actual_aux = aux;
     }
 
-    // --- z_beta = u_beta * dz_beta_du_, beta = transform(z_beta) ---
+    // --- z_beta = affine(u_beta), beta = transform(z_beta) ---
     z_beta_.resize(K); beta_.resize(K); dbeta_dz_.resize(K);
     Eigen::VectorXd& z_beta = z_beta_;
     Eigen::VectorXd& beta = beta_;
     Eigen::VectorXd& dbeta_dz = dbeta_dz_;
     for (int k = 0; k < K; ++k) {
-      const double z = u_beta_p[k] * dz_beta_du_[k];
+      const double z = u_beta_p[k] * dz_beta_du_[k] - z_beta_shift_[k];
       z_beta[k] = z;
       if (prior_dist == 1) { beta[k] = z * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = prior_scale[k]; }
       else if (prior_dist == 2) { beta[k] = CFt(z, prior_df[k]) * prior_scale[k] + prior_mean[k]; dbeta_dz[k] = dCFt(z, prior_df[k]) * prior_scale[k]; }

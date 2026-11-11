@@ -25,13 +25,14 @@ C_grad <- function(d, par) .Call(stan4bart:::C_stan4bart_logdensity_grad, d, par
 build_stan_data <- function(N, X, y, blocks, is_binary,
                             weights = NULL,
                             prior_dist = 1L, prior_scale = NULL, prior_df = NULL,
-                            coef_coordinate_scale = NULL,
+                            prior_mean = NULL, coef_coordinate_scale = NULL,
                             prior_dist_for_aux = 3L, prior_scale_for_aux = 1.0,
                             prior_mean_for_aux = 0.0, prior_df_for_aux = 0.0) {
   K <- ncol(X)
   t <- length(blocks)
   if (is.null(prior_scale)) prior_scale <- rep(2.5, K)
   if (is.null(prior_df))    prior_df    <- rep(3, K)
+  if (is.null(prior_mean))  prior_mean  <- rep(0, K)
   if (is.null(coef_coordinate_scale)) coef_coordinate_scale <- prior_scale
 
   if (t > 0L) {
@@ -79,7 +80,7 @@ build_stan_data <- function(N, X, y, blocks, is_binary,
     offset_ = numeric(N),
     prior_scale = as.numeric(prior_scale), prior_scale_for_intercept = 1.0,
     prior_scale_for_aux = as.numeric(prior_scale_for_aux),
-    prior_mean = rep(0, K), prior_mean_for_intercept = 0.0,
+    prior_mean = as.numeric(prior_mean), prior_mean_for_intercept = 0.0,
     prior_mean_for_aux = as.numeric(prior_mean_for_aux),
     prior_df = as.numeric(prior_df), prior_df_for_intercept = 1.0,
     coef_coordinate_scale = as.numeric(coef_coordinate_scale),
@@ -154,9 +155,11 @@ make_fixtures <- function() {
     # under a wide prior, and under a flat one
     normal_beta_coord = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc1), FALSE,
                                                                        prior_scale = c(1e3, 1e8),
+                                                                       prior_mean = c(3, -40),
                                                                        coef_coordinate_scale = c(2.5, 0.7))),
     studentt_beta_coord = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc1), FALSE,
                                                                          prior_dist = 2L, prior_scale = c(40, 1e4),
+                                                                         prior_mean = c(-2, 500),
                                                                          coef_coordinate_scale = c(2.5, 3))),
     flat_beta   = list(is_binary = FALSE, data = build_stan_data(N, X, yc, list(nc1), FALSE, prior_dist = 0L,
                                                                  coef_coordinate_scale = c(2.5, 0.4))),

@@ -19,12 +19,16 @@ including its quirks. The free (unconstrained) position vector, in continuous.st
   zeta_free(len_concentration), tau_free(t), aux_unscaled_free(!is_binary) ]
 ```
 
-The coefficients' coordinates are continuous.stan's `z_beta` rescaled by a constant,
-`z_beta = u_beta * coef_coordinate_scale / prior_scale`; under a flat prior
-`beta = coef_coordinate_scale * u_beta`. The constant Jacobian leaves the target as it
-was. `stan4bart_fit` sets `coef_coordinate_scale` to the smaller of the prior's scale
-and the default prior's (`2.5` sd(y)/sd(x), autoscaled as the default is), the
-default's alone under a flat prior. The sampler starts each coordinate uniformly
+The coefficients' coordinates are an affine map of continuous.stan's `z_beta`: with
+`r = coef_coordinate_scale / prior_scale`,
+`z_beta = r * u_beta - (1 - r) * prior_mean / prior_scale`, so
+`beta = coef_coordinate_scale * u_beta + r * prior_mean` under a normal prior, and
+`beta = coef_coordinate_scale * u_beta` under a flat one. The constant Jacobian leaves
+the target as it was. `stan4bart_fit` sets `coef_coordinate_scale` to the smaller of
+the prior's scale and the default prior's (`2.5` sd(y)/sd(x), autoscaled as the
+default is), the default's alone under a flat prior. The shrunken location matters
+for a wide prior centered away from the estimate: `normal(500, 1e4)` started within
+`init_r` coordinate units of 500 stays there, as the wide prior at zero did. The sampler starts each coordinate uniformly
 within `init_r` of zero and seeds its mass from the gradient there, so `z_beta`
 measured in prior scales fails under a prior much wider than the posterior: with
 `normal(0, 1000)` on a coefficient whose posterior sd is 0.025 the start lies 1e4 to
