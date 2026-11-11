@@ -908,15 +908,31 @@ fitted.stan4bartFit <-
 }
 
 # Posterior-mean fitted surface for a store = "trees" fit, computed by streaming
-# row-blocks so no full n x draws x chains block is ever held (M2). For each
-# block the BART draws are recomputed from the kept trees and the parametric
-# fixef/ranef surfaces are evaluated on the same rows (by subsetting their design
-# matrices, which keeps them block-sized too); the block is transformed by the
-# response family and reduced to one posterior mean per observation. Matches the
+# row-blocks so no full n x draws x chains block is ever held (M2). Matches the
 # store = "fits" fitted() to numerical tolerance. The rarer training-side cases
 # extract() handles specially - a component-replacing offset or na.exclude gaps -
 # fall back to the materializing path (correct, just not memory-bounded).
 fitted_bart_streamed <- function(object, type, sample, sample_new_levels) {
+  X.bart <- if (sample == "train") object$bartData@x else object$bartData@x.test
+  result <- numeric(nrow(X.bart))
+  streamed <- visit_ev_blocks(object, type, sample, sample_new_levels,
+                              function(ev_b, idx, M) result[idx] <<- rowMeans(matrix(ev_b, length(idx), M)))
+  if (streamed) return(result)
+  samples <- extract(object, type, sample, combine_chains = TRUE, sample_new_levels = sample_new_levels)
+  if (!is.null(dim(samples))) apply(samples, seq_len(length(dim(samples)) - 1L), mean) else mean(samples)
+}
+
+# Calls visit(ev_b, idx, M) on the draws of each block of rows idx, in order: ev_b
+# is the block's rows x draws x chains array, M the number of draws over the
+# chains. For each block the BART draws are read from the stored block or, for
+# store = "trees", recomputed from the kept trees, and the parametric
+# fixef/ranef surfaces are evaluated on the same rows (by subsetting their design
+# matrices, which keeps them block-sized too); the block is transformed by the
+# response family. Returns FALSE, having visited nothing, where a block cannot
+# be built without extract(): a parametric design that is missing, a
+# component-replacing offset, or na.exclude gaps. A block holds about
+# block_cells draws.
+visit_ev_blocks <- function(object, type, sample, sample_new_levels, visit, block_cells = 2e6) {
   is_bernoulli <- object$family$family == "binomial"
   offset_type  <- object$offset_type
 
@@ -938,27 +954,26 @@ fitted_bart_streamed <- function(object, type, sample, sample_new_levels) {
                                      (has_ranef && is.null(reTrms))))
   if (cannot_stream ||
       (!is.null(offset) && length(offset) > 0L && offset_type != "default") ||
-      inherits(na_bart, "exclude")) {
-    samples <- extract(object, type, sample, combine_chains = TRUE, sample_new_levels = sample_new_levels)
-    return(if (!is.null(dim(samples))) apply(samples, seq_len(length(dim(samples)) - 1L), mean) else mean(samples))
-  }
+      inherits(na_bart, "exclude"))
+    return(FALSE)
 
   X.bart <- if (sample == "train") object$bartData@x else object$bartData@x.test
   n_obs  <- nrow(X.bart)
   dims   <- bart_sample_chain_dims(object)
   M      <- dims[1L] * dims[2L]
+  stored <- if (bart_needs_recompute(object, sample)) NULL
+            else if (sample == "train") object$bart_train else object$bart_test
 
   add_fixef <- type == "ev" && has_fixef_par && !is.null(X.fixef)
   add_ranef <- type == "ev" && has_ranef
   ev_offset <- if (type == "ev" && !is.null(offset) && length(offset) > 0L && offset_type == "default") offset else NULL
 
-  # bound peak at ~2e6 doubles (~16 MB) of recomputed draws per block
-  block   <- max(1L, min(n_obs, as.integer(ceiling(2e6 / max(1L, M)))))
-  result  <- numeric(n_obs)
+  block   <- max(1L, min(n_obs, as.integer(ceiling(block_cells / max(1L, M)))))
   start   <- 1L
   while (start <= n_obs) {
     idx <- seq.int(start, min(start + block - 1L, n_obs))
-    ev_b <- recompute_bart_block(object, sample, rows = idx)
+    ev_b <- if (is.null(stored)) recompute_bart_block(object, sample, rows = idx)
+            else stored[idx, , , drop = FALSE]
     if (add_fixef)
       ev_b <- ev_b + fitted_fixed(object, X.fixef[idx, , drop = FALSE], FALSE)
     if (add_ranef) {
@@ -968,10 +983,10 @@ fitted_bart_streamed <- function(object, type, sample, sample_new_levels) {
     }
     if (!is.null(ev_offset)) ev_b <- ev_b + ev_offset[idx]
     if (type == "ev" && is_bernoulli) ev_b <- pnorm(ev_b)
-    result[idx] <- rowMeans(matrix(ev_b, length(idx), M))
+    visit(ev_b, idx, M)
     start <- start + block
   }
-  result
+  TRUE
 }
 
 fitted_fixed <- function(object, x, include_warmup)

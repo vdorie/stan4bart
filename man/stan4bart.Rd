@@ -172,7 +172,9 @@ stan4bart(formula,
   posterior mean in row blocks, so its peak memory stays bounded, but
   \code{extract} must materialize the whole block (unavoidable) - roughly 15 s
   per call at \code{n = 10000} with 4 chains x 1000 draws, and over a minute at
-  \code{n = 50000}. Storing trees costs essentially nothing during sampling. The
+  \code{n = 50000}. Storing trees costs essentially nothing during sampling,
+  but the mixing check replays the kept trees once when the fit ends, in row
+  blocks, so its memory stays bounded. The
   saving only exists above a crossover near \code{n = 550}: below it the kept
   trees cost as much as the fits they replace and add latency, so \code{"fits"}
   remains the default and the recommended choice at small \code{n}. Under
@@ -559,7 +561,9 @@ stan4bart(formula,
     single chain is checked by comparing its halves.
     Only the saved draws are read, never warmup, and a quantity that cannot be
     compared, such as one with fewer than four draws per chain, is not
-    checked.
+    checked. \code{fit} is summed in blocks of rows, as \code{fitted} streams,
+    so its memory stays bounded; if computing it fails, as for want of memory,
+    it is left unchecked (\code{NA}) and the fit is returned.
   }
 }
 \value{

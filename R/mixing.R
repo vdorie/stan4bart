@@ -46,10 +46,44 @@ split_rhat <- function(x)
   if (is.nan(result)) NA_real_ else result
 }
 
+# The in-sample RMSE of the expected value against the response, per draw over
+# the chains, the sums of squares taken in blocks of rows as fitted() streams
+# them so that memory stays bounded.
+fit_rmse_draws <- function(object, block_cells)
+{
+  M <- prod(bart_sample_chain_dims(object))
+  y <- object$y
+  sums <- numeric(M)
+  n_rows <- length(y)
+  streamed <- visit_ev_blocks(object, "ev", "train", TRUE, function(ev_b, idx, M) {
+    resid <- matrix(ev_b, length(idx), M) - y[idx]
+    sums <<- sums + colSums(resid^2)
+  }, block_cells)
+  if (!streamed) {
+    # the rows extract() reports, those a component dropped missing
+    ev <- extract(object, "ev", combine_chains = FALSE)
+    resid <- ev - pad_kept_rows(object, y, NA_real_)
+    dim(resid) <- c(dim(ev)[1L], M)
+    sums <- colSums(resid^2, na.rm = TRUE)
+    n_rows <- sum(!is.na(resid[, 1L]))
+  }
+  sqrt(sums / n_rows)
+}
+
+# R-hat of the per-draw RMSE. NA where it cannot be computed, and where
+# computing it fails, as for want of memory: a check never loses a fit.
+fit_rhat <- function(object, block_cells)
+{
+  tryCatch({
+    n_draws <- bart_sample_chain_dims(object)
+    split_rhat(matrix(fit_rmse_draws(object, block_cells), n_draws[1L], n_draws[2L]))
+  }, error = function(e) NA_real_)
+}
+
 # Named vector of the R-hats of a fit's checked quantities: "sigma" unless
 # the response is binary, "<factor> sd" (with the term appended for a factor
 # with several) per grouping factor, and "fit".
-fit_mixing <- function(object)
+fit_mixing <- function(object, block_cells = 2e6)
 {
   result <- numeric()
   # keep_fits = FALSE keeps no draws to read
@@ -69,15 +103,9 @@ fit_mixing <- function(object)
     }
   }
 
-  # the response and the expected value, on the rows extract() reports
-  if (!is.null(object$bart_train) || bart_needs_recompute(object, "train")) {
-    ev <- extract(object, "ev", combine_chains = FALSE)
-    n_draws <- dim(ev)[2L:3L]
-    resid <- ev - pad_kept_rows(object, object$y, NA_real_)
-    dim(resid) <- c(dim(ev)[1L], prod(n_draws))
-    rmse <- sqrt(colMeans(resid^2, na.rm = TRUE))
-    result["fit"] <- split_rhat(matrix(rmse, n_draws[1L], n_draws[2L]))
-  }
+  # the response and the expected value
+  if (!is.null(object$bart_train) || bart_needs_recompute(object, "train"))
+    result["fit"] <- fit_rhat(object, block_cells)
   result
 }
 

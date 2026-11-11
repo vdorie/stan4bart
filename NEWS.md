@@ -171,7 +171,9 @@
   against the response, one chain included (its halves are compared). They
   are stored in `fit$mixing`, and `summary()` prints them on one line, with
   a star after each over 1.1 and the line "* over 1.1: the chains
-  disagree". No warning is issued. Fixed effects, group effects and trees
+  disagree". No warning is issued. The in-sample error is summed in blocks
+  of rows, as `fitted()` does, so its memory stays bounded, and is left
+  unchecked (`NA`, said in `summary()`) if computing it fails. Fixed effects, group effects and trees
   are not checked, being redundantly parameterized or many.
 
 * `residuals()` works on a `stan4bart` fit, returning the response residuals

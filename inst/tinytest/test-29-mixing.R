@@ -117,6 +117,51 @@ for (verbose in c(-1L, 0L)) {
 out <- capture.output(print(summary(short)))
 expect_true("* over 1.1: the chains disagree" %in% out)
 
+# the fit quantity is summed in blocks of rows: the per-draw RMSE is the
+# unblocked computation on the whole block of expected values to rounding, and
+# so is its R-hat, for a stored block and for kept trees, with and without
+# parametric parts, and for a binary response (probability scale). One block
+# is the unblocked computation exactly; many differ in the last bits of each
+# sum, which the R-hat's ranks of the draws about their median can amplify to a
+# few parts in a thousand where two draws sit equally far from it.
+unblocked_rmse <- function(fit) {
+  ev <- extract(fit, "ev", combine_chains = FALSE)
+  d <- dim(ev)
+  resid <- ev - fit$y
+  dim(resid) <- c(d[1L], d[2L] * d[3L])
+  sqrt(colMeans(resid^2))
+}
+for (store in c("fits", "trees")) {
+  for (form in list(y ~ x1 + bart(xb) + (1 | g), y ~ x1 + bart(xb), z ~ x1 + bart(xb) + (1 | g))) {
+    fit <- do.call(fit_stan4bart, c(list(form), args[names(args) != "cores"],
+                                    list(chains = 2L, store = store)))
+    expected <- unblocked_rmse(fit)
+    d <- dim(fit$stan)[2L:3L]
+    expected_rhat <- split_rhat(matrix(expected, d[1L], d[2L]))
+    expect_equal(fit$mixing[["fit"]], expected_rhat, tolerance = 1e-12, info = store)
+    # blocks of seven rows and of one, so that each sum runs over many
+    for (cells in c(7 * prod(d), prod(d))) {
+      expect_equal(stan4bart:::fit_rmse_draws(fit, cells), expected, tolerance = 1e-12, info = store)
+      expect_equal(fit_mixing(fit, block_cells = cells)[["fit"]], expected_rhat, tolerance = 5e-3,
+                   info = store)
+    }
+  }
+}
+
+# a failure computing the fit quantity leaves it unchecked, NA and said so in
+# summary(), and the other quantities stand
+fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args))
+broken <- fit
+broken$reTrms$Zt <- NULL
+mixing <- fit_mixing(broken)
+expect_equal(names(mixing), c("sigma", "g sd", "fit"))
+expect_true(is.na(mixing[["fit"]]))
+expect_equal(mixing[c("sigma", "g sd")], fit$mixing[c("sigma", "g sd")])
+broken$mixing <- mixing
+out <- capture.output(print(summary(broken)))
+expect_true(grepl("fit NA", grep("^R-hat: ", out, value = TRUE)))
+expect_true("NA: could not be checked" %in% out)
+
 # keep_fits = FALSE keeps no draws: nothing is checked and nothing is stored
 fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args, list(keep_fits = FALSE)))
 expect_null(fit$mixing)
