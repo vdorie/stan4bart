@@ -123,10 +123,11 @@ expect_true("* over 1.1: the chains disagree" %in% out)
 # the fit quantity is summed in blocks of rows: the per-draw RMSE is the
 # unblocked computation on the whole block of expected values to rounding, and
 # so is its R-hat, for a stored block and for kept trees, with and without
-# parametric parts, and for a binary response (probability scale). One block
-# is the unblocked computation exactly; many differ in the last bits of each
-# sum, which the R-hat's ranks of the draws about their median can amplify to a
-# few parts in a thousand where two draws sit equally far from it.
+# parametric parts, and for a binary response (probability scale). Blocked
+# sums, and even one block on some builds (a sanitizer build's), differ from
+# the unblocked computation in the last bits, which the R-hat's ranks of the
+# draws about their median can amplify to a few parts in a thousand where two
+# draws sit equally far from it.
 unblocked_rmse <- function(fit) {
   ev <- extract(fit, "ev", combine_chains = FALSE)
   d <- dim(ev)
@@ -141,9 +142,9 @@ for (store in c("fits", "trees")) {
     expected <- unblocked_rmse(fit)
     d <- dim(fit$stan)[2L:3L]
     expected_rhat <- split_rhat(matrix(expected, d[1L], d[2L]))
-    expect_equal(fit$mixing[["fit"]], expected_rhat, tolerance = 1e-12, info = store)
-    # blocks of seven rows and of one, so that each sum runs over many
-    for (cells in c(7 * prod(d), prod(d))) {
+    expect_equal(fit$mixing[["fit"]], expected_rhat, tolerance = 5e-3, info = store)
+    # one block, then blocks of seven rows and of one, so that each sum runs over many
+    for (cells in c(2e6, 7 * prod(d), prod(d))) {
       expect_equal(stan4bart:::fit_rmse_draws(fit, cells), expected, tolerance = 1e-12, info = store)
       expect_equal(fit_mixing(fit, block_cells = cells)[["fit"]], expected_rhat, tolerance = 5e-3,
                    info = store)
