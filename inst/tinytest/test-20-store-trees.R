@@ -1,5 +1,4 @@
 # stan4bart store = 'trees' recompute seam (bart-train-recompute C3)
-source(system.file("common", "quiet-mixing.R", package = "stan4bart"), local = TRUE)
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 

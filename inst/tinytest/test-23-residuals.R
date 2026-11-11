@@ -1,6 +1,5 @@
 # residuals(): the observed response less the posterior mean expected value,
 # on the rows fitted() reports
-source(system.file("common", "quiet-mixing.R", package = "stan4bart"), local = TRUE)
 
 set.seed(23)
 n <- 60L

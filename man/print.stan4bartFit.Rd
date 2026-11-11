@@ -41,9 +41,12 @@
   \code{summary.stan4bartFit}, printed by \code{print.summary.stan4bartFit},
   giving the formula, family, chain/sample counts, the per-chain warmup
   and sampling mean leapfrog counts, and the fit's R-hats, which are the
-  numbers behind the warning \code{stan4bart} issues when chains disagree (see
-  \dQuote{Mixing check} in \code{\link{stan4bart}}): one compact line such as
-  \code{R-hat: sigma 1.00, g sd 1.01, fit 1.00}. \code{print} is unchanged.
+  numbers of the mixing check (see \dQuote{Mixing check} in
+  \code{\link{stan4bart}}): one compact line such as
+  \code{R-hat: sigma 1.00, g sd 1.01, fit 1.00}, with a star after each over
+  1.1 and a line \code{* over 1.1: the chains disagree} when there is one,
+  and \code{NA: could not be checked} when a value is \code{NA}. \code{print}
+  is unchanged.
 }
 \value{
   \code{print.stan4bartFit} and \code{print.summary.stan4bartFit} return

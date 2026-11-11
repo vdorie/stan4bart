@@ -554,9 +554,9 @@ stan4bart(formula,
     effects, and for \code{fit}: each draw's in-sample root mean squared
     difference between the expected value and the response (on the probability
     scale for a binary response). Fixed effects, individual group effects and
-    trees are not checked. If one exceeds 1.1 a single warning names the
-    worst, with its value, and says how many are over; \code{summary} prints
-    all of them on one line. A single chain is checked by comparing its halves.
+    trees are not checked. No warning is issued; \code{summary} prints all of
+    them on one line and flags each over 1.1, where the chains disagree. A
+    single chain is checked by comparing its halves.
     Only the saved draws are read, never warmup, and a quantity that cannot be
     compared, such as one with fewer than four draws per chain, is not
     checked.

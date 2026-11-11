@@ -1,7 +1,6 @@
 # predicting/extracting random effects for grouping-factor levels not seen
 # during training (sample_new_levels), including levels that are entirely
 # new for a multi-predictor (random slope + intercept) grouping factor
-source(system.file("common", "quiet-mixing.R", package = "stan4bart"), local = TRUE)
 
 source(system.file("common", "friedmanData.R", package = "stan4bart"), local = TRUE)
 

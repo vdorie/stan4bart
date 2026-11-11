@@ -272,10 +272,7 @@ stan4bart <-
   }
 
   mixing <- fit_mixing(result)
-  if (length(mixing) > 0L) {
-    result$mixing <- mixing
-    if (mixing_state$warn) warn_if_not_mixed(mixing, length(chain_results))
-  }
+  if (length(mixing) > 0L) result$mixing <- mixing
   
   result
 }

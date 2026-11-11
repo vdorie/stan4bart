@@ -1,12 +1,9 @@
 # end-of-fit mixing check: split rank-normalized R-hat of sigma, each group sd
 # and the in-sample fit
 
-# the switch is restored when the file ends
-warn_before <- get("warn", envir = stan4bart:::mixing_state)
-assign("warn", TRUE, envir = stan4bart:::mixing_state)
 split_rhat <- stan4bart:::split_rhat
 fit_mixing <- stan4bart:::fit_mixing
-warn_if_not_mixed <- stan4bart:::warn_if_not_mixed
+format_mixing <- stan4bart:::format_mixing
 
 # the helper against posterior::rhat (1.7.0), computed once on these matrices;
 # built from sin and cos so that no random stream is involved
@@ -30,14 +27,15 @@ expect_true(is.na(split_rhat(cbind(c(1:9, NA), 1:10))))
 for (two in list(matrix(rep(c(0, 1), each = 8), 16, 1), cbind(rep(0, 8), rep(1, 8)), matrix(rep(c(0, 1), 4), 8, 2)))
   expect_identical(split_rhat(two), NA_real_)
 
-# the warning: one, naming the worst quantity and its value
-expect_silent(warn_if_not_mixed(c(sigma = 1.09, "g sd" = 1.1, fit = NA), 4L))
-w <- tryCatch(warn_if_not_mixed(c(sigma = 3.3, "g sd" = 1.02, fit = 1.01), 4L), warning = conditionMessage)
-expect_equal(w, "chains disagree on sigma (R-hat 3.30); the fit is unreliable. See summary().")
-w <- tryCatch(warn_if_not_mixed(c(sigma = 1.5, "g sd" = 2.5, fit = 1.2), 4L), warning = conditionMessage)
-expect_equal(w, "chains disagree on g sd (R-hat 2.50), the worst of 3 quantities over 1.1; the fit is unreliable. See summary().")
-w <- tryCatch(warn_if_not_mixed(c(sigma = 1.01, fit = 1.4), 1L), warning = conditionMessage)
-expect_equal(w, "the halves of the chain disagree on the overall fit (R-hat 1.40); the fit is unreliable. See summary().")
+# the summary's lines: a star on a value over 1.1 and a line saying what it
+# means, nothing more when none is over; an NA is said to be unchecked
+expect_identical(format_mixing(c(sigma = 1.09, "g sd" = 1.1, fit = 1.0), 4L),
+                 "R-hat: sigma 1.09, g sd 1.10, fit 1.00")
+expect_identical(format_mixing(c(sigma = 3.3, "g sd" = 1.02, fit = 1.01), 4L),
+                 c("R-hat: sigma 3.30*, g sd 1.02, fit 1.01", "* over 1.1: the chains disagree"))
+expect_identical(format_mixing(c(sigma = 1.5, "g sd" = 2.5, fit = NA), 1L),
+                 c("R-hat: sigma 1.50*, g sd 2.50*, fit NA", "* over 1.1: the halves of the chain disagree",
+                   "NA: could not be checked"))
 
 set.seed(1)
 n <- 200
@@ -56,7 +54,7 @@ args <- list(data = d, cores = 2L, verbose = -1L, seed = 3L, iter = 300L, warmup
              bart_args = list(n.trees = 25L))
 
 # a healthy fit is silent, carries the three kinds of quantity, and summary()
-# prints them on one line
+# prints them on one line, with no flag
 fit <- NULL
 expect_silent(fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args)))
 expect_equal(names(fit$mixing), c("sigma", "g sd", "fit"))
@@ -64,7 +62,8 @@ expect_true(all(fit$mixing < 1.1))
 out <- capture.output(print(summary(fit)))
 line <- grep("^R-hat: ", out, value = TRUE)
 expect_equal(length(line), 1L)
-expect_equal(line, paste0("R-hat: ", paste(names(fit$mixing), formatC(fit$mixing, digits = 2L, format = "f"), collapse = ", ")))
+expect_equal(line, format_mixing(fit$mixing, 4L)[1L])
+expect_false(any(grepl("over 1.1", out)))
 expect_false(any(grepl("R-hat", capture.output(print(fit)))))
 
 # a fit with no grouping factor has no group sd; a binary fit has no sigma
@@ -84,22 +83,27 @@ fit_w <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args[names(
                               list(chains = 1L, save_warmup = TRUE)))
 expect_equal(fit_w$mixing, fit$mixing)
 
-# a planted disagreement warns once, naming the quantity: the same fit with
-# one chain's sigma draws moved apart
+# a planted disagreement is flagged by summary(): the same fit with one chain's
+# sigma draws moved apart
 fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args))
 sigma_row <- match("aux.1", dimnames(fit$stan)[[1L]])
 fit$stan[sigma_row, , 1L] <- fit$stan[sigma_row, , 1L] + 5
-mixing <- fit_mixing(fit)
-expect_true(mixing[["sigma"]] > 1.1)
-expect_true(all(mixing[c("g sd", "fit")] < mixing[["sigma"]]))
-w <- tryCatch(warn_if_not_mixed(mixing, 4L), warning = conditionMessage)
-expect_true(startsWith(w, "chains disagree on sigma (R-hat "))
-expect_true(endsWith(w, "the fit is unreliable. See summary()."))
+fit$mixing <- fit_mixing(fit)
+expect_true(fit$mixing[["sigma"]] > 1.1)
+expect_true(all(fit$mixing[c("g sd", "fit")] < fit$mixing[["sigma"]]))
+out <- capture.output(print(summary(fit)))
+line <- grep("^R-hat: ", out, value = TRUE)
+expect_true(grepl("sigma [0-9.]+\\*,", line))
+expect_false(grepl("g sd [0-9.]+\\*", line))
+expect_true("* over 1.1: the chains disagree" %in% out)
+# print() of the fit says nothing of it
+expect_false(any(grepl("R-hat|over 1.1", capture.output(print(fit)))))
 
-# a real fit too short to mix warns once, whatever verbose says
+# a real fit too short to mix raises no warning, whatever verbose says; its
+# R-hats are stored, and its summary flags them
 for (verbose in c(-1L, 0L)) {
   warnings <- character()
-  withCallingHandlers(
+  short <- withCallingHandlers(
     do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)),
                          modifyList(args, list(verbose = verbose, seed = 3L, iter = 12L, warmup = 2L,
                                                bart_args = list(n.trees = 5L))))),
@@ -107,11 +111,12 @@ for (verbose in c(-1L, 0L)) {
       warnings <<- c(warnings, conditionMessage(cond))
       invokeRestart("muffleWarning")
     })
-  expect_equal(sum(grepl("^chains disagree on ", warnings)), 1L, info = verbose)
+  expect_equal(length(warnings), 0L, info = verbose)
+  expect_true(any(short$mixing > 1.1), info = verbose)
 }
+out <- capture.output(print(summary(short)))
+expect_true("* over 1.1: the chains disagree" %in% out)
 
 # keep_fits = FALSE keeps no draws: nothing is checked and nothing is stored
 fit <- do.call(fit_stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)), args, list(keep_fits = FALSE)))
 expect_null(fit$mixing)
-
-assign("warn", warn_before, envir = stan4bart:::mixing_state)

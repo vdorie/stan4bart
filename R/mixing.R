@@ -5,13 +5,7 @@
 # effects are redundantly parameterized with the BART component and group
 # effects are many, so neither is checked.
 
-# Whether a fit's warning is issued; the package's own tests, whose tiny fits
-# do not mix, hold it back by assigning FALSE here. The check itself always
-# runs.
-mixing_state <- new.env(parent = emptyenv())
-mixing_state$warn <- TRUE
-
-# R-hat above which a quantity is reported as not mixed.
+# R-hat above which summary() flags a quantity as not mixed.
 mixing_rhat_bar <- 1.1
 
 # Each chain cut in two, the middle draw of an odd length dropped.
@@ -87,21 +81,16 @@ fit_mixing <- function(object)
   result
 }
 
-mixing_label <- function(name)
-  if (name == "fit") "the overall fit" else name
-
-# The one warning of a fit, naming the worst quantity over the bar; none when
-# every R-hat is under it (a quantity that could not be computed never counts).
-warn_if_not_mixed <- function(mixing, n_chains)
+# The R-hat line of a summary, its quantities each followed by a star when over
+# the bar, and the lines that explain what a star or an NA says.
+format_mixing <- function(mixing, n_chains)
 {
-  over <- which(mixing > mixing_rhat_bar)
-  if (length(over) == 0L) return(invisible(NULL))
-  worst <- over[which.max(mixing[over])]
-  warning(sprintf("%s disagree on %s (R-hat %.2f)%s; the fit is unreliable. See summary().",
-                  if (n_chains > 1L) "chains" else "the halves of the chain",
-                  mixing_label(names(mixing)[worst]), mixing[[worst]],
-                  if (length(over) > 1L) sprintf(", the worst of %d quantities over %.1f",
-                                                 length(over), mixing_rhat_bar) else ""),
-          call. = FALSE)
-  invisible(NULL)
+  flagged <- !is.na(mixing) & mixing > mixing_rhat_bar
+  values <- paste0(ifelse(is.na(mixing), "NA", formatC(mixing, digits = 2L, format = "f")),
+                   ifelse(flagged, "*", ""))
+  c(paste0("R-hat: ", paste(names(mixing), values, collapse = ", ")),
+    if (any(flagged))
+      sprintf("* over %.1f: the %s disagree", mixing_rhat_bar,
+              if (n_chains > 1L) "chains" else "halves of the chain"),
+    if (anyNA(mixing)) "NA: could not be checked")
 }
