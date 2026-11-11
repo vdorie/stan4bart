@@ -88,13 +88,13 @@ w <- tryCatch(warn_if_not_mixed(mixing, 4L), warning = conditionMessage)
 expect_true(startsWith(w, "chains disagree on sigma (R-hat "))
 expect_true(endsWith(w, "the fit is unreliable. See summary()."))
 
-# chains started apart under a wide prior that is not autoscaled: the fit
-# warns once, whatever verbose says
+# a real fit too short to mix warns once, whatever verbose says
 for (verbose in c(-1L, 0L)) {
   warnings <- character()
   withCallingHandlers(
-    do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g), prior = quote(normal(0, 1000))),
-                         modifyList(args, list(verbose = verbose)))),
+    do.call(stan4bart, c(list(y ~ x1 + bart(xb) + (1 | g)),
+                         modifyList(args, list(verbose = verbose, seed = 3L, iter = 12L, warmup = 2L,
+                                               bart_args = list(n.trees = 5L))))),
     warning = function(cond) {
       warnings <<- c(warnings, conditionMessage(cond))
       invokeRestart("muffleWarning")
